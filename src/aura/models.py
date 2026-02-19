@@ -66,13 +66,20 @@ class Dataset(BaseModel):
     source: str = "avoindata.fi"
 
     @classmethod
-    def from_ckan(cls, data: dict) -> Dataset:
+    def from_ckan(cls, data: dict, source: str = "avoindata.fi") -> Dataset:
         """Luo Dataset CKAN API:n vastauksen pohjalta."""
         title_translated = data.get("title_translated", {}) or {}
         notes_translated = data.get("notes_translated", {}) or {}
         keywords = data.get("keywords", {}) or {}
         org = data.get("organization", {}) or {}
-        update_freq = data.get("update_frequency", {}) or {}
+        update_freq_raw = data.get("update_frequency", {}) or {}
+        if isinstance(update_freq_raw, dict):
+            val = update_freq_raw.get("fi", "")
+            update_freq = ", ".join(val) if isinstance(val, list) else str(val)
+        elif isinstance(update_freq_raw, list):
+            update_freq = ", ".join(str(v) for v in update_freq_raw)
+        else:
+            update_freq = str(update_freq_raw)
 
         resources = []
         for r in data.get("resources", []):
@@ -115,9 +122,9 @@ class Dataset(BaseModel):
             keywords_fi=keywords.get("fi", []),
             keywords_en=keywords.get("en", []),
             geographical_coverage=data.get("geographical_coverage", []) or [],
-            update_frequency=update_freq.get("fi", "") if isinstance(update_freq, dict) else "",
+            update_frequency=update_freq,
             collection_type=data.get("collection_type", ""),
             num_resources=data.get("num_resources", 0),
             resources=resources,
-            source="avoindata.fi",
+            source=source,
         )

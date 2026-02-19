@@ -22,9 +22,18 @@ def main() -> None:
 
     # harvest
     harvest_parser = subparsers.add_parser("harvest", help="Hae datasettien metatiedot")
+    harvest_parser.add_argument(
+        "source",
+        nargs="?",
+        default="all",
+        help="Lähde tai 'all' kaikille (oletus: all)",
+    )
+    harvest_parser.add_argument(
+        "--list", action="store_true", dest="list_sources", help="Listaa saatavilla olevat lähteet"
+    )
 
     # serve
-    serve_parser = subparsers.add_parser("serve", help="Käynnistä MCP-server")
+    subparsers.add_parser("serve", help="Käynnistä MCP-server")
 
     # search
     search_parser = subparsers.add_parser("search", help="Hae datasettejä")
@@ -34,6 +43,9 @@ def main() -> None:
     # stats
     subparsers.add_parser("stats", help="Näytä tilastot")
 
+    # sources
+    subparsers.add_parser("sources", help="Listaa datalähteet ja niiden tila")
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -42,10 +54,27 @@ def main() -> None:
     )
 
     if args.command == "harvest":
-        from aura.harvester import harvest_all
+        from aura.harvesters import get_all_harvesters, get_harvester
 
-        count = asyncio.run(harvest_all())
-        print(f"Haettu {count} datasettiä.")
+        if args.list_sources:
+            for name, cls in get_all_harvesters().items():
+                print(f"  {name:25s} {cls.description}")
+            return
+
+        if args.source == "all":
+            total = 0
+            for name, cls in get_all_harvesters().items():
+                print(f"Harvestoidaan: {name}...")
+                harvester = cls()
+                count = asyncio.run(harvester.harvest())
+                print(f"  {name}: {count} datasettiä")
+                total += count
+            print(f"\nYhteensä: {total} datasettiä")
+        else:
+            cls = get_harvester(args.source)
+            harvester = cls()
+            count = asyncio.run(harvester.harvest())
+            print(f"Haettu {count} datasettiä lähteestä {args.source}.")
 
     elif args.command == "serve":
         from aura.server import mcp
@@ -73,6 +102,21 @@ def main() -> None:
         conn = get_connection()
         init_db(conn)
         print(format_stats(get_stats(conn)))
+
+    elif args.command == "sources":
+        from aura.database import get_connection, init_db
+        from aura.harvesters import get_all_harvesters
+
+        conn = get_connection()
+        init_db(conn)
+
+        print("Datalähteet:\n")
+        for name, cls in get_all_harvesters().items():
+            count = conn.execute(
+                "SELECT COUNT(*) FROM datasets WHERE source = ?", (name,)
+            ).fetchone()[0]
+            status = f"{count} datasettiä" if count > 0 else "ei harvestoitu"
+            print(f"  {name:25s} {cls.description:45s} [{status}]")
 
     else:
         parser.print_help()
