@@ -46,6 +46,9 @@ def main() -> None:
     # sources
     subparsers.add_parser("sources", help="Listaa datalähteet ja niiden tila")
 
+    # migrate
+    subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -117,6 +120,16 @@ def main() -> None:
             ).fetchone()[0]
             status = f"{count} datasettiä" if count > 0 else "ei harvestoitu"
             print(f"  {name:25s} {cls.description:45s} [{status}]")
+
+    elif args.command == "migrate":
+        from aura.database import get_connection, run_migrations
+
+        conn = get_connection()
+        count = run_migrations(conn)
+        if count > 0:
+            print(f"Ajettu {count} migraatiota.")
+        else:
+            print("Ei uusia migraatioita.")
 
     else:
         parser.print_help()

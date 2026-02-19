@@ -1,50 +1,58 @@
 # Datalähteet ja harvestoidut aineistot
 
-Tämä sivu dokumentoi kaikki Auran harvesteroimat ja suunnitellut datalähteet.
+Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 
 > Päivitetty: 2026-02-19
 
 ## Yhteenveto
 
-| Lähde | Tyyppi | Status | Datasettejä | Resursseja |
-|-------|--------|--------|-------------|------------|
-| [avoindata.fi](#avoindatafi) | CKAN API | Harvestoitu | 1 943 | 6 780 |
-| [HRI (hri.fi)](#hri-helsinki-region-infoshare) | CKAN API | Harvestoitu | 549 | ~1 200 |
-| [Tilastokeskus (StatFin)](#tilastokeskus-statfin) | PxWeb API | Harvestoitu | 374 | 748 |
-| [Digitraffic](#digitraffic) | REST/OpenAPI | Harvestoitu | 162 | 162 |
-| [LUKE](#luke-luonnonvarakeskus) | PxWeb API | Suunniteltu | 6 pääkategoriaa | |
-| [Traficom](#traficom) | OData v4 | Suunniteltu | 31 tietojoukkoa | |
-| [Ilmatieteen laitos (FMI)](#ilmatieteen-laitos-fmi) | WFS 2.0 | Suunniteltu | ~160 kyselyä | |
-| [Museovirasto / Finna](#museovirasto--finna) | REST API | Suunniteltu | ~450 000 tietuetta | |
-| [SYKE](#syke-suomen-ympäristökeskus) | ArcGIS REST | Suunniteltu | 221 (via avoindata) | |
-| [Maanmittauslaitos](#maanmittauslaitos) | OGC API | Suunniteltu | 22 (via avoindata) | |
+| Lähde | Tyyppi | Datasettejä | Resursseja | Arvioitu koko |
+|-------|--------|-------------|------------|---------------|
+| [avoindata.fi](#avoindatafi) | CKAN API | 1 943 | 5 188 | 114 GB |
+| [HRI (hri.fi)](#hri-helsinki-region-infoshare) | CKAN API | 549 | 1 594 | 39 GB |
+| [LUKE](#luke-luonnonvarakeskus) | PxWeb API | 495 | 990 | 2,3 GB |
+| [Tilastokeskus (StatFin)](#tilastokeskus-statfin) | PxWeb API | 374 | 748 | 1,7 GB |
+| [Digitraffic](#digitraffic) | REST/OpenAPI | 162 | 162 | 1,5 GB |
+| [Ilmatieteen laitos (FMI)](#ilmatieteen-laitos-fmi) | WFS 2.0 | 160 | 160 | 14 GB |
+| [Metsäkeskus](#metsäkeskus) | WFS/WCS | 42 | 53 | 1,2 TB |
+| [Traficom](#traficom) | OData v4 | 32 | 32 | 2,5 GB |
+| **Yhteensä** | | **3 757** | **8 927** | **~1,3 TB** |
 
 ### Resurssityypit
 
 Aura harvestoi sekä **rajapintoja** (API, WMS, WFS, OGC, PXWEB) että **aineistopaketteja** (CSV, XLSX, JSON, SHP, ZIP jne.):
 
-| Tyyppi | Resursseja | Osuus |
-|--------|-----------|-------|
-| Rajapinnat (WMS, WFS, API, PXWEB) | ~2 100 | 24% |
-| Aineistopaketit (CSV, XLSX, JSON, SHP...) | ~6 800 | 76% |
+| Formaatti | Resursseja |
+|----------|-----------|
+| HTML | 1 059 |
+| PXWEB | 1 009 |
+| WMS | 875 |
+| XLSX | 842 |
+| WFS | 753 |
+| CSV | 482 |
+| ZIP | 291 |
+| SHP | 270 |
+| PDF | 251 |
+| API | 194 |
 
-**Yhteensä: 3 028 datasettiä, 196 organisaatiota, 95 dataformaattia**
+**Yhteensä: 3 757 datasettiä, 8 927 resurssia, 197 organisaatiota, ~1,3 TB**
 
 ---
 
-## Harvestoidut lähteet
-
-### avoindata.fi
+## avoindata.fi
 
 **URL:** https://avoindata.suomi.fi
 **API:** CKAN 3 REST (`https://avoindata.suomi.fi/data/api/3/action/`)
 **Autentikointi:** Ei tarvita
-**Status:** Harvestoitu
-**Datasettejä:** 2 492
-**Resursseja:** 6 780
-**Organisaatioita:** 195
+**Datasettejä:** 1 943
+**Resursseja:** 5 188
+**Arvioitu koko:** 114 GB
 
 Suomen kansallinen avoimen datan portaali. Aggregoi dataa kunnilta, ministeriöiltä, virastoilta ja tutkimuslaitoksilta.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/avoindata.py` — Käyttää CKAN:n `package_search` -endpointia sivuttaen 100 datasettiä kerrallaan. Jokainen CKAN-paketti muunnetaan `Dataset`-olioksi `Dataset.from_ckan()`-luokkametodilla.
 
 #### Suurimmat julkaisijat
 
@@ -61,123 +69,152 @@ Suomen kansallinen avoimen datan portaali. Aggregoi dataa kunnilta, ministeriöi
 | Helsingin seudun ympäristöpalvelut (HSY) | 67 |
 | Varsinais-Suomen liitto | 52 |
 
-#### Yleisimmät formaatit
-
-| Formaatti | Resursseja | Tyyppi |
-|----------|-----------|--------|
-| WMS | 875 | Rajapinta |
-| XLSX | 842 | Aineistopaketti |
-| WFS | 570 | Rajapinta |
-| CSV | 482 | Aineistopaketti |
-| ZIP | 280 | Aineistopaketti |
-| SHP | 269 | Aineistopaketti |
-| PDF | 251 | Aineistopaketti |
-| HTML | 190 | Aineistopaketti |
-| TAB | 150 | Aineistopaketti |
-| PXWEB | 140 | Rajapinta |
-| JSON | 134 | Aineistopaketti |
-
 ---
 
-## Suunnitellut lähteet
-
-### HRI (Helsinki Region Infoshare)
+## HRI (Helsinki Region Infoshare)
 
 **URL:** https://hri.fi
 **API:** CKAN 3 REST (`https://hri.fi/data/api/3/action/`)
 **Autentikointi:** Ei tarvita
-**Status:** Harvestoitu
 **Datasettejä:** 549
+**Resursseja:** 1 594
+**Arvioitu koko:** 39 GB
 
-Pääkaupunkiseudun avoimen datan portaali (Helsinki, Espoo, Vantaa, Kauniainen). Sama CKAN-rajapinta kuin avoindata.fi.
+Pääkaupunkiseudun avoimen datan portaali (Helsinki, Espoo, Vantaa, Kauniainen). Sama CKAN-rajapinta kuin avoindata.fi — harvester on lähes identtinen.
 
-### Tilastokeskus (StatFin)
+#### Harvester-toteutus
 
-**URL:** https://stat.fi
-**API:** PxWeb REST (`https://statfin.stat.fi/PxWeb/api/v1/fi/StatFin/`)
-**Autentikointi:** Ei tarvita
-**Status:** Harvestoitu
-**Datasettejä:** 374 tilastotaulua
+`src/aura/harvesters/hri.py` — Sama `package_search`-logiikka kuin avoindata.fi:lle, mutta eri base URL ja `source="hri.fi"`.
 
-Suomen virallinen tilastoviranomainen. Harvester käy rekursiivisesti läpi PxWeb-puun ja kerää jokaisen tilastotaulun metadatan.
+---
 
-**Aihealueita:** Asuminen, energia, hinnat, kansantalous, koulutus, oikeus, palkat, terveys, työ, väestö, ympäristö...
-
-**Kielet:** fi, en, sv
-
-### LUKE (Luonnonvarakeskus)
+## LUKE (Luonnonvarakeskus)
 
 **URL:** https://luke.fi
 **API:** PxWeb REST (`https://statdb.luke.fi/PxWeb/api/v1/fi/LUKE/`)
 **Autentikointi:** Ei tarvita
-**Kategoriat:** Maataloustilastot, metsätilastot, kala- ja riistatilastot, indikaattorit
+**Datasettejä:** 495
+**Resursseja:** 990
+**Arvioitu koko:** 2,3 GB
 
-Sama PxWeb-rajapinta kuin Tilastokeskuksella — sama harvester toimii molemmille.
+Luonnonvarakeskuksen tilastotietokannat. Maatalous-, metsä-, kala- ja riistatilastoja.
 
-### Traficom
+#### Harvester-toteutus
 
-**URL:** https://opendata.traficom.fi
-**API:** OData v4 (`https://opendata.traficom.fi/api/v12/`)
+`src/aura/harvesters/luke.py` — Käy rekursiivisesti läpi PxWeb-puurakenteen. Kansiot (type `l`) käydään läpi, taulut (type `t`) tallennetaan datasetteiksi. Sama logiikka kuin Tilastokeskuksen harvesterissa.
+
+**Pääkategoriat:** 01 Maatalous, 02 Metsä, 03 Kala ja riista, 04 Kansantalous, 06 Indikaattorit
+
+---
+
+## Tilastokeskus (StatFin)
+
+**URL:** https://stat.fi
+**API:** PxWeb REST (`https://statfin.stat.fi/PxWeb/api/v1/fi/StatFin/`)
 **Autentikointi:** Ei tarvita
-**Tietojoukkoja:** 31
+**Datasettejä:** 374
+**Resursseja:** 748
+**Arvioitu koko:** 1,7 GB
 
-Liikenne- ja viestintäviraston avoin data. Sisältää mm. ajoneuvorekisterin (5,1 miljoonaa ajoneuvoa), ilma-alusrekisterin, alusrekisterin, radioasematiedot.
+Suomen virallinen tilastoviranomainen. Harvester käy rekursiivisesti läpi PxWeb-puun ja kerää jokaisen tilastotaulun metadatan.
 
-### Digitraffic
+#### Harvester-toteutus
+
+`src/aura/harvesters/statfin.py` — PxWeb-puun rekursiivinen läpikäynti. Jokainen taulu saa kaksi resurssia: PxWeb API -endpoint ja ihmisluettava web-sivu.
+
+**Aihealueita:** Asuminen, energia, hinnat, kansantalous, koulutus, oikeus, palkat, terveys, työ, väestö, ympäristö...
+
+---
+
+## Digitraffic
 
 **URL:** https://www.digitraffic.fi
 **API:** REST/OpenAPI 3.0
-**Autentikointi:** Ei tarvita (gzip-header vaaditaan)
-**Status:** Harvestoitu
-**Datasettejä:** 162 API-endpointtia
+**Autentikointi:** Ei tarvita (gzip-header suositeltava)
+**Datasettejä:** 162
+**Resursseja:** 162
+**Arvioitu koko:** 1,5 GB
 
-Kolme erillistä rajapintaa:
+Reaaliaikaista ja lähes reaaliaikaista liikennedataa. Kolme erillistä rajapintaa:
 
 | Rajapinta | URL | Endpointteja |
 |-----------|-----|--------------|
-| Tieliikenne | https://tie.digitraffic.fi | 87 |
-| Rautatieliikenne | https://rata.digitraffic.fi | 58 |
-| Meriliikenne | https://meri.digitraffic.fi | 17 |
+| Tieliikenne | https://tie.digitraffic.fi | ~87 |
+| Rautatieliikenne | https://rata.digitraffic.fi | ~58 |
+| Meriliikenne | https://meri.digitraffic.fi | ~17 |
 
-Reaaliaikaista ja lähes reaaliaikaista liikennedataa: mittausasemat, sääasemat, junien sijainnit, laivojen AIS-tiedot. Harvester parsii OpenAPI-speksit ja luo datasetin jokaisesta GET-endpointista.
+#### Harvester-toteutus
 
-### Ilmatieteen laitos (FMI)
+`src/aura/harvesters/digitraffic.py` — Parsii kunkin rajapinnan OpenAPI/Swagger-speksin ja luo datasetin jokaisesta GET-endpointista. Endpoint URL on resurssin osoite.
+
+**Datatyyppejä:** Mittausasemat, sääasemat, LAM-pisteet, junien sijainnit, AIS-tiedot, vesiliikenteen varoitukset.
+
+---
+
+## Ilmatieteen laitos (FMI)
 
 **URL:** https://www.ilmatieteenlaitos.fi
 **API:** OGC WFS 2.0 (`https://opendata.fmi.fi/wfs`)
 **Autentikointi:** Ei tarvita
-**Tallennettuja kyselyjä:** ~160
+**Datasettejä:** 160
+**Resursseja:** 160
+**Arvioitu koko:** 14 GB
 
 Sää-, ilmasto-, meri- ja säteilytietoa. WFS-rajapinta tarjoaa stored query -mekanismin jossa jokainen kysely on käytännössä oma datasettinsä.
 
-**Datakategoriat:** Säähavainnot, ennusteet (HARMONIE, MEPS, ECMWF), tutka, meritaso, säteily, ilmanlaatu.
+#### Harvester-toteutus
 
-### Museovirasto / Finna
+`src/aura/harvesters/fmi.py` — Hakee `ListStoredQueries`-operaation XML-vastauksen ja parsii jokaisen `StoredQuery`-elementin. Kategorisoi kyselyt tittelinsä perusteella (sää, tutka, meri, ennuste, säteily, ilmanlaatu) ja arvioi koon sen mukaisesti.
 
-**URL:** https://api.finna.fi
-**API:** Finna REST API (`https://api.finna.fi/v1/`)
+**Datakategoriat:** Säähavainnot (reaaliaikainen + historia), sääennusteet (HARMONIE, MEPS, ECMWF), tutkakuvat, meritasotiedot, säteilyvalvonta, ilmanlaatu.
+
+---
+
+## Metsäkeskus
+
+**URL:** https://avoin.metsakeskus.fi
+**API:** GeoServer WFS/WCS
 **Autentikointi:** Ei tarvita
-**Tietueita:** ~450 000 (Museovirasto-suodatin)
+**Datasettejä:** 42
+**Resursseja:** 53
+**Arvioitu koko:** 1,2 TB
 
-Kansallinen kulttuuriperintöhaku. Finna aggregoi museoiden, arkistojen ja kirjastojen aineistot.
+Suomen metsävaratiedot — ylivoimaisesti suurin yksittäinen datalähde kooltaan.
 
-### SYKE (Suomen ympäristökeskus)
+#### Harvester-toteutus
 
-**URL:** https://www.syke.fi
-**API:** ArcGIS REST + WFS (`https://paikkatieto.ymparisto.fi/arcgis/rest/services/`)
+`src/aura/harvesters/metsakeskus.py` — Ei käytä WFS `GetCapabilities` -mekanismia, vaan listaa palvelut manuaalisesti (endpointit ovat hyvin dokumentoitu mutta hajanaisesti). Kolme pääkategoriaa:
+
+1. **Metsävaratieto-palvelut** — Kuviotiedot, hilaruudukot, elinympäristöt, metsänkäyttöilmoitukset (GeoServer WFS)
+2. **Latvusmalliaineistot (CHM)** — Vuosittaiset puuston latvusmallit 2008–2022 (WCS)
+3. **Kemera-aineistot** — Metsätalouden tuet ja hoitotyöt (GeoServer WFS)
+
+**Suurimmat aineistot:**
+- Hilaruudukkotiedot: ~200 GB
+- Latvusmallit (per vuosi): ~50 GB × 8 vuotta = ~400 GB
+- Metsikkökuviotiedot: ~50 GB
+
+---
+
+## Traficom
+
+**URL:** https://opendata.traficom.fi
+**API:** OData v4 (`https://opendata.traficom.fi/api/v12/`)
 **Autentikointi:** Ei tarvita
-**Datasettejä:** 221 (avoindata.fi kautta)
+**Datasettejä:** 32
+**Resursseja:** 32
+**Arvioitu koko:** 2,5 GB
 
-Ympäristötietoa: vesistöt, maankäyttö, luonnonsuojelu, tulvariskit, CORINE-maanpeite.
+Liikenne- ja viestintäviraston avoin data.
 
-### Maanmittauslaitos
+#### Harvester-toteutus
 
-**URL:** https://www.maanmittauslaitos.fi
-**API:** OGC API Features (`https://avoin-paikkatieto.maanmittauslaitos.fi/`)
-**Autentikointi:** API-avain vaaditaan (ilmainen rekisteröityminen)
-**Datasettejä:** 22 (avoindata.fi kautta)
+`src/aura/harvesters/traficom.py` — OData entity set -harvester, jossa jokainen entity set on oma datasettinsä. Koko arvioidaan rekisterien koon perusteella (tietuemäärä × rivikoko).
 
-Maastotiedot, kiinteistötiedot, paikannimet, korkeusmallit, kartat.
+**Suurimmat aineistot:**
+- Ajoneuvorekisteri: ~5,1 miljoonaa ajoneuvoa (~1,3 GB)
+- Viestintämarkkinatiedot, taajuusluvat, katsastustiedot
+- Ilma-alusrekisteri, alusrekisteri, rautatiekalusto
 
 ---
 
@@ -190,13 +227,13 @@ src/aura/harvesters/
 ├── __init__.py       # Rekisteri ja factory
 ├── base.py           # BaseHarvester-pohjaluokka
 ├── avoindata.py      # avoindata.fi (CKAN)
-├── hri.py            # HRI (CKAN) — tulossa
-├── statfin.py        # Tilastokeskus (PxWeb) — tulossa
-├── luke.py           # LUKE (PxWeb) — tulossa
-├── traficom.py       # Traficom (OData) — tulossa
-├── digitraffic.py    # Digitraffic (REST) — tulossa
-├── fmi.py            # FMI (WFS) — tulossa
-└── finna.py          # Finna/Museovirasto (REST) — tulossa
+├── hri.py            # HRI (CKAN)
+├── statfin.py        # Tilastokeskus (PxWeb)
+├── luke.py           # LUKE (PxWeb)
+├── digitraffic.py    # Digitraffic (OpenAPI)
+├── fmi.py            # FMI (WFS)
+├── traficom.py       # Traficom (OData)
+└── metsakeskus.py    # Metsäkeskus (WFS/WCS)
 ```
 
 ### Käyttö
@@ -214,3 +251,27 @@ aura harvest --list
 # Näytä lähteiden tila
 aura sources
 ```
+
+## Tietokantamigraatiot
+
+Skeemamuutokset hoidetaan numeroiduilla SQL-migraatiotiedostoilla:
+
+```
+scripts/migrations/
+├── 001_initial_schema.sql    # Alkuperäinen skeema
+├── 002_add_something.sql     # Seuraava muutos
+└── ...
+```
+
+Migraatiot ajetaan automaattisesti `init_db()`:n yhteydessä. Sovelletut migraatiot kirjataan `schema_migrations`-tauluun — samaa migraatiota ei ajeta kahdesti.
+
+```bash
+# Aja migraatiot manuaalisesti
+aura migrate
+```
+
+### Uuden migraation luominen
+
+1. Luo tiedosto `scripts/migrations/NNN_kuvaus.sql` (NNN = seuraava numero)
+2. Kirjoita SQL-komennot (ALTER TABLE, CREATE INDEX, jne.)
+3. Aja `aura migrate` tai migraatio ajetaan automaattisesti seuraavan harvest/search/serve -komennon yhteydessä

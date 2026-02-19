@@ -1,14 +1,18 @@
-"""SQLite-tietokantakerros FTS5-täystekstihaulla."""
+"""SQLite-tietokantakerros FTS5-täystekstihaulla ja migraatioilla."""
 
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
 from aura.models import Dataset, Resource
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "aura.db"
+MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "scripts" / "migrations"
 
 
 def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
@@ -21,122 +25,74 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def init_db(conn: sqlite3.Connection) -> None:
-    """Luo tietokantataulut ja FTS5-indeksit."""
+def run_migrations(conn: sqlite3.Connection) -> int:
+    """Aja pending-migraatiot tietokantaan.
+
+    Migraatiot ovat numeroidut SQL-tiedostot kansiossa scripts/migrations/:
+        001_initial_schema.sql
+        002_add_something.sql
+        ...
+
+    Sovellettuja migraatioita seurataan schema_migrations-taulussa.
+
+    Returns:
+        Sovellettujen migraatioiden lukumäärä.
+    """
+    # Luo seurantataulu
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS datasets (
-            id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
-            title TEXT DEFAULT '',
-            title_fi TEXT DEFAULT '',
-            title_en TEXT DEFAULT '',
-            title_sv TEXT DEFAULT '',
-            notes TEXT DEFAULT '',
-            notes_fi TEXT DEFAULT '',
-            notes_en TEXT DEFAULT '',
-            notes_sv TEXT DEFAULT '',
-            license_id TEXT DEFAULT '',
-            license_title TEXT DEFAULT '',
-            organization_id TEXT DEFAULT '',
-            organization_name TEXT DEFAULT '',
-            organization_title TEXT DEFAULT '',
-            metadata_created TEXT DEFAULT '',
-            metadata_modified TEXT DEFAULT '',
-            keywords_fi TEXT DEFAULT '[]',
-            keywords_en TEXT DEFAULT '[]',
-            geographical_coverage TEXT DEFAULT '[]',
-            update_frequency TEXT DEFAULT '',
-            collection_type TEXT DEFAULT '',
-            num_resources INTEGER DEFAULT 0,
-            source TEXT DEFAULT 'avoindata.fi',
-            harvested_at TEXT DEFAULT (datetime('now'))
+            applied_at TEXT DEFAULT (datetime('now'))
         );
-
-        CREATE TABLE IF NOT EXISTS resources (
-            id TEXT PRIMARY KEY,
-            dataset_id TEXT NOT NULL,
-            name TEXT DEFAULT '',
-            name_fi TEXT DEFAULT '',
-            name_en TEXT DEFAULT '',
-            description TEXT DEFAULT '',
-            description_fi TEXT DEFAULT '',
-            description_en TEXT DEFAULT '',
-            format TEXT DEFAULT '',
-            url TEXT DEFAULT '',
-            file_size TEXT DEFAULT '',
-            last_modified TEXT,
-            FOREIGN KEY (dataset_id) REFERENCES datasets(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_resources_dataset
-            ON resources(dataset_id);
-
-        CREATE INDEX IF NOT EXISTS idx_datasets_org
-            ON datasets(organization_name);
-
-        CREATE INDEX IF NOT EXISTS idx_datasets_modified
-            ON datasets(metadata_modified);
-
-        CREATE VIRTUAL TABLE IF NOT EXISTS datasets_fts USING fts5(
-            title,
-            title_fi,
-            title_en,
-            notes_fi,
-            notes_en,
-            keywords_fi,
-            keywords_en,
-            organization_title,
-            content='datasets',
-            content_rowid='rowid',
-            tokenize='unicode61'
-        );
-
-        CREATE TRIGGER IF NOT EXISTS datasets_ai AFTER INSERT ON datasets BEGIN
-            INSERT INTO datasets_fts(
-                rowid, title, title_fi, title_en,
-                notes_fi, notes_en, keywords_fi, keywords_en,
-                organization_title
-            ) VALUES (
-                new.rowid, new.title, new.title_fi, new.title_en,
-                new.notes_fi, new.notes_en, new.keywords_fi, new.keywords_en,
-                new.organization_title
-            );
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS datasets_ad AFTER DELETE ON datasets BEGIN
-            INSERT INTO datasets_fts(
-                datasets_fts, rowid, title, title_fi, title_en,
-                notes_fi, notes_en, keywords_fi, keywords_en,
-                organization_title
-            ) VALUES (
-                'delete', old.rowid, old.title, old.title_fi, old.title_en,
-                old.notes_fi, old.notes_en, old.keywords_fi, old.keywords_en,
-                old.organization_title
-            );
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS datasets_au AFTER UPDATE ON datasets BEGIN
-            INSERT INTO datasets_fts(
-                datasets_fts, rowid, title, title_fi, title_en,
-                notes_fi, notes_en, keywords_fi, keywords_en,
-                organization_title
-            ) VALUES (
-                'delete', old.rowid, old.title, old.title_fi, old.title_en,
-                old.notes_fi, old.notes_en, old.keywords_fi, old.keywords_en,
-                old.organization_title
-            );
-            INSERT INTO datasets_fts(
-                rowid, title, title_fi, title_en,
-                notes_fi, notes_en, keywords_fi, keywords_en,
-                organization_title
-            ) VALUES (
-                new.rowid, new.title, new.title_fi, new.title_en,
-                new.notes_fi, new.notes_en, new.keywords_fi, new.keywords_en,
-                new.organization_title
-            );
-        END;
     """)
-    conn.commit()
+
+    # Hae jo sovelletut versiot
+    applied = {
+        row[0]
+        for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
+    }
+
+    # Etsi migraatiotiedostot
+    if not MIGRATIONS_DIR.exists():
+        return 0
+
+    migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
+    applied_count = 0
+
+    for path in migration_files:
+        # Parsii version numeron tiedostonimestä: "001_initial_schema.sql" -> 1
+        try:
+            version = int(path.stem.split("_", 1)[0])
+        except (ValueError, IndexError):
+            logger.warning("[migrations] Ohitetaan tiedosto: %s", path.name)
+            continue
+
+        if version in applied:
+            continue
+
+        # Suorita migraatio
+        logger.info("[migrations] Ajetaan: %s", path.name)
+        sql = path.read_text(encoding="utf-8")
+        try:
+            conn.executescript(sql)
+            conn.execute(
+                "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+                (version, path.stem),
+            )
+            conn.commit()
+            applied_count += 1
+            logger.info("[migrations] Valmis: %s", path.name)
+        except Exception as e:
+            logger.error("[migrations] Virhe ajettaessa %s: %s", path.name, e)
+            raise
+
+    return applied_count
+
+
+def init_db(conn: sqlite3.Connection) -> None:
+    """Alusta tietokanta: aja kaikki migraatiot."""
+    run_migrations(conn)
 
 
 def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
@@ -150,7 +106,8 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             organization_id, organization_name, organization_title,
             metadata_created, metadata_modified,
             keywords_fi, keywords_en, geographical_coverage,
-            update_frequency, collection_type, num_resources, source
+            update_frequency, collection_type, num_resources, source,
+            estimated_size_bytes
         ) VALUES (
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
@@ -158,7 +115,8 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             ?, ?, ?,
             ?, ?,
             ?, ?, ?,
-            ?, ?, ?, ?
+            ?, ?, ?, ?,
+            ?
         ) ON CONFLICT(id) DO UPDATE SET
             name=excluded.name, title=excluded.title,
             title_fi=excluded.title_fi, title_en=excluded.title_en, title_sv=excluded.title_sv,
@@ -176,6 +134,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             collection_type=excluded.collection_type,
             num_resources=excluded.num_resources,
             source=excluded.source,
+            estimated_size_bytes=excluded.estimated_size_bytes,
             harvested_at=datetime('now')
         """,
         (
@@ -190,6 +149,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             json.dumps(dataset.geographical_coverage, ensure_ascii=False),
             dataset.update_frequency, dataset.collection_type,
             dataset.num_resources, dataset.source,
+            dataset.estimated_size_bytes,
         ),
     )
 

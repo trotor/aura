@@ -5,15 +5,23 @@ from __future__ import annotations
 from aura.harvesters.avoindata import AvoindataHarvester
 from aura.harvesters.base import BaseHarvester
 from aura.harvesters.digitraffic import DigitrafficHarvester
+from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.hri import HriHarvester
+from aura.harvesters.luke import LukeHarvester
+from aura.harvesters.metsakeskus import MetsakeskusHarvester
 from aura.harvesters.statfin import StatfinHarvester
+from aura.harvesters.traficom import TraficomHarvester
 
 # Rekisteri kaikista harvestereista
 HARVESTERS: dict[str, type[BaseHarvester]] = {
     "avoindata.fi": AvoindataHarvester,
     "hri.fi": HriHarvester,
     "statfin": StatfinHarvester,
+    "luke": LukeHarvester,
     "digitraffic": DigitrafficHarvester,
+    "fmi": FmiHarvester,
+    "traficom": TraficomHarvester,
+    "metsakeskus": MetsakeskusHarvester,
 }
 
 

@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from aura.database import get_stats, init_db, search_datasets, upsert_dataset
+from aura.database import get_stats, init_db, run_migrations, search_datasets, upsert_dataset
 from aura.models import Dataset, Resource
 
 
@@ -96,3 +96,19 @@ def test_get_stats_with_data():
     s = get_stats(conn)
     assert s["total_datasets"] == 1
     assert s["total_organizations"] == 1
+
+
+def test_migrations_applied():
+    conn = _memory_db()
+    # init_db ajaa migraatiot — tarkista että schema_migrations-taulu on olemassa
+    versions = conn.execute("SELECT version, name FROM schema_migrations").fetchall()
+    assert len(versions) >= 1
+    assert versions[0]["version"] == 1
+    assert "initial" in versions[0]["name"]
+
+
+def test_migrations_idempotent():
+    conn = _memory_db()
+    # Aja migraatiot uudelleen — ei pitäisi tehdä mitään
+    count = run_migrations(conn)
+    assert count == 0

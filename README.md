@@ -2,19 +2,54 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
+> **3 757 datasettiä** · **8 927 resurssia** · **200 organisaatiota** · **~1,3 TB** avointa dataa
+>
+> 8 datalähteestä: avoindata.fi, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Traficom, Metsäkeskus
+
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
 > *Aura* — suomen kielen kyntämistä. Aura kyntää datan esiin.
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** Suomessa saatavilla olevan avoimen datan metadatan (aloittaen [avoindata.fi](https://avoindata.suomi.fi):stä)
-- **Normalisoi** eri lähteistä tulevat metatiedot yhtenäiseen muotoon
-- **Tekee hakukelpoiseksi** — täystekstihaku luonnollisella kielellä
+- **Aggregoi** metadatan 8 suomalaisesta avoimen datan lähteestä
+- **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
+- **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
+- **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
 - **Palvelee tekoälyjä** MCP-serverin kautta (Claude, GPT, jne.)
 - **Palvelee ihmisiä** avoimen web-rajapinnan kautta
 
-## Pikastartti
+## Käyttöönotto (tekoälylle)
+
+Jos käytät Claudea tai muuta MCP-yhteensopivaa tekoälyä, lisää Aura MCP-serveriksi:
+
+```json
+{
+  "mcpServers": {
+    "aura": {
+      "command": "uv",
+      "args": ["--directory", "/polku/aura", "run", "aura", "serve"]
+    }
+  }
+}
+```
+
+Tai jos `uv` ei ole käytössä:
+
+```json
+{
+  "mcpServers": {
+    "aura": {
+      "command": "/polku/aura/.venv/bin/python",
+      "args": ["-m", "aura.cli", "serve"]
+    }
+  }
+}
+```
+
+Tämän jälkeen tekoäly voi käyttää Auran työkaluja suoraan: etsiä datasettejä, kuvata niitä ja listata organisaatioita.
+
+## Pikastartti (ihmiselle)
 
 ```bash
 # Kloonaa
@@ -26,64 +61,36 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Hae datasettien metatiedot
+# Tietokanta tulee repon mukana valmiina — voit hakea heti:
+aura search "väestö helsinki"
+aura search "joukkoliikenne"
+aura stats
+
+# Päivitä data uusimmaksi:
 aura harvest
 
-# Käynnistä MCP-server
+# Käynnistä MCP-server:
 aura serve
 ```
 
 > **Huom:** Käytä aina virtuaaliympäristöä (venv). Älä asenna globaalisti.
 
-## Projektirakenne
-
-```
-aura/
-├── src/aura/               # Pääpaketti
-│   ├── __init__.py         # Versio ja paketin metadata
-│   ├── server.py           # MCP-server (FastMCP)
-│   ├── database.py         # SQLite-tietokantakerros
-│   ├── models.py           # Tietomallit
-│   ├── search.py           # Hakutoiminnot (FTS5)
-│   ├── cli.py              # Komentorivityökalu
-│   └── harvesters/         # Datalähteiden keräimet
-│       ├── __init__.py
-│       ├── base.py         # Yhteinen harvester-pohjaluokka
-│       └── avoindata.py    # avoindata.fi (CKAN)
-├── data/                   # SQLite-tietokanta (osa repoa)
-│   └── aura.db
-├── tests/                  # Testit
-├── scripts/                # SQL-migraatiot
-├── docs/                   # Dokumentaatio
-│   └── SOURCES.md          # Harvestoidut lähteet ja datasetit
-├── pyproject.toml          # Projektikonfiguraatio
-├── CHANGELOG.md            # Versiohistoria
-├── VERSIONING.md           # Versiointiohjeet
-└── LICENSE                 # MIT-lisenssi
-```
-
-## Tietokanta
-
-Aura käyttää **SQLite:ä** paikallisena tietokantana. Tietokanta on osa git-repositoriota, koska se sisältää projektin ydindatan — aggregoidun metadatan suomalaisista avoimista dataseteistä.
-
-SQLite valittiin koska:
-- **FTS5-täystekstihaku** mahdollistaa luonnollisen kielen haut suoraan tietokannasta
-- **Yksi tiedosto** — helppo jakaa ja versionhallita
-- **Nolla riippuvuutta** — Python tukee SQLite:ä natiivisti
-- **Riittävä suorituskyky** — ~2 500 datasetin metadatalle enemmän kuin tarpeeksi
-
 ## Datalähteet
 
-Katso täydellinen lista harvestoiduista lähteistä ja dataseteistä: **[docs/SOURCES.md](docs/SOURCES.md)**
+Katso täydellinen datasettikatalogi: **[docs/CATALOG.md](docs/CATALOG.md)**
+Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 
-| Lähde | Tyyppi | Status | Datasettejä |
-|-------|--------|--------|-------------|
-| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | Harvestoitu | 1 943 |
-| [HRI (hri.fi)](https://hri.fi) | CKAN API | Harvestoitu | 549 |
-| [Tilastokeskus (StatFin)](https://stat.fi) | PxWeb API | Harvestoitu | 374 |
-| [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | Harvestoitu | 162 |
-| [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | Suunniteltu | ~160 |
-| [Maanmittauslaitos](https://www.maanmittauslaitos.fi) | OGC API | Suunniteltu | ~22 |
+| Lähde | Tyyppi | Datasettejä | Arvioitu koko |
+|-------|--------|-------------|---------------|
+| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 943 | 114 GB |
+| [HRI (hri.fi)](https://hri.fi) | CKAN API | 549 | 39 GB |
+| [LUKE](https://statdb.luke.fi) | PxWeb API | 495 | 2,3 GB |
+| [Tilastokeskus](https://stat.fi) | PxWeb API | 374 | 1,7 GB |
+| [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1,5 GB |
+| [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
+| [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS | 42 | 1,2 TB |
+| [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
+| **Yhteensä** | | **3 757** | **~1,3 TB** |
 
 ## MCP-työkalut
 
@@ -91,42 +98,62 @@ Aura tarjoaa tekoälyille seuraavat MCP-työkalut:
 
 | Työkalu | Kuvaus |
 |---------|--------|
-| `search_datasets` | Hae datasettejä luonnollisella kielellä |
-| `describe_dataset` | Kuvaa yksittäinen datasetti ymmärrettävästi |
+| `search` | Hae datasettejä luonnollisella kielellä |
+| `describe` | Kuvaa yksittäinen datasetti yksityiskohtaisesti |
+| `stats` | Näytä tilastot tietokannasta |
 | `list_organizations` | Listaa datan julkaisijat |
 | `list_formats` | Listaa saatavilla olevat dataformaatit |
-| `get_dataset_resource` | Hae datasetin yksittäisen resurssin tiedot |
+
+## Projektirakenne
+
+```
+aura/
+├── src/aura/               # Pääpaketti
+│   ├── server.py           # MCP-server (FastMCP)
+│   ├── database.py         # SQLite + FTS5
+│   ├── models.py           # Pydantic-tietomallit
+│   ├── search.py           # Hakutoiminnot
+│   ├── size_estimator.py   # Datakoon arviointi
+│   ├── cli.py              # Komentorivityökalu
+│   └── harvesters/         # Datalähteiden keräimet (8 kpl)
+├── data/aura.db            # SQLite-tietokanta (osa repoa)
+├── docs/
+│   ├── CATALOG.md          # Kaikki datasetit listattuna
+│   └── SOURCES.md          # Lähteiden tekniset tiedot
+├── scripts/                # Migraatiot ja apuskriptit
+│   └── migrations/         # Tietokantamigraatiot
+└── tests/
+```
+
+## Tietokanta
+
+SQLite + FTS5 -täystekstihaku. Tietokanta on osa git-repoa — ei tarvitse harvestoida erikseen.
+
+Skeemamuutokset hoidetaan migraatiojärjestelmällä (`scripts/migrations/`). Katso [docs/SOURCES.md](docs/SOURCES.md).
 
 ## Kehitys
 
 ```bash
-# Luo virtuaaliympäristö (vain kerran)
-python3 -m venv .venv
+# Aktivoi venv (aina ensin!)
 source .venv/bin/activate
 
-# Asenna kehitysriippuvuudet
+# Asenna
 pip install -e ".[dev]"
 
-# Aja testit
+# Testit
 pytest
 
-# Aja lintteri
+# Lintteri
 ruff check src/
 
-# Aja tyypintarkistus
+# Tyypintarkistus
 mypy src/
 ```
 
-> **Tärkeää:** Kaikki Python-komennot ajetaan aina venvin sisällä. Aktivoi venv aina uuden terminaali-istunnon alussa: `source .venv/bin/activate`
-
 ## Versiointi
 
-Aura noudattaa [Semantic Versioning 2.0.0](https://semver.org/) -käytäntöä. Katso [VERSIONING.md](VERSIONING.md) tarkemmat ohjeet.
+[Semantic Versioning 2.0.0](https://semver.org/) · [VERSIONING.md](VERSIONING.md) · [CHANGELOG.md](CHANGELOG.md)
 
 ## Lisenssi
 
 [MIT](LICENSE)
-
-## Tekijät
-
-Aura on avoimen lähdekoodin projekti. Tervetuloa mukaan!

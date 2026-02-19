@@ -114,6 +114,7 @@ class DigitrafficHarvester(BaseHarvester):
                     ),
                 ],
                 source="digitraffic",
+                estimated_size_bytes=10_000_000,  # API-endpoint ~10 MB
             )
 
             upsert_dataset(self.conn, dataset)
