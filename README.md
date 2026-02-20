@@ -2,7 +2,7 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-> **3 757 datasettiä** · **8 927 resurssia** · **200 organisaatiota** · **~1,3 TB** avointa dataa
+> **3 758 datasettiä** · **8 959 resurssia** · **200 organisaatiota** · **~1,3 TB** avointa dataa
 >
 > 8 datalähteestä: avoindata.fi, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Traficom, Metsäkeskus
 
@@ -88,9 +88,9 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 | [Tilastokeskus](https://stat.fi) | PxWeb API | 374 | 1,7 GB |
 | [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1,5 GB |
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
-| [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS | 42 | 1,2 TB |
+| [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
 | [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
-| **Yhteensä** | | **3 757** | **~1,3 TB** |
+| **Yhteensä** | | **3 758** | **~1,3 TB** |
 
 ## MCP-työkalut
 

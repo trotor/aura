@@ -1,6 +1,6 @@
 # Aura — Datasettikatalogi
 
-> **3,757** datasettiä | **8,927** resurssia | **200** organisaatiota | **1.3 TB** arvioitua dataa
+> **3,758** datasettiä | **8,959** resurssia | **200** organisaatiota | **1.3 TB** arvioitua dataa
 >
 > Päivitetty: 2026-02-19
 
@@ -14,9 +14,9 @@
 | [statfin](#statfin) | 374 | 1.7 GB |
 | [digitraffic](#digitraffic) | 162 | 1.5 GB |
 | [fmi](#fmi) | 160 | 14.3 GB |
-| [metsakeskus](#metsakeskus) | 42 | 1.2 TB |
+| [metsakeskus](#metsakeskus) | 43 | 1.2 TB |
 | [traficom](#traficom) | 32 | 2.5 GB |
-| **Yhteensä** | **3,757** | **1.3 TB** |
+| **Yhteensä** | **3,758** | **1.3 TB** |
 
 ---
 
@@ -3858,10 +3858,10 @@
 
 ## metsakeskus
 
-### Datasetit (42)
+### Datasetit (43)
 
 <details>
-<summary>Näytä kaikki 42 datasettiä</summary>
+<summary>Näytä kaikki 43 datasettiä</summary>
 
 | Datasetti | Organisaatio | Koko | Resursseja |
 |----------|-------------|------|-----------|
@@ -3869,38 +3869,39 @@
 | Hilatiedot (16m ruutudata) | Suomen metsäkeskus | 200.0 GB | 2 |
 | Inventointikoealat | Suomen metsäkeskus | 1.0 GB | 2 |
 | Kaukokartoituskoealat | Suomen metsäkeskus | 1.0 GB | 2 |
-| Kemera: juurikäävän torjunta (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: luonnonhoitohanke (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: metsätien perusparannus (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: metsätien tekeminen (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: metsätien tekeminen (toteutus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: nuoren metsän hoito (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: nuoren metsän hoito (toteutus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: pienpuun keräys (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: pienpuun keräys (toteutus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: suometsän hoito (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: suometsän hoito (toteutus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: taimikon varhaishoito (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: taimikon varhaishoito (toteutus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: terveyslannoitus (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: ympäristötuki (hakemus) | Suomen metsäkeskus | 500.0 MB | 1 |
-| Kemera: ympäristötuki (toteutus) | Suomen metsäkeskus | 500.0 MB | 1 |
+| Kemera: juurikäävän torjunta (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: luonnonhoitohanke (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: metsätien perusparannus (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: metsätien tekeminen (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: metsätien tekeminen (toteutus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: nuoren metsän hoito (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: nuoren metsän hoito (toteutus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: pienpuun keräys (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: pienpuun keräys (toteutus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: suometsän hoito (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: suometsän hoito (toteutus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: taimikon varhaishoito (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: taimikon varhaishoito (toteutus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: terveyslannoitus (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: ympäristötuki (hakemus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Kemera: ympäristötuki (toteutus) | Suomen metsäkeskus | 500.0 MB | 2 |
+| Korjuukelpoisuus | Suomen metsäkeskus | 10.0 GB | 1 |
 | Latvusmalli (uusin) | Suomen metsäkeskus | 100.0 GB | 2 |
-| Latvusmalli 2008 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2009 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2010 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2011 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2012 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2013 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2014 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2015 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2016 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2017 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2018 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2019 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2020 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2021 | Suomen metsäkeskus | 50.0 GB | 1 |
-| Latvusmalli 2022 | Suomen metsäkeskus | 50.0 GB | 1 |
+| Latvusmalli 2008 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2009 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2010 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2011 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2012 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2013 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2014 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2015 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2016 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2017 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2018 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2019 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2020 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2021 | Suomen metsäkeskus | 50.0 GB | 2 |
+| Latvusmalli 2022 | Suomen metsäkeskus | 50.0 GB | 2 |
 | Metsämaski | Suomen metsäkeskus | 5.0 GB | 2 |
 | Metsänkäyttöilmoitukset | Suomen metsäkeskus | 10.0 GB | 2 |
 | Metsävarakuviot | Suomen metsäkeskus | 50.0 GB | 2 |

@@ -2,7 +2,7 @@
 
 Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 
-> Päivitetty: 2026-02-19
+> Päivitetty: 2026-02-20
 
 ## Yhteenveto
 
@@ -14,9 +14,9 @@ Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 | [Tilastokeskus (StatFin)](#tilastokeskus-statfin) | PxWeb API | 374 | 748 | 1,7 GB |
 | [Digitraffic](#digitraffic) | REST/OpenAPI | 162 | 162 | 1,5 GB |
 | [Ilmatieteen laitos (FMI)](#ilmatieteen-laitos-fmi) | WFS 2.0 | 160 | 160 | 14 GB |
-| [Metsäkeskus](#metsäkeskus) | WFS/WCS | 42 | 53 | 1,2 TB |
+| [Metsäkeskus](#metsäkeskus) | WFS/WCS/ZIP | 43 | 85 | 1,2 TB |
 | [Traficom](#traficom) | OData v4 | 32 | 32 | 2,5 GB |
-| **Yhteensä** | | **3 757** | **8 927** | **~1,3 TB** |
+| **Yhteensä** | | **3 758** | **8 959** | **~1,3 TB** |
 
 ### Resurssityypit
 
@@ -24,18 +24,18 @@ Aura harvestoi sekä **rajapintoja** (API, WMS, WFS, OGC, PXWEB) että **aineist
 
 | Formaatti | Resursseja |
 |----------|-----------|
-| HTML | 1 059 |
+| HTML | 1 063 |
 | PXWEB | 1 009 |
 | WMS | 875 |
 | XLSX | 842 |
 | WFS | 753 |
 | CSV | 482 |
-| ZIP | 291 |
+| ZIP | 319 |
 | SHP | 270 |
 | PDF | 251 |
 | API | 194 |
 
-**Yhteensä: 3 757 datasettiä, 8 927 resurssia, 197 organisaatiota, ~1,3 TB**
+**Yhteensä: 3 758 datasettiä, 8 959 resurssia, 200 organisaatiota, ~1,3 TB**
 
 ---
 
@@ -173,21 +173,22 @@ Sää-, ilmasto-, meri- ja säteilytietoa. WFS-rajapinta tarjoaa stored query -m
 ## Metsäkeskus
 
 **URL:** https://avoin.metsakeskus.fi
-**API:** GeoServer WFS/WCS
+**API:** GeoServer WFS/WCS + ZIP-aineistopaketit
 **Autentikointi:** Ei tarvita
-**Datasettejä:** 42
-**Resursseja:** 53
+**Datasettejä:** 43
+**Resursseja:** 85
 **Arvioitu koko:** 1,2 TB
 
-Suomen metsävaratiedot — ylivoimaisesti suurin yksittäinen datalähde kooltaan.
+Suomen metsävaratiedot — ylivoimaisesti suurin yksittäinen datalähde kooltaan. Sisältää sekä rajapinnat (WFS/WCS) että ladattavat aineistopaketit (ZIP).
 
 #### Harvester-toteutus
 
-`src/aura/harvesters/metsakeskus.py` — Ei käytä WFS `GetCapabilities` -mekanismia, vaan listaa palvelut manuaalisesti (endpointit ovat hyvin dokumentoitu mutta hajanaisesti). Kolme pääkategoriaa:
+`src/aura/harvesters/metsakeskus.py` — Ei käytä WFS `GetCapabilities` -mekanismia, vaan listaa palvelut manuaalisesti (endpointit ovat hyvin dokumentoitu mutta hajanaisesti). Neljä pääkategoriaa:
 
-1. **Metsävaratieto-palvelut** — Kuviotiedot, hilaruudukot, elinympäristöt, metsänkäyttöilmoitukset (GeoServer WFS)
-2. **Latvusmalliaineistot (CHM)** — Vuosittaiset puuston latvusmallit 2008–2022 (WCS)
-3. **Kemera-aineistot** — Metsätalouden tuet ja hoitotyöt (GeoServer WFS)
+1. **Metsävaratieto-palvelut** — Kuviotiedot, hilaruudukot, elinympäristöt, metsänkäyttöilmoitukset (GeoServer WFS + ZIP-lataukset)
+2. **Latvusmalliaineistot (CHM)** — Vuosittaiset puuston latvusmallit 2008–2022 (WCS + ZIP-lataukset)
+3. **Kemera-aineistot** — Metsätalouden tuet ja hoitotyöt (GeoServer WFS + ZIP-lataukset)
+4. **Lataus-only-aineistot** — Korjuukelpoisuus ym. (~130 ZIP-tiedostoa, ei API-endpointia)
 
 **Suurimmat aineistot:**
 - Hilaruudukkotiedot: ~200 GB
