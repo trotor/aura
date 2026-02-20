@@ -10,13 +10,17 @@ from aura.harvesters.gtk import GtkHarvester
 from aura.harvesters.hri import HriHarvester
 from aura.harvesters.luke import LukeHarvester
 from aura.harvesters.metsakeskus import MetsakeskusHarvester
+from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.statfin import StatfinHarvester
+from aura.harvesters.syke import SykeHarvester
+from aura.harvesters.taustakartat import TaustakartatHarvester
 from aura.harvesters.traficom import TraficomHarvester
 
 # Rekisteri kaikista harvestereista
 HARVESTERS: dict[str, type[BaseHarvester]] = {
     "avoindata.fi": AvoindataHarvester,
     "hri.fi": HriHarvester,
+    "syke": SykeHarvester,
     "statfin": StatfinHarvester,
     "luke": LukeHarvester,
     "digitraffic": DigitrafficHarvester,
@@ -24,6 +28,8 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "gtk": GtkHarvester,
     "traficom": TraficomHarvester,
     "metsakeskus": MetsakeskusHarvester,
+    "taustakartat": TaustakartatHarvester,
+    "overture": OvertureHarvester,
 }
 
 

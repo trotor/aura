@@ -2,9 +2,9 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-> **3 758+ datasettiä** · **8 959+ resurssia** · **200 organisaatiota** · **~1,3 TB** avointa dataa
+> **4 388+ datasettiä** · **10 183+ resurssia** · **200+ organisaatiota** · **~1,6 TB** avointa dataa
 >
-> 9 datalähteestä: avoindata.fi, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, GTK, Traficom, Metsäkeskus
+> 12 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Overture Maps, GTK, Traficom, Metsäkeskus, Taustakartat
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -12,7 +12,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 9 suomalaisesta avoimen datan lähteestä
+- **Aggregoi** metadatan 12 avoimen datan lähteestä
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
@@ -83,15 +83,18 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 | Lähde | Tyyppi | Datasettejä | Arvioitu koko |
 |-------|--------|-------------|---------------|
 | [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 943 | 114 GB |
+| [SYKE](https://ckan.ymparisto.fi) | CKAN API | ~615 | ~50 GB |
 | [HRI (hri.fi)](https://hri.fi) | CKAN API | 549 | 39 GB |
 | [LUKE](https://statdb.luke.fi) | PxWeb API | 495 | 2,3 GB |
 | [Tilastokeskus](https://stat.fi) | PxWeb API | 374 | 1,7 GB |
 | [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1,5 GB |
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
+| [Overture Maps](https://overturemaps.org) | GeoParquet (S3) | 6 | ~215 GB |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
 | [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
 | [GTK](https://www.gtk.fi) | ArcGIS WFS/WMS | 5 | 7 GB |
-| **Yhteensä** | | **3 763** | **~1,3 TB** |
+| [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | ~20 GB |
+| **Yhteensä** | | **~4 388** | **~1,6 TB** |
 
 ## MCP-työkalut
 
@@ -124,7 +127,7 @@ aura/
 │   ├── size_estimator.py   # Datakoon arviointi
 │   ├── cli.py              # Komentorivityökalu
 │   ├── spatial_probe.py    # Paikkatietojen kokoluotaus
-│   └── harvesters/         # Datalähteiden keräimet (9 kpl)
+│   └── harvesters/         # Datalähteiden keräimet (12 kpl)
 │       ├── base.py         # BaseHarvester + _make_dataset()
 │       ├── ckan.py         # CkanHarvester-kantaluokka
 │       ├── pxweb.py        # PxWebHarvester-kantaluokka

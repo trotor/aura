@@ -9,14 +9,18 @@ Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 | Lähde | Tyyppi | Datasettejä | Resursseja | Arvioitu koko |
 |-------|--------|-------------|------------|---------------|
 | [avoindata.fi](#avoindatafi) | CKAN API | 1 943 | 5 188 | 114 GB |
+| [SYKE](#syke-suomen-ympäristökeskus) | CKAN API | ~615 | ~1 200 | ~50 GB |
 | [HRI (hri.fi)](#hri-helsinki-region-infoshare) | CKAN API | 549 | 1 594 | 39 GB |
 | [LUKE](#luke-luonnonvarakeskus) | PxWeb API | 495 | 990 | 2,3 GB |
 | [Tilastokeskus (StatFin)](#tilastokeskus-statfin) | PxWeb API | 374 | 748 | 1,7 GB |
 | [Digitraffic](#digitraffic) | REST/OpenAPI | 162 | 162 | 1,5 GB |
 | [Ilmatieteen laitos (FMI)](#ilmatieteen-laitos-fmi) | WFS 2.0 | 160 | 160 | 14 GB |
+| [Overture Maps](#overture-maps) | GeoParquet (S3) | 6 | 12 | ~215 GB |
 | [Metsäkeskus](#metsäkeskus) | WFS/WCS/ZIP | 43 | 85 | 1,2 TB |
 | [Traficom](#traficom) | OData v4 | 32 | 32 | 2,5 GB |
-| **Yhteensä** | | **3 758** | **8 959** | **~1,3 TB** |
+| [GTK](#gtk) | ArcGIS WFS/WMS | 5 | 8 | 7 GB |
+| [Taustakartat](#taustakartat) | TMS | 4 | 4 | ~20 GB |
+| **Yhteensä** | | **~4 388** | **~10 183** | **~1,6 TB** |
 
 ### Resurssityypit
 
@@ -35,7 +39,7 @@ Aura harvestoi sekä **rajapintoja** (API, WMS, WFS, OGC, PXWEB) että **aineist
 | PDF | 251 |
 | API | 194 |
 
-**Yhteensä: 3 758 datasettiä, 8 959 resurssia, 200 organisaatiota, ~1,3 TB**
+**Yhteensä: ~4 388 datasettiä, ~10 183 resurssia, 200+ organisaatiota, ~1,6 TB**
 
 ---
 
@@ -219,6 +223,90 @@ Liikenne- ja viestintäviraston avoin data.
 
 ---
 
+## GTK
+
+**URL:** https://www.gtk.fi
+**API:** ArcGIS WFS/WMS (`https://gtkdata.gtk.fi/arcgis/services/Rajapinnat/`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 5
+**Resursseja:** 8
+**Arvioitu koko:** 7 GB
+
+Geologian tutkimuskeskus (GTK) tarjoaa Suomen kallioperä-, maaperä- ja kiviainestietoja ArcGIS-rajapintojen kautta.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/gtk.py` — Staattinen konfiguraatio. WFS-palveluille (kallioperä, maaperä, kiviainesvarannot) luodaan kaksi resurssia (WFS + WMS), WMS-only-palveluille (geofysiikka, pohjatutkimukset) yksi.
+
+---
+
+## SYKE (Suomen ympäristökeskus)
+
+**URL:** https://ckan.ymparisto.fi
+**API:** CKAN 3 REST (`https://ckan.ymparisto.fi/api/3/action/`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** ~615
+**Resursseja:** ~1 200
+**Arvioitu koko:** ~50 GB
+
+Suomen ympäristökeskus (SYKE) julkaisee ympäristö-, vesistö- ja paikkatietoja. Sisältää mm. pohjavesialueet, Natura 2000 -alueet, maankäyttö-, vedenlaatu- ja satelliittihavaintodataa.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/syke.py` — Käyttää `CkanHarvester`-kantaluokkaa. Sama `package_search`-logiikka kuin avoindata.fi:lle ja HRI:lle, mutta hakee SYKE:n omasta CKAN-portaalista (`ckan.ymparisto.fi`).
+
+---
+
+## Taustakartat
+
+**URL:** https://kartat.kapsi.fi
+**Tyyppi:** TMS-tiilipalvelut
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 4
+**Resursseja:** 4
+**Arvioitu koko:** ~20 GB
+
+Karttatiilipalvelut joita voi käyttää sovellusten pohjakarttoina. Sisältää Maanmittauslaitoksen kartat Kapsin kautta sekä OpenStreetMap-standardikartan.
+
+| Palvelu | URL-template | Lisenssi |
+|---------|-------------|----------|
+| MML Peruskartta | `tiles.kartat.kapsi.fi/peruskartta/{z}/{x}/{y}.jpg` | CC BY 4.0 |
+| MML Taustakartta | `tiles.kartat.kapsi.fi/taustakartta/{z}/{x}/{y}.jpg` | CC BY 4.0 |
+| MML Ortokuva | `tiles.kartat.kapsi.fi/ortokuva/{z}/{x}/{y}.jpg` | CC BY 4.0 |
+| OpenStreetMap | `tile.openstreetmap.org/{z}/{x}/{y}.png` | ODbL |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/taustakartat.py` — Staattinen konfiguraatioharvester. Jokaisesta tiilipalvelusta luodaan yksi Dataset ja TMS-resurssi URL-templatella.
+
+---
+
+## Overture Maps
+
+**URL:** https://overturemaps.org
+**Tyyppi:** GeoParquet (S3 + HTTPS)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 6
+**Resursseja:** 12
+**Arvioitu koko:** ~215 GB
+
+Overture Maps Foundation tuottaa avoimen, maailmanlaajuisen kartta-aineiston GeoParquet-muodossa. Data on saatavilla S3:ssä ja source.coop:ssa. Jokaiselle teemalle kaksi resurssia: S3 GeoParquet ja HTTPS-lataus.
+
+| Teema | Kuvaus | Arvioitu koko |
+|-------|--------|---------------|
+| buildings | Rakennukset | 50 GB |
+| transportation | Liikenneverkko | 80 GB |
+| places | Paikat ja POI:t | 10 GB |
+| addresses | Osoitteet | 30 GB |
+| divisions | Hallinnolliset alueet | 5 GB |
+| base | Perusgeometria (vesistöt, maasto) | 40 GB |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/overture.py` — Staattinen konfiguraatioharvester. Kuvauksissa DuckDB-kyselyesimerkit Suomen bbox-rajauksella. Lisenssi: ODbL, kattavuus: Maailma.
+
+---
+
 ## Harvester-arkkitehtuuri
 
 Jokainen datalähde harvestoidaan omalla luokallaan joka perii `BaseHarvester`-pohjaluokan:
@@ -227,14 +315,20 @@ Jokainen datalähde harvestoidaan omalla luokallaan joka perii `BaseHarvester`-p
 src/aura/harvesters/
 ├── __init__.py       # Rekisteri ja factory
 ├── base.py           # BaseHarvester-pohjaluokka
+├── ckan.py           # CkanHarvester-kantaluokka
+├── pxweb.py          # PxWebHarvester-kantaluokka
 ├── avoindata.py      # avoindata.fi (CKAN)
 ├── hri.py            # HRI (CKAN)
+├── syke.py           # SYKE (CKAN)
 ├── statfin.py        # Tilastokeskus (PxWeb)
 ├── luke.py           # LUKE (PxWeb)
 ├── digitraffic.py    # Digitraffic (OpenAPI)
 ├── fmi.py            # FMI (WFS)
+├── gtk.py            # GTK (ArcGIS WFS/WMS)
 ├── traficom.py       # Traficom (OData)
-└── metsakeskus.py    # Metsäkeskus (WFS/WCS)
+├── metsakeskus.py    # Metsäkeskus (WFS/WCS)
+├── taustakartat.py   # Taustakartat (TMS)
+└── overture.py       # Overture Maps (GeoParquet)
 ```
 
 ### Käyttö

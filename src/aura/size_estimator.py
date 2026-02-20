@@ -30,6 +30,8 @@ FORMAT_SIZE_ESTIMATES: dict[str, int] = {
     "KUNTAGML": 20_000_000,  # 20 MB
     "TAB": 5_000_000,        # 5 MB — MapInfo
     "GPKG": 50_000_000,      # 50 MB — GeoPackage
+    "TMS": 5_000_000_000,    # 5 GB — karttatiilipalvelu (koko tileset)
+    "GeoParquet": 500_000_000,  # 500 MB — GeoParquet-aineisto
     "PPTX": 5_000_000,       # 5 MB
     "DOC": 1_000_000,        # 1 MB
     "DOCX": 1_000_000,       # 1 MB
