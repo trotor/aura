@@ -20,7 +20,8 @@ Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 | [Traficom](#traficom) | OData v4 | 32 | 32 | 2,5 GB |
 | [GTK](#gtk) | ArcGIS WFS/WMS | 5 | 8 | 7 GB |
 | [Taustakartat](#taustakartat) | TMS | 4 | 4 | ~20 GB |
-| **Yhteensä** | | **~4 388** | **~10 183** | **~1,6 TB** |
+| [Ruokavirasto](#ruokavirasto) | INSPIRE/GeoServer | 33 | 97 | — |
+| **Yhteensä** | | **~4 421** | **~10 280** | **~1,6 TB** |
 
 ### Resurssityypit
 
@@ -39,7 +40,7 @@ Aura harvestoi sekä **rajapintoja** (API, WMS, WFS, OGC, PXWEB) että **aineist
 | PDF | 251 |
 | API | 194 |
 
-**Yhteensä: ~4 388 datasettiä, ~10 183 resurssia, 200+ organisaatiota, ~1,6 TB**
+**Yhteensä: ~4 421 datasettiä, ~10 280 resurssia, 200+ organisaatiota, ~1,6 TB**
 
 ---
 
@@ -307,6 +308,39 @@ Overture Maps Foundation tuottaa avoimen, maailmanlaajuisen kartta-aineiston Geo
 
 ---
 
+## Ruokavirasto
+
+**URL:** https://www.ruokavirasto.fi
+**API:** INSPIRE GeoServer (`https://inspire.ruokavirasto-awsa.com/geoserver/`)
+**Autentikointi:** Ei tarvita (avoimet); viranomaiskäyttö (rajoitetut)
+**Datasettejä:** 33
+**Resursseja:** 97
+
+Ruokavirasto (Finnish Food Authority) tarjoaa maatalouden paikkatietoaineistoja, avoin tieto -dashboardeja ja rajoitettuja viranomaiskäytön rajapintoja.
+
+### A. INSPIRE-paikkatiedot (20 datasettiä)
+
+| Aineisto | Vuodet | Resurssit | Lisenssi |
+|----------|--------|-----------|----------|
+| Peltolohkorekisteri | 2020–2024 | WMS, WFS, GPKG | CC BY 4.0 |
+| Maatalousmaa | 2020–2024 | WMS, WFS, GPKG | CC BY 4.0 |
+| Kasvulohkot | 2020–2024 | WMS, WFS, GPKG | CC BY 4.0 |
+| Maisemapiirteet | 2020–2024 | WMS, WFS, GPKG | CC BY 4.0 |
+
+### B. Avoin tieto -dashboardit (5 datasettiä)
+
+Qlik-dashboardit osoitteessa avointieto.ruokavirasto.fi. Elintarvikevalvonta, eläinten terveys, kasvinterveys ja EU-tukimaksut.
+
+### C. Rajoitetut rajapinnat (8 datasettiä)
+
+Liityntäkatalogi.suomi.fi:ssä rekisteröidyt viranomaiskäytön rajapinnat (`access_level="restricted"`): eläinrekisteri, teurastamotiedot, luomutoimijarekisteri, kasvinsuojeluainerekisteri, rehurekisteri, lannoiterekisteri, vierasainerekisteri, elintarvikehuoneistorekisteri.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/ruokavirasto.py` — Staattinen konfiguraatioharvester. INSPIRE-aineistoista luodaan vuosi × tyyppi -datasetit (3 resurssia: WMS + WFS + GeoPackage). Dashboardeista HTML-resurssi. Rajoitetuista palveluista API-resurssi liityntäkatalogiin.
+
+---
+
 ## Harvester-arkkitehtuuri
 
 Jokainen datalähde harvestoidaan omalla luokallaan joka perii `BaseHarvester`-pohjaluokan:
@@ -328,7 +362,8 @@ src/aura/harvesters/
 ├── traficom.py       # Traficom (OData)
 ├── metsakeskus.py    # Metsäkeskus (WFS/WCS)
 ├── taustakartat.py   # Taustakartat (TMS)
-└── overture.py       # Overture Maps (GeoParquet)
+├── overture.py       # Overture Maps (GeoParquet)
+└── ruokavirasto.py   # Ruokavirasto (INSPIRE/GeoServer)
 ```
 
 ### Käyttö

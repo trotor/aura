@@ -27,7 +27,10 @@ def format_dataset_summary(dataset: dict[str, Any]) -> str:
     else:
         keywords = keywords_raw
 
-    parts = [f"## {title}"]
+    access_level = dataset.get("access_level", "open")
+    lock = "\U0001f512 " if access_level == "restricted" else ""
+
+    parts = [f"## {lock}{title}"]
     if org:
         parts.append(f"**Julkaisija:** {org}")
     if notes:
@@ -71,6 +74,11 @@ def format_dataset_detail(dataset: dict[str, Any]) -> str:
     freq = dataset.get("update_frequency", "")
     if freq:
         summary += f"\n**Päivitystiheys:** {freq}"
+
+    access_level = dataset.get("access_level", "open")
+    if access_level != "open":
+        label = {"registration": "Vaatii rekisteröinnin", "restricted": "Rajoitettu pääsy"}
+        summary += f"\n**Saatavuus:** {label.get(access_level, access_level)}"
 
     return summary
 

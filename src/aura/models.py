@@ -66,6 +66,7 @@ class Dataset(BaseModel):
     num_resources: int = 0
     resources: list[Resource] = Field(default_factory=list)
     source: str = "avoindata.fi"
+    access_level: str = "open"
     estimated_size_bytes: int = 0
 
     @classmethod

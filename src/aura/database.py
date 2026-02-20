@@ -108,7 +108,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             metadata_created, metadata_modified,
             keywords_fi, keywords_en, geographical_coverage,
             update_frequency, collection_type, num_resources, source,
-            estimated_size_bytes
+            access_level, estimated_size_bytes
         ) VALUES (
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
@@ -117,7 +117,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
-            ?
+            ?, ?
         ) ON CONFLICT(id) DO UPDATE SET
             name=excluded.name, title=excluded.title,
             title_fi=excluded.title_fi, title_en=excluded.title_en, title_sv=excluded.title_sv,
@@ -135,6 +135,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             collection_type=excluded.collection_type,
             num_resources=excluded.num_resources,
             source=excluded.source,
+            access_level=excluded.access_level,
             estimated_size_bytes=excluded.estimated_size_bytes,
             harvested_at=datetime('now')
         """,
@@ -150,7 +151,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             json.dumps(dataset.geographical_coverage, ensure_ascii=False),
             dataset.update_frequency, dataset.collection_type,
             dataset.num_resources, dataset.source,
-            dataset.estimated_size_bytes,
+            dataset.access_level, dataset.estimated_size_bytes,
         ),
     )
 
@@ -181,6 +182,7 @@ def search_datasets(
     source: str = "",
     fmt: str = "",
     organization: str = "",
+    access_level: str = "",
 ) -> list[dict[str, Any]]:
     """Hae datasettejä FTS5-täystekstihaulla ja suodattimilla.
 
@@ -192,6 +194,7 @@ def search_datasets(
         fmt: Suodata formaatin mukaan (esim. "CSV") — datasetti sisältyy jos
              sillä on vähintään yksi resurssi kyseisessä formaatissa.
         organization: Suodata organisaation mukaan (osa nimestä riittää).
+        access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted").
     """
     conditions = ["datasets_fts MATCH ?"]
     params: list[Any] = [query]
@@ -202,6 +205,9 @@ def search_datasets(
     if organization:
         conditions.append("d.organization_title LIKE ?")
         params.append(f"%{organization}%")
+    if access_level:
+        conditions.append("d.access_level = ?")
+        params.append(access_level)
     if fmt:
         conditions.append(
             "d.id IN (SELECT dataset_id FROM resources WHERE format = ? COLLATE NOCASE)"

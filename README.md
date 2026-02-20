@@ -2,9 +2,9 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-> **4 388+ datasettiä** · **10 183+ resurssia** · **200+ organisaatiota** · **~1,6 TB** avointa dataa
+> **4 421+ datasettiä** · **10 280+ resurssia** · **200+ organisaatiota** · **~1,6 TB** avointa dataa
 >
-> 12 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Overture Maps, GTK, Traficom, Metsäkeskus, Taustakartat
+> 13 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Overture Maps, GTK, Traficom, Metsäkeskus, Taustakartat, Ruokavirasto
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -12,7 +12,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 12 avoimen datan lähteestä
+- **Aggregoi** metadatan 13 avoimen datan lähteestä
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
@@ -94,7 +94,8 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 | [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
 | [GTK](https://www.gtk.fi) | ArcGIS WFS/WMS | 5 | 7 GB |
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | ~20 GB |
-| **Yhteensä** | | **~4 388** | **~1,6 TB** |
+| [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
+| **Yhteensä** | | **~4 421** | **~1,6 TB** |
 
 ## MCP-työkalut
 
@@ -127,7 +128,7 @@ aura/
 │   ├── size_estimator.py   # Datakoon arviointi
 │   ├── cli.py              # Komentorivityökalu
 │   ├── spatial_probe.py    # Paikkatietojen kokoluotaus
-│   └── harvesters/         # Datalähteiden keräimet (12 kpl)
+│   └── harvesters/         # Datalähteiden keräimet (13 kpl)
 │       ├── base.py         # BaseHarvester + _make_dataset()
 │       ├── ckan.py         # CkanHarvester-kantaluokka
 │       ├── pxweb.py        # PxWebHarvester-kantaluokka

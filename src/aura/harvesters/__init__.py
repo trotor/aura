@@ -11,6 +11,7 @@ from aura.harvesters.hri import HriHarvester
 from aura.harvesters.luke import LukeHarvester
 from aura.harvesters.metsakeskus import MetsakeskusHarvester
 from aura.harvesters.overture import OvertureHarvester
+from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.statfin import StatfinHarvester
 from aura.harvesters.syke import SykeHarvester
 from aura.harvesters.taustakartat import TaustakartatHarvester
@@ -30,6 +31,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "metsakeskus": MetsakeskusHarvester,
     "taustakartat": TaustakartatHarvester,
     "overture": OvertureHarvester,
+    "ruokavirasto": RuokavirastoHarvester,
 }
 
 

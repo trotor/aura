@@ -44,6 +44,7 @@ def search(
     source: str = "",
     format: str = "",
     organization: str = "",
+    access_level: str = "",
 ) -> str:
     """Hae suomalaisia avoimia datasettejä luonnollisella kielellä.
 
@@ -54,11 +55,13 @@ def search(
         source: Suodata lähteen mukaan (esim. "avoindata.fi", "hri.fi", "statfin")
         format: Suodata formaatin mukaan (esim. "CSV", "JSON", "GeoJSON")
         organization: Suodata organisaation mukaan (osa nimestä riittää)
+        access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
     """
     conn = _get_conn()
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
+        access_level=access_level,
     )
 
     if not results:
@@ -242,6 +245,7 @@ def search_structured(
     source: str = "",
     format: str = "",
     organization: str = "",
+    access_level: str = "",
 ) -> str:
     """Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille.
 
@@ -254,6 +258,7 @@ def search_structured(
         source: Suodata lähteen mukaan (esim. "avoindata.fi")
         format: Suodata formaatin mukaan (esim. "CSV")
         organization: Suodata organisaation mukaan
+        access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
     """
     import json
 
@@ -261,6 +266,7 @@ def search_structured(
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
+        access_level=access_level,
     )
 
     structured = []
@@ -286,6 +292,7 @@ def search_structured(
             "modified": d.get("metadata_modified", ""),
             "num_resources": d.get("num_resources", 0),
             "estimated_size_bytes": d.get("estimated_size_bytes", 0),
+            "access_level": d.get("access_level", "open"),
         })
 
     return json.dumps(

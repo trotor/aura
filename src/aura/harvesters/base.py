@@ -60,6 +60,7 @@ class BaseHarvester(ABC):
             "collection_type": "Open Data",
             "geographical_coverage": ["Suomi"],
             "source": self.name,
+            "access_level": "open",
         }
         defaults.update(kwargs)
         return Dataset(**defaults)
