@@ -46,7 +46,53 @@ def format_dataset_summary(dataset: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def format_dataset_detail(dataset: dict[str, Any]) -> str:
+ENRICHMENT_FIELD_LABELS: dict[str, str] = {
+    "description_extended": "Laajennettu kuvaus",
+    "api_endpoint": "Rajapinta-URL",
+    "api_format": "Rajapinnan formaatti",
+    "data_fields": "Datakentät",
+    "related_datasets": "Liittyvät datasetit",
+    "quality_notes": "Laatuhuomiot",
+    "use_case": "Käyttötapaus",
+    "access_instructions": "Käyttöohjeet",
+    "organization_context": "Organisaation tausta",
+    "temporal_coverage": "Ajallinen kattavuus",
+    "update_frequency_actual": "Havaittu päivitystiheys",
+}
+
+
+def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
+    """Muotoile rikastukset luettavaan muotoon."""
+    if not enrichments:
+        return ""
+
+    parts = ["\n### Rikastukset\n"]
+    for e in enrichments:
+        field = e.get("field", "")
+        label = ENRICHMENT_FIELD_LABELS.get(field, field)
+        value = e.get("value", "")
+        confidence = e.get("confidence", "")
+        source_type = e.get("source_type", "")
+
+        conf_marker = ""
+        if confidence == "high":
+            conf_marker = " [varma]"
+        elif confidence == "low":
+            conf_marker = " [epävarma]"
+        elif confidence == "verified":
+            conf_marker = " [vahvistettu]"
+
+        parts.append(f"- **{label}:** {value}{conf_marker}")
+        if source_type and source_type != "mcp_session":
+            parts.append(f"  (lähde: {source_type})")
+
+    return "\n".join(parts)
+
+
+def format_dataset_detail(
+    dataset: dict[str, Any],
+    enrichments: list[dict[str, Any]] | None = None,
+) -> str:
     """Muotoile datasetin täydet tiedot."""
     summary = format_dataset_summary(dataset)
 
@@ -79,6 +125,9 @@ def format_dataset_detail(dataset: dict[str, Any]) -> str:
     if access_level != "open":
         label = {"registration": "Vaatii rekisteröinnin", "restricted": "Rajoitettu pääsy"}
         summary += f"\n**Saatavuus:** {label.get(access_level, access_level)}"
+
+    if enrichments:
+        summary += format_enrichments(enrichments)
 
     return summary
 

@@ -9,20 +9,33 @@ from datetime import UTC
 from fastmcp import FastMCP
 
 from aura.database import (
+    add_enrichment,
     find_related_datasets,
     get_connection,
     get_dataset,
     get_datasets_by_ids,
+    get_enrichment_count,
+    get_latest_enrichments,
     get_stats,
     init_db,
     search_datasets,
 )
-from aura.search import format_dataset_detail, format_dataset_summary, format_stats
+from aura.search import (
+    format_dataset_detail,
+    format_dataset_summary,
+    format_enrichments,
+    format_stats,
+)
 
 mcp = FastMCP(
     "Aura",
-    instructions="Suomalaisen avoimen datan discovery-palvelu. "
-    "Hae ja ymmärrä Suomen avoimia datasettejä.",
+    instructions=(
+        "Suomalaisen avoimen datan discovery-palvelu. "
+        "Hae ja ymmärrä Suomen avoimia datasettejä. "
+        "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
+        "(kenttiä, käyttöohjeita, laatuhuomioita), "
+        "tallenna löydökset enrich()-työkalulla."
+    ),
 )
 
 _conn = None
@@ -88,7 +101,8 @@ def describe(dataset_id: str) -> str:
     if dataset is None:
         return f"Datasettiä '{dataset_id}' ei löytynyt."
 
-    return format_dataset_detail(dataset)
+    enrichments = get_latest_enrichments(conn, dataset["id"])
+    return format_dataset_detail(dataset, enrichments=enrichments)
 
 
 @mcp.tool()
@@ -280,8 +294,9 @@ def search_structured(
         else:
             keywords = keywords_raw
 
+        ds_id = d.get("id", "")
         structured.append({
-            "id": d.get("id", ""),
+            "id": ds_id,
             "name": d.get("name", ""),
             "title": d.get("title_fi") or d.get("title", ""),
             "description": d.get("notes_fi") or d.get("notes", ""),
@@ -293,6 +308,7 @@ def search_structured(
             "num_resources": d.get("num_resources", 0),
             "estimated_size_bytes": d.get("estimated_size_bytes", 0),
             "access_level": d.get("access_level", "open"),
+            "enrichment_count": get_enrichment_count(conn, ds_id),
         })
 
     return json.dumps(
@@ -413,6 +429,83 @@ def compare(dataset_ids: list[str]) -> str:
         parts.append("")
 
     return "\n".join(parts)
+
+
+@mcp.tool()
+def enrich(
+    dataset_id: str,
+    field: str,
+    value: str,
+    confidence: str = "medium",
+    source_type: str = "mcp_session",
+    source_detail: str = "",
+) -> str:
+    """Rikasta datasetin tietoja. Tallentaa löydetyn tiedon kantaan.
+
+    Käytä tätä kun löydät uutta tietoa datasetistä tutkimuksen aikana.
+
+    Args:
+        dataset_id: Datasetin ID tai nimi
+        field: Rikastettava kenttä. Tuetut kentät:
+            - description_extended: laajennettu kuvaus
+            - api_endpoint: löydetty rajapinta-URL
+            - api_format: rajapinnan formaatti (REST, WFS, OData, jne.)
+            - data_fields: JSON-lista datasetin kentistä/sarakkeista
+            - related_datasets: liittyvät datasetit
+            - quality_notes: huomioita datan laadusta
+            - use_case: käyttötapausesimerkki
+            - access_instructions: ohjeet datan hakemiseen
+            - organization_context: taustatietoa julkaisijasta
+            - temporal_coverage: ajallinen kattavuus
+            - update_frequency_actual: havaittu päivitystiheys
+        value: Rikastuksen arvo (teksti tai JSON-merkkijono)
+        confidence: Luottamustaso: "low", "medium", "high", "verified"
+        source_type: Lähdetyyppi: "mcp_session", "web_research",
+            "manual", "ai_analysis"
+        source_detail: Lähteen kuvaus tai URL
+    """
+    conn = _get_conn()
+
+    valid_fields = {
+        "description_extended", "api_endpoint", "api_format",
+        "data_fields", "related_datasets", "quality_notes",
+        "use_case", "access_instructions", "organization_context",
+        "temporal_coverage", "update_frequency_actual",
+    }
+    if field not in valid_fields:
+        fields_list = ", ".join(sorted(valid_fields))
+        return f"Tuntematon kenttä '{field}'. Tuetut: {fields_list}"
+
+    valid_confidence = {"low", "medium", "high", "verified"}
+    if confidence not in valid_confidence:
+        return f"Virheellinen luottamustaso '{confidence}'."
+
+    enrichment_id = add_enrichment(
+        conn, dataset_id, field, value,
+        confidence=confidence,
+        source_type=source_type,
+        source_detail=source_detail,
+    )
+    return (
+        f"Rikastus tallennettu (id: {enrichment_id}). "
+        f"Datasetti: {dataset_id}, kenttä: {field}."
+    )
+
+
+@mcp.tool()
+def get_enrichments_tool(dataset_id: str) -> str:
+    """Näytä datasetin rikastukset (crowdsourced enrichments).
+
+    Args:
+        dataset_id: Datasetin ID tai nimi
+    """
+    conn = _get_conn()
+    enrichments = get_latest_enrichments(conn, dataset_id)
+
+    if not enrichments:
+        return f"Ei rikastuksia datasetille '{dataset_id}'."
+
+    return format_enrichments(enrichments)
 
 
 @mcp.tool()

@@ -69,6 +69,28 @@ def main() -> None:
         help="HTTP-timeout sekunteina (oletus: 180)",
     )
 
+    # export-enrichments
+    export_parser = subparsers.add_parser(
+        "export-enrichments", help="Vie rikastukset JSON-tiedostoon"
+    )
+    export_parser.add_argument(
+        "--output", "-o", default="enrichments.json",
+        help="Tulostiedoston polku (oletus: enrichments.json)",
+    )
+    export_parser.add_argument(
+        "--source-type",
+        default="",
+        help="Suodata lähdetyypin mukaan (esim. mcp_session)",
+    )
+
+    # import-enrichments
+    import_parser = subparsers.add_parser(
+        "import-enrichments", help="Tuo rikastukset JSON-tiedostosta"
+    )
+    import_parser.add_argument(
+        "files", nargs="+", help="JSON-tiedostot"
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -189,6 +211,62 @@ def main() -> None:
                     updated += 1
             conn.commit()
             print(f"Päivitetty {updated} datasetin kokoarvio tietokantaan.")
+
+    elif args.command == "export-enrichments":
+        import json
+
+        from aura.database import (
+            export_enrichments,
+            get_connection,
+            init_db,
+        )
+
+        conn = get_connection()
+        init_db(conn)
+        enrichments = export_enrichments(
+            conn, source_type=args.source_type
+        )
+        if not enrichments:
+            print("Ei rikastuksia vietäväksi.")
+            sys.exit(0)
+
+        output = {
+            "version": "1.0",
+            "enrichments": enrichments,
+        }
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+        print(
+            f"Viety {len(enrichments)} rikastusta "
+            f"tiedostoon {args.output}."
+        )
+
+    elif args.command == "import-enrichments":
+        import json
+
+        from aura.database import (
+            get_connection,
+            import_enrichments,
+            init_db,
+        )
+
+        conn = get_connection()
+        init_db(conn)
+        total_imported = 0
+        for filepath in args.files:
+            try:
+                with open(filepath, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, json.JSONDecodeError) as e:
+                print(f"Virhe luettaessa {filepath}: {e}")
+                continue
+
+            enrichments = data.get("enrichments", [])
+            count = import_enrichments(conn, enrichments)
+            print(f"  {filepath}: {count} uutta rikastusta")
+            total_imported += count
+
+        print(f"\nTuotu yhteensä {total_imported} rikastusta.")
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations

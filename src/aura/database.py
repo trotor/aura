@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -367,3 +368,150 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "top_organizations": [dict(r) for r in top_orgs],
         "top_formats": [dict(r) for r in top_formats],
     }
+
+
+# --- Enrichments ---
+
+
+def add_enrichment(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+    field: str,
+    value: str,
+    confidence: str = "medium",
+    source_type: str = "mcp_session",
+    source_detail: str = "",
+) -> str:
+    """Lisää rikastus datasettiin.
+
+    Returns:
+        Luodun enrichmentin id.
+    """
+    enrichment_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO enrichments (
+            id, dataset_id, field, value,
+            confidence, source_type, source_detail
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            enrichment_id, dataset_id, field, value,
+            confidence, source_type, source_detail,
+        ),
+    )
+    conn.commit()
+    return enrichment_id
+
+
+def get_enrichments(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+) -> list[dict[str, Any]]:
+    """Hae datasetin rikastukset, uusin ensin.
+
+    Palauttaa kaikki rikastukset (myös vanhat versiot).
+    """
+    rows = conn.execute(
+        """
+        SELECT * FROM enrichments
+        WHERE dataset_id = ?
+        ORDER BY field, created_at DESC
+        """,
+        (dataset_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_latest_enrichments(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+) -> list[dict[str, Any]]:
+    """Hae datasetin uusimmat rikastukset (yksi per kenttä)."""
+    rows = conn.execute(
+        """
+        SELECT e.*
+        FROM enrichments e
+        INNER JOIN (
+            SELECT field, MAX(rowid) as max_rowid
+            FROM enrichments
+            WHERE dataset_id = ?
+            GROUP BY field
+        ) latest ON e.rowid = latest.max_rowid
+        ORDER BY e.field
+        """,
+        (dataset_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_enrichment_count(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+) -> int:
+    """Palauta datasetin uniikkien rikastuskenttien lukumäärä."""
+    row = conn.execute(
+        "SELECT COUNT(DISTINCT field) FROM enrichments WHERE dataset_id = ?",
+        (dataset_id,),
+    ).fetchone()
+    return row[0] if row else 0
+
+
+def export_enrichments(
+    conn: sqlite3.Connection,
+    source_type: str = "",
+) -> list[dict[str, Any]]:
+    """Vie kaikki rikastukset listana.
+
+    Args:
+        source_type: Suodata lähdetyypin mukaan (tyhjä = kaikki).
+    """
+    if source_type:
+        rows = conn.execute(
+            "SELECT * FROM enrichments WHERE source_type = ? ORDER BY created_at",
+            (source_type,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM enrichments ORDER BY created_at"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def import_enrichments(
+    conn: sqlite3.Connection,
+    enrichments: list[dict[str, Any]],
+) -> int:
+    """Tuo rikastukset tietokantaan. Ohittaa duplikaatit (sama id).
+
+    Returns:
+        Tuotujen (uusien) rikastusten lukumäärä.
+    """
+    imported = 0
+    for e in enrichments:
+        try:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO enrichments (
+                    id, dataset_id, field, value,
+                    confidence, source_type, source_detail, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    e["id"], e["dataset_id"], e["field"], e["value"],
+                    e.get("confidence", "medium"),
+                    e["source_type"],
+                    e.get("source_detail", ""),
+                    e.get("created_at", ""),
+                ),
+            )
+            if conn.execute(
+                "SELECT changes()"
+            ).fetchone()[0] > 0:
+                imported += 1
+        except (KeyError, sqlite3.Error) as exc:
+            logger.warning(
+                "[enrichments] Ohitetaan virheellinen rivi: %s", exc
+            )
+    conn.commit()
+    return imported
