@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from aura.size_estimator import estimate_dataset_size, parse_file_size
+from aura.size_estimator import estimate_dataset_size
 
 
 class Resource(BaseModel):
@@ -69,7 +69,7 @@ class Dataset(BaseModel):
     estimated_size_bytes: int = 0
 
     @classmethod
-    def from_ckan(cls, data: dict, source: str = "avoindata.fi") -> Dataset:
+    def from_ckan(cls, data: dict[str, Any], source: str = "avoindata.fi") -> Dataset:
         """Luo Dataset CKAN API:n vastauksen pohjalta."""
         title_translated = data.get("title_translated", {}) or {}
         notes_translated = data.get("notes_translated", {}) or {}
@@ -134,7 +134,7 @@ class Dataset(BaseModel):
         )
 
     @staticmethod
-    def _estimate_ckan_size(data: dict, resources: list[Resource]) -> int:
+    def _estimate_ckan_size(data: dict[str, Any], resources: list[Resource]) -> int:
         """Arvioi CKAN-datasetin koko resurssien perusteella."""
         resource_dicts = [
             {"file_size": r.file_size, "format": r.format}

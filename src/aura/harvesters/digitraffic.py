@@ -8,7 +8,7 @@ import httpx
 
 from aura.database import upsert_dataset
 from aura.harvesters.base import BaseHarvester
-from aura.models import Dataset, Resource
+from aura.models import Resource
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class DigitrafficHarvester(BaseHarvester):
         self,
         client: httpx.AsyncClient,
         api_key: str,
-        api_info: dict,
+        api_info: dict[str, str],
     ) -> int:
         """Hae yhden Digitraffic-rajapinnan OpenAPI-speksi ja luo datasetit."""
         try:
@@ -74,9 +74,6 @@ class DigitrafficHarvester(BaseHarvester):
 
         count = 0
         paths = spec.get("paths", {})
-        info = spec.get("info", {})
-        api_title = info.get("title", api_info["name"])
-
         for path, methods in paths.items():
             # Ota vain GET-endpointit (datan luku)
             if "get" not in methods:
@@ -90,19 +87,21 @@ class DigitrafficHarvester(BaseHarvester):
             endpoint_url = f"{api_info['base_url']}{path}"
             dataset_id = f"digitraffic-{api_key}-{path.strip('/').replace('/', '-')}"
 
-            dataset = Dataset(
+            title_text = (
+                f"{api_info['name']}: {summary}" if summary
+                else f"{api_info['name']}: {path}"
+            )
+            dataset = self._make_dataset(
                 id=dataset_id,
                 name=dataset_id,
-                title=f"{api_info['name']}: {summary}" if summary else f"{api_info['name']}: {path}",
-                title_fi=f"{api_info['name']}: {summary}" if summary else f"{api_info['name']}: {path}",
+                title=title_text,
+                title_fi=title_text,
                 notes_fi=description or summary or "",
-                license_id="cc-by-4.0",
-                license_title="CC BY 4.0",
                 organization_id="digitraffic",
                 organization_name="digitraffic",
                 organization_title="Fintraffic / Digitraffic",
-                keywords_fi=["liikenne", api_info["name"].lower()] + [t.lower() for t in tags],
-                collection_type="Open Data",
+                keywords_fi=["liikenne", api_info["name"].lower()]
+                + [t.lower() for t in tags],
                 num_resources=1,
                 resources=[
                     Resource(
@@ -113,8 +112,7 @@ class DigitrafficHarvester(BaseHarvester):
                         url=endpoint_url,
                     ),
                 ],
-                source="digitraffic",
-                estimated_size_bytes=10_000_000,  # API-endpoint ~10 MB
+                estimated_size_bytes=10_000_000,
             )
 
             upsert_dataset(self.conn, dataset)

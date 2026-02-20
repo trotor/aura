@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from datetime import UTC
 
 from aura import __version__
 
@@ -45,6 +46,28 @@ def main() -> None:
 
     # sources
     subparsers.add_parser("sources", help="Listaa datalähteet ja niiden tila")
+
+    # probe-sizes
+    probe_parser = subparsers.add_parser(
+        "probe-sizes", help="Mittaa paikkatietoaineistojen koot otoskyselyillä"
+    )
+    probe_parser.add_argument(
+        "--source",
+        choices=["metsakeskus", "gtk", "all"],
+        default="all",
+        help="Mittauskohde (oletus: all)",
+    )
+    probe_parser.add_argument(
+        "--update-db",
+        action="store_true",
+        help="Päivitä estimated_size_bytes tietokantaan",
+    )
+    probe_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=180.0,
+        help="HTTP-timeout sekunteina (oletus: 180)",
+    )
 
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
@@ -113,13 +136,59 @@ def main() -> None:
         conn = get_connection()
         init_db(conn)
 
+        from datetime import datetime
+
         print("Datalähteet:\n")
+        now = datetime.now(tz=UTC)
         for name, cls in get_all_harvesters().items():
-            count = conn.execute(
-                "SELECT COUNT(*) FROM datasets WHERE source = ?", (name,)
-            ).fetchone()[0]
-            status = f"{count} datasettiä" if count > 0 else "ei harvestoitu"
-            print(f"  {name:25s} {cls.description:45s} [{status}]")
+            row = conn.execute(
+                """
+                SELECT COUNT(*) as count, MAX(harvested_at) as last_harvest
+                FROM datasets WHERE source = ?
+                """,
+                (name,),
+            ).fetchone()
+            count = row["count"] if row else 0
+            last_harvest = row["last_harvest"] if row else None
+
+            status = f"{count} datasettiä"
+            warning = ""
+            if last_harvest:
+                harvest_dt = datetime.fromisoformat(last_harvest)
+                days_old = (now - harvest_dt.replace(tzinfo=UTC)).days
+                status += f" (viimeksi: {last_harvest[:16]})"
+                if days_old > 7:
+                    warning = f" ⚠ {days_old} pv vanha"
+            elif count == 0:
+                status = "ei harvestoitu"
+
+            print(f"  {name:25s} [{status}]{warning}")
+
+    elif args.command == "probe-sizes":
+        from aura.spatial_probe import format_probe_report, probe_all
+
+        probe_results = asyncio.run(
+            probe_all(source=args.source, timeout=args.timeout)
+        )
+        print()
+        print(format_probe_report(probe_results))
+        print()
+
+        if args.update_db:
+            from aura.database import get_connection, init_db
+
+            conn = get_connection()
+            init_db(conn)
+            updated = 0
+            for pr in probe_results:
+                if pr.extrapolated_size_bytes > 0:
+                    conn.execute(
+                        "UPDATE datasets SET estimated_size_bytes = ? WHERE id = ?",
+                        (pr.extrapolated_size_bytes, pr.dataset_id),
+                    )
+                    updated += 1
+            conn.commit()
+            print(f"Päivitetty {updated} datasetin kokoarvio tietokantaan.")
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations

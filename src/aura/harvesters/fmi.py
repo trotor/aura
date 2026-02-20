@@ -70,7 +70,10 @@ class FmiHarvester(BaseHarvester):
 
     def _query_to_dataset(self, query_id: str, title: str, abstract: str) -> Dataset:
         dataset_id = f"fmi-{query_id}"
-        wfs_url = f"{WFS_BASE}?service=WFS&version=2.0.0&request=GetFeature&storedquery_id={query_id}"
+        wfs_url = (
+            f"{WFS_BASE}?service=WFS&version=2.0.0"
+            f"&request=GetFeature&storedquery_id={query_id}"
+        )
 
         keywords = ["sää", "ilmasto"]
         for key, category in CATEGORY_MAP.items():
@@ -87,19 +90,16 @@ class FmiHarvester(BaseHarvester):
         elif "forecast" in query_id:
             size = 100_000_000  # 100 MB ennuste
 
-        return Dataset(
+        return self._make_dataset(
             id=dataset_id,
             name=dataset_id,
             title=title,
             title_fi=title,
             notes_fi=abstract,
-            license_id="cc-by-4.0",
-            license_title="CC BY 4.0",
             organization_id="fmi",
             organization_name="fmi",
             organization_title="Ilmatieteen laitos",
             keywords_fi=keywords,
-            collection_type="Open Data",
             num_resources=1,
             resources=[
                 Resource(
@@ -110,6 +110,5 @@ class FmiHarvester(BaseHarvester):
                     url=wfs_url,
                 ),
             ],
-            source="fmi",
             estimated_size_bytes=size,
         )

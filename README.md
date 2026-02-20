@@ -2,9 +2,9 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-> **3 758 datasettiä** · **8 959 resurssia** · **200 organisaatiota** · **~1,3 TB** avointa dataa
+> **3 758+ datasettiä** · **8 959+ resurssia** · **200 organisaatiota** · **~1,3 TB** avointa dataa
 >
-> 8 datalähteestä: avoindata.fi, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Traficom, Metsäkeskus
+> 9 datalähteestä: avoindata.fi, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, GTK, Traficom, Metsäkeskus
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -12,7 +12,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 8 suomalaisesta avoimen datan lähteestä
+- **Aggregoi** metadatan 9 suomalaisesta avoimen datan lähteestä
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
@@ -90,7 +90,8 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
 | [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
-| **Yhteensä** | | **3 758** | **~1,3 TB** |
+| [GTK](https://www.gtk.fi) | ArcGIS WFS/WMS | 5 | 7 GB |
+| **Yhteensä** | | **3 763** | **~1,3 TB** |
 
 ## MCP-työkalut
 
@@ -98,11 +99,18 @@ Aura tarjoaa tekoälyille seuraavat MCP-työkalut:
 
 | Työkalu | Kuvaus |
 |---------|--------|
-| `search` | Hae datasettejä luonnollisella kielellä |
+| `search` | Hae datasettejä luonnollisella kielellä (+ suodattimet: lähde, formaatti, organisaatio) |
+| `search_structured` | Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille |
 | `describe` | Kuvaa yksittäinen datasetti yksityiskohtaisesti |
+| `recommend` | Suosittele parhaita datasettejä aiheesta |
+| `compare` | Vertaile datasettejä rinnakkain |
+| `find_related` | Etsi samankaltaiset datasetit |
 | `stats` | Näytä tilastot tietokannasta |
 | `list_organizations` | Listaa datan julkaisijat |
 | `list_formats` | Listaa saatavilla olevat dataformaatit |
+| `harvest` | Hae datasettien metatiedot lähteistä |
+| `list_sources` | Listaa datalähteet ja harvestoinnin tila |
+| `probe_sizes` | Mittaa paikkatietoaineistojen koot |
 
 ## Projektirakenne
 
@@ -115,7 +123,12 @@ aura/
 │   ├── search.py           # Hakutoiminnot
 │   ├── size_estimator.py   # Datakoon arviointi
 │   ├── cli.py              # Komentorivityökalu
-│   └── harvesters/         # Datalähteiden keräimet (8 kpl)
+│   ├── spatial_probe.py    # Paikkatietojen kokoluotaus
+│   └── harvesters/         # Datalähteiden keräimet (9 kpl)
+│       ├── base.py         # BaseHarvester + _make_dataset()
+│       ├── ckan.py         # CkanHarvester-kantaluokka
+│       ├── pxweb.py        # PxWebHarvester-kantaluokka
+│       └── ...             # Lähdekohtaiset harvesterit
 ├── data/aura.db            # SQLite-tietokanta (osa repoa)
 ├── docs/
 │   ├── CATALOG.md          # Kaikki datasetit listattuna
@@ -124,6 +137,10 @@ aura/
 │   └── migrations/         # Tietokantamigraatiot
 └── tests/
 ```
+
+## Tekoälykehittäjille
+
+Projektin `.mcp.json` konfiguroi MCP-palvelimen automaattisesti Claude Codelle. Katso [docs/MCP_SETUP.md](docs/MCP_SETUP.md) lisäohjeet Claude Desktopille ja muille MCP-yhteensopiville työkaluille.
 
 ## Tietokanta
 

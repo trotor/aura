@@ -6,8 +6,9 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
+from typing import Any
 
-from aura.models import Dataset, Resource
+from aura.models import Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -176,23 +177,55 @@ def search_datasets(
     conn: sqlite3.Connection,
     query: str,
     limit: int = 20,
-) -> list[dict]:
-    """Hae datasettejä FTS5-täystekstihaulla."""
+    offset: int = 0,
+    source: str = "",
+    fmt: str = "",
+    organization: str = "",
+) -> list[dict[str, Any]]:
+    """Hae datasettejä FTS5-täystekstihaulla ja suodattimilla.
+
+    Args:
+        query: Hakusanat.
+        limit: Tulosten enimmäismäärä.
+        offset: Ohita ensimmäiset N tulosta (sivutus).
+        source: Suodata lähteen mukaan (esim. "avoindata.fi").
+        fmt: Suodata formaatin mukaan (esim. "CSV") — datasetti sisältyy jos
+             sillä on vähintään yksi resurssi kyseisessä formaatissa.
+        organization: Suodata organisaation mukaan (osa nimestä riittää).
+    """
+    conditions = ["datasets_fts MATCH ?"]
+    params: list[Any] = [query]
+
+    if source:
+        conditions.append("d.source = ?")
+        params.append(source)
+    if organization:
+        conditions.append("d.organization_title LIKE ?")
+        params.append(f"%{organization}%")
+    if fmt:
+        conditions.append(
+            "d.id IN (SELECT dataset_id FROM resources WHERE format = ? COLLATE NOCASE)"
+        )
+        params.append(fmt)
+
+    where = " AND ".join(conditions)
+    params.extend([limit, offset])
+
     rows = conn.execute(
-        """
+        f"""
         SELECT d.*, rank
         FROM datasets_fts fts
         JOIN datasets d ON d.rowid = fts.rowid
-        WHERE datasets_fts MATCH ?
+        WHERE {where}
         ORDER BY rank
-        LIMIT ?
+        LIMIT ? OFFSET ?
         """,
-        (query, limit),
+        params,
     ).fetchall()
     return [dict(row) for row in rows]
 
 
-def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict | None:
+def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict[str, Any] | None:
     """Hae yksittäinen datasetti ID:llä tai nimellä."""
     row = conn.execute(
         "SELECT * FROM datasets WHERE id = ? OR name = ?",
@@ -200,7 +233,7 @@ def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict | None:
     ).fetchone()
     if row is None:
         return None
-    result = dict(row)
+    result: dict[str, Any] = dict(row)
 
     resources = conn.execute(
         "SELECT * FROM resources WHERE dataset_id = ?",
@@ -210,7 +243,90 @@ def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict | None:
     return result
 
 
-def get_stats(conn: sqlite3.Connection) -> dict:
+def get_datasets_by_ids(
+    conn: sqlite3.Connection, dataset_ids: list[str]
+) -> list[dict[str, Any]]:
+    """Hae useita datasettejä ID:llä tai nimellä."""
+    if not dataset_ids:
+        return []
+    placeholders = ",".join("?" for _ in dataset_ids)
+    rows = conn.execute(
+        f"SELECT * FROM datasets WHERE id IN ({placeholders}) OR name IN ({placeholders})",
+        dataset_ids + dataset_ids,
+    ).fetchall()
+    results = []
+    for row in rows:
+        d: dict[str, Any] = dict(row)
+        resources = conn.execute(
+            "SELECT * FROM resources WHERE dataset_id = ?", (d["id"],)
+        ).fetchall()
+        d["resources"] = [dict(r) for r in resources]
+        results.append(d)
+    return results
+
+
+def find_related_datasets(
+    conn: sqlite3.Connection, dataset_id: str, limit: int = 5
+) -> list[dict[str, Any]]:
+    """Etsi samankaltaiset datasetit avainsanojen ja organisaation perusteella."""
+    dataset = get_dataset(conn, dataset_id)
+    if dataset is None:
+        return []
+
+    keywords_raw = dataset.get("keywords_fi", "[]")
+    if isinstance(keywords_raw, str):
+        try:
+            keywords: list[str] = json.loads(keywords_raw)
+        except json.JSONDecodeError:
+            keywords = []
+    else:
+        keywords = keywords_raw
+
+    org = dataset.get("organization_title", "")
+    ds_id = dataset["id"]
+
+    # Etsitään avainsanojen perusteella
+    related: dict[str, dict[str, Any]] = {}
+    for kw in keywords[:5]:
+        try:
+            rows = conn.execute(
+                """
+                SELECT d.*, rank
+                FROM datasets_fts fts
+                JOIN datasets d ON d.rowid = fts.rowid
+                WHERE datasets_fts MATCH ?
+                ORDER BY rank
+                LIMIT 10
+                """,
+                (kw,),
+            ).fetchall()
+            for row in rows:
+                d = dict(row)
+                if d["id"] != ds_id and d["id"] not in related:
+                    related[d["id"]] = d
+        except Exception:  # noqa: BLE001
+            continue
+
+    # Lisätään organisaation muita datasettejä
+    if org:
+        org_rows = conn.execute(
+            """
+            SELECT * FROM datasets
+            WHERE organization_title = ? AND id != ?
+            ORDER BY metadata_modified DESC
+            LIMIT 10
+            """,
+            (org, ds_id),
+        ).fetchall()
+        for row in org_rows:
+            d = dict(row)
+            if d["id"] not in related:
+                related[d["id"]] = d
+
+    return list(related.values())[:limit]
+
+
+def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     """Palauta tilastot tietokannasta."""
     total = conn.execute("SELECT COUNT(*) FROM datasets").fetchone()[0]
     orgs = conn.execute("SELECT COUNT(DISTINCT organization_name) FROM datasets").fetchone()[0]

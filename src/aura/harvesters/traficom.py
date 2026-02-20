@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from aura.database import upsert_dataset
 from aura.harvesters.base import BaseHarvester
-from aura.models import Dataset, Resource
+from aura.models import Resource
 
 logger = logging.getLogger(__name__)
 
 ODATA_BASE = "https://opendata.traficom.fi/api/v12"
 
 # Tunnetut entity set -kuvaukset ja arvioidut koot
-ENTITY_SETS: dict[str, dict] = {
+ENTITY_SETS: dict[str, dict[str, Any]] = {
     "AjoneuvorekisteriVer2": {
         "title_fi": "Ajoneuvorekisteri",
         "description": "Suomessa rekisteröidyt ajoneuvot",
@@ -168,19 +169,16 @@ class TraficomHarvester(BaseHarvester):
                 records = info.get("estimated_records", 10_000)
                 row_bytes = info.get("estimated_row_bytes", 300)
 
-                dataset = Dataset(
+                dataset = self._make_dataset(
                     id=f"traficom-{es_name.lower()}",
                     name=f"traficom-{es_name.lower()}",
                     title=title,
                     title_fi=title,
                     notes_fi=desc,
-                    license_id="cc-by-4.0",
-                    license_title="CC BY 4.0",
                     organization_id="traficom",
                     organization_name="traficom",
                     organization_title="Liikenne- ja viestintävirasto Traficom",
                     keywords_fi=keywords,
-                    collection_type="Open Data",
                     num_resources=1,
                     resources=[
                         Resource(
@@ -191,7 +189,6 @@ class TraficomHarvester(BaseHarvester):
                             url=f"{ODATA_BASE}/{es_name}",
                         ),
                     ],
-                    source="traficom",
                     estimated_size_bytes=records * row_bytes,
                 )
                 upsert_dataset(self.conn, dataset)

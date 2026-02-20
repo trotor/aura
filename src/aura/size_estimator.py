@@ -76,7 +76,7 @@ def parse_file_size(size_str: str) -> int:
     return 0
 
 
-def estimate_dataset_size(resources: list[dict]) -> int:
+def estimate_dataset_size(resources: list[dict[str, str]]) -> int:
     """Arvioi datasetin kokonaiskoko resurssien perusteella.
 
     Käyttää ensisijaisesti resurssien ilmoitettua kokoa (file_size),

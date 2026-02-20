@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import sqlite3
+from typing import Any
 
 
-def format_dataset_summary(dataset: dict) -> str:
+def format_dataset_summary(dataset: dict[str, Any]) -> str:
     """Muotoile datasetin yhteenveto luettavaan muotoon."""
     title = dataset.get("title_fi") or dataset.get("title") or dataset.get("name", "")
     org = dataset.get("organization_title", "")
@@ -43,7 +43,7 @@ def format_dataset_summary(dataset: dict) -> str:
     return "\n".join(parts)
 
 
-def format_dataset_detail(dataset: dict) -> str:
+def format_dataset_detail(dataset: dict[str, Any]) -> str:
     """Muotoile datasetin täydet tiedot."""
     summary = format_dataset_summary(dataset)
 
@@ -75,10 +75,10 @@ def format_dataset_detail(dataset: dict) -> str:
     return summary
 
 
-def format_stats(stats: dict) -> str:
+def format_stats(stats: dict[str, Any]) -> str:
     """Muotoile tilastot luettavaan muotoon."""
     parts = [
-        f"# Aura — Avoimen datan tilastot",
+        "# Aura — Avoimen datan tilastot",
         f"**Datasettejä:** {stats['total_datasets']}",
         f"**Organisaatioita:** {stats['total_organizations']}",
         f"**Dataformaatteja:** {stats['total_formats']}",

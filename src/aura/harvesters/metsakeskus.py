@@ -230,42 +230,33 @@ class MetsakeskusHarvester(BaseHarvester):
                 ),
             )
 
-        return Dataset(
+        return self._make_dataset(
             id=f"metsakeskus-{endpoint.lower()}",
             name=f"metsakeskus-{endpoint.lower().replace('_', '-')}",
             title=svc["title"],
             title_fi=svc["title"],
             notes_fi=svc["description"],
-            license_id="cc-by-4.0",
-            license_title="CC BY 4.0",
             organization_id="metsakeskus",
             organization_name="metsakeskus",
             organization_title="Suomen metsäkeskus",
             keywords_fi=svc.get("keywords", ["metsä"]),
-            geographical_coverage=["Suomi"],
-            collection_type="Open Data",
             num_resources=len(resources),
             resources=resources,
-            source="metsakeskus",
             estimated_size_bytes=int(size_bytes),
         )
 
     def _chm_year_dataset(self, year: int) -> Dataset:
         endpoint = f"CHM_{year}"
-        return Dataset(
+        return self._make_dataset(
             id=f"metsakeskus-chm-{year}",
             name=f"metsakeskus-chm-{year}",
             title=f"Latvusmalli {year}",
             title_fi=f"Latvusmalli {year}",
             notes_fi=f"Laserkeilauspohjainen latvuston korkeusmalli vuodelta {year}",
-            license_id="cc-by-4.0",
-            license_title="CC BY 4.0",
             organization_id="metsakeskus",
             organization_name="metsakeskus",
             organization_title="Suomen metsäkeskus",
             keywords_fi=["metsä", "latvusmalli", "CHM", "LiDAR", str(year)],
-            geographical_coverage=["Suomi"],
-            collection_type="Open Data",
             num_resources=2,
             resources=[
                 Resource(
@@ -283,25 +274,20 @@ class MetsakeskusHarvester(BaseHarvester):
                     url=f"{DOWNLOAD_BASE}/Latvusmalli/",
                 ),
             ],
-            source="metsakeskus",
             estimated_size_bytes=50 * 1024 * 1024 * 1024,  # ~50 GB per vuosi
         )
 
     def _kemera_dataset(self, endpoint: str, title: str) -> Dataset:
-        return Dataset(
+        return self._make_dataset(
             id=f"metsakeskus-{endpoint.lower()}",
             name=f"metsakeskus-{endpoint.lower().replace('_', '-')}",
             title=title,
             title_fi=title,
             notes_fi=f"Kemera-rahoituslain mukainen tukitieto. Endpoint: {endpoint}",
-            license_id="cc-by-4.0",
-            license_title="CC BY 4.0",
             organization_id="metsakeskus",
             organization_name="metsakeskus",
             organization_title="Suomen metsäkeskus",
             keywords_fi=["metsä", "kemera", "tuki", "metsänhoito"],
-            geographical_coverage=["Suomi"],
-            collection_type="Open Data",
             num_resources=2,
             resources=[
                 Resource(
@@ -319,26 +305,21 @@ class MetsakeskusHarvester(BaseHarvester):
                     url=f"{DOWNLOAD_BASE}/Kemera/",
                 ),
             ],
-            source="metsakeskus",
             estimated_size_bytes=500 * 1024 * 1024,  # ~500 MB per Kemera-setti
         )
 
     def _download_only_dataset(self, cfg: dict[str, Any]) -> Dataset:
         ds_id = cfg["id"]
-        return Dataset(
+        return self._make_dataset(
             id=f"metsakeskus-{ds_id}",
             name=f"metsakeskus-{ds_id}",
             title=cfg["title"],
             title_fi=cfg["title"],
             notes_fi=cfg["description"],
-            license_id="cc-by-4.0",
-            license_title="CC BY 4.0",
             organization_id="metsakeskus",
             organization_name="metsakeskus",
             organization_title="Suomen metsäkeskus",
             keywords_fi=cfg.get("keywords", ["metsä"]),
-            geographical_coverage=["Suomi"],
-            collection_type="Open Data",
             num_resources=1,
             resources=[
                 Resource(
@@ -349,7 +330,6 @@ class MetsakeskusHarvester(BaseHarvester):
                     url=f"{DOWNLOAD_BASE}/{cfg['download_dir']}/",
                 ),
             ],
-            source="metsakeskus",
             estimated_size_bytes=int(
                 cfg.get("estimated_size_gb", 1) * 1024 * 1024 * 1024
             ),

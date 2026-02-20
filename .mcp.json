@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "aura": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "aura.cli", "serve"]
+    }
+  }
+}
