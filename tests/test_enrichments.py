@@ -286,6 +286,61 @@ class TestFormatEnrichments:
         result = format_dataset_detail(dataset)
         assert "Rikastukset" not in result
 
+    def test_format_keywords_as_comma_list(self):
+        """keywords-kenttä näytetään pilkkulistana."""
+        enrichments = [
+            {
+                "field": "keywords",
+                "value": '["maatalous", "peltolohko", "INSPIRE"]',
+                "confidence": "high",
+                "source_type": "mcp_session",
+            }
+        ]
+        result = format_enrichments(enrichments)
+        assert "Lisäavainsanat" in result
+        assert "maatalous, peltolohko, INSPIRE" in result
+
+    def test_format_tags_as_comma_list(self):
+        """tags-kenttä näytetään pilkkulistana."""
+        enrichments = [
+            {
+                "field": "tags",
+                "value": '["paikkatietoaineisto", "avoin data"]',
+                "confidence": "medium",
+                "source_type": "mcp_session",
+            }
+        ]
+        result = format_enrichments(enrichments)
+        assert "Tagit" in result
+        assert "paikkatietoaineisto, avoin data" in result
+
+    def test_format_data_fields_as_comma_list(self):
+        """data_fields-kenttä näytetään pilkkulistana."""
+        enrichments = [
+            {
+                "field": "data_fields",
+                "value": '["id", "nimi", "pinta_ala"]',
+                "confidence": "high",
+                "source_type": "web_research",
+            }
+        ]
+        result = format_enrichments(enrichments)
+        assert "Datakentät" in result
+        assert "id, nimi, pinta_ala" in result
+
+    def test_format_invalid_json_falls_back_to_raw(self):
+        """Virheellinen JSON-arvo näytetään sellaisenaan."""
+        enrichments = [
+            {
+                "field": "keywords",
+                "value": "ei-json-arvo",
+                "confidence": "medium",
+                "source_type": "mcp_session",
+            }
+        ]
+        result = format_enrichments(enrichments)
+        assert "ei-json-arvo" in result
+
 
 class TestMigration:
     """Migraatio luo enrichments-taulun."""

@@ -16,25 +16,33 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
+- **Rikastaa joukkoistamalla** — MCP-sessiot kerryttävät tietoa dataseteistä
 - **Palvelee tekoälyjä** MCP-serverin kautta (Claude, GPT, jne.)
-- **Palvelee ihmisiä** avoimen web-rajapinnan kautta
 
-## Käyttöönotto (tekoälylle)
+## Käyttöönotto
 
-Jos käytät Claudea tai muuta MCP-yhteensopivaa tekoälyä, lisää Aura MCP-serveriksi:
+### Claude Code (toimii sellaisenaan)
 
-```json
-{
-  "mcpServers": {
-    "aura": {
-      "command": "uv",
-      "args": ["--directory", "/polku/aura", "run", "aura", "serve"]
-    }
-  }
-}
+Auran repo sisältää `.mcp.json`-tiedoston, joka konfiguroi MCP-serverin automaattisesti. Ei tarvitse tehdä mitään ylimääräistä:
+
+```bash
+git clone https://github.com/trotor/aura.git
+cd aura
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+claude   # Aura MCP-server käynnistyy automaattisesti
 ```
 
-Tai jos `uv` ei ole käytössä:
+Claude Code tunnistaa `.mcp.json`:n ja käynnistää serverin taustalle. Voit heti kysyä: *"Mitä avoimia datasettejä Helsingin kaupunki tarjoaa?"*
+
+### Claude Desktop
+
+Lisää Auran MCP-server Clauden asetustiedostoon:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -47,33 +55,95 @@ Tai jos `uv` ei ole käytössä:
 }
 ```
 
-Tämän jälkeen tekoäly voi käyttää Auran työkaluja suoraan: etsiä datasettejä, kuvata niitä ja listata organisaatioita.
+> Korvaa `/polku/aura` kloonatun repon absoluuttisella polulla. Käytä virtuaaliympäristön Pythonia (`.venv/bin/python`).
 
-## Pikastartti (ihmiselle)
+### Cursor
 
-```bash
-# Kloonaa
-git clone https://github.com/trotor/aura.git
-cd aura
+Lisää `.cursor/mcp.json` projektin juureen tai globaalisti `~/.cursor/mcp.json`:
 
-# Luo virtuaaliympäristö ja asenna
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-
-# Tietokanta tulee repon mukana valmiina — voit hakea heti:
-aura search "väestö helsinki"
-aura search "joukkoliikenne"
-aura stats
-
-# Päivitä data uusimmaksi:
-aura harvest
-
-# Käynnistä MCP-server:
-aura serve
+```json
+{
+  "mcpServers": {
+    "aura": {
+      "command": "/polku/aura/.venv/bin/python",
+      "args": ["-m", "aura.cli", "serve"]
+    }
+  }
+}
 ```
 
-> **Huom:** Käytä aina virtuaaliympäristöä (venv). Älä asenna globaalisti.
+### Windsurf
+
+Lisää `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "aura": {
+      "command": "/polku/aura/.venv/bin/python",
+      "args": ["-m", "aura.cli", "serve"]
+    }
+  }
+}
+```
+
+### Muu MCP-yhteensopiva työkalu
+
+Aura on standardi MCP-server. Mikä tahansa työkalu joka tukee MCP-protokollaa voi käyttää Auraa. Käynnistyskomento:
+
+```bash
+/polku/aura/.venv/bin/python -m aura.cli serve
+```
+
+Tai `uv`:llä ilman erillistä asennusta:
+
+```bash
+uv --directory /polku/aura run aura serve
+```
+
+## Komentorivityökalu
+
+```bash
+source .venv/bin/activate
+
+# Hae datasettejä
+aura search "väestö helsinki"
+aura search "joukkoliikenne"
+
+# Tilastot ja lähteet
+aura stats
+aura sources
+
+# Päivitä data
+aura harvest              # kaikki lähteet
+aura harvest avoindata.fi  # yksittäinen lähde
+aura harvest --list        # listaa saatavilla olevat
+
+# Rikastukset
+aura export-enrichments -o contributions/omat.json
+aura import-enrichments contributions/*.json
+```
+
+> **Huom:** Tietokanta (`data/aura.db`) tulee repon mukana valmiina — ei tarvitse harvestoida erikseen.
+
+## MCP-työkalut
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `search` | Hae datasettejä luonnollisella kielellä (suodattimet: lähde, formaatti, organisaatio, saatavuus) |
+| `search_structured` | Hae datasettejä ja palauta JSON tekoälyagenteille |
+| `describe` | Kuvaa datasetti yksityiskohtaisesti (sis. rikastukset) |
+| `recommend` | Suosittele parhaita datasettejä aiheesta |
+| `compare` | Vertaile datasettejä rinnakkain (2–5 kpl) |
+| `find_related` | Etsi samankaltaiset datasetit |
+| `enrich` | Rikasta datasetin tietoja (avainsanat, kuvaukset, laatuhuomiot) |
+| `get_enrichments_tool` | Näytä datasetin rikastukset |
+| `stats` | Näytä tilastot tietokannasta |
+| `list_organizations` | Listaa datan julkaisijat |
+| `list_formats` | Listaa saatavilla olevat dataformaatit |
+| `harvest` | Hae datasettien metatiedot lähteistä |
+| `list_sources` | Listaa datalähteet ja harvestoinnin tila |
+| `probe_sizes` | Mittaa paikkatietoaineistojen koot |
 
 ## Datalähteet
 
@@ -97,24 +167,62 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
 | **Yhteensä** | | **~4 421** | **~1,6 TB** |
 
-## MCP-työkalut
+## Osallistuminen
 
-Aura tarjoaa tekoälyille seuraavat MCP-työkalut:
+Auraan voi osallistua monella tavalla — myös ilman koodaamista.
 
-| Työkalu | Kuvaus |
-|---------|--------|
-| `search` | Hae datasettejä luonnollisella kielellä (+ suodattimet: lähde, formaatti, organisaatio) |
-| `search_structured` | Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille |
-| `describe` | Kuvaa yksittäinen datasetti yksityiskohtaisesti |
-| `recommend` | Suosittele parhaita datasettejä aiheesta |
-| `compare` | Vertaile datasettejä rinnakkain |
-| `find_related` | Etsi samankaltaiset datasetit |
-| `stats` | Näytä tilastot tietokannasta |
-| `list_organizations` | Listaa datan julkaisijat |
-| `list_formats` | Listaa saatavilla olevat dataformaatit |
-| `harvest` | Hae datasettien metatiedot lähteistä |
-| `list_sources` | Listaa datalähteet ja harvestoinnin tila |
-| `probe_sizes` | Mittaa paikkatietoaineistojen koot |
+### Rikasta dataa (helpoin tapa)
+
+Jokaisella Aura MCP -sessiolla kertyy arvokasta tietoa dataseteistä: mitä kenttiä data sisältää, miten sitä haetaan, millainen laatu on. Tämä tieto voidaan tallentaa pysyvästi `enrich()`-työkalulla.
+
+**MCP-session aikana** tekoäly voi kutsua `enrich()`-työkalua automaattisesti:
+
+```
+"Tutki Ruokaviraston peltolohkorekisterin sisältö ja tallenna löydökset."
+```
+
+AI tutkii datasetin, löytää kentät ja metatiedot, ja kutsuu:
+```python
+enrich("ruokavirasto-peltolohkorekisteri-2024", "data_fields",
+       '["lohko_id", "kasvilaji", "pinta_ala_ha"]', confidence="high")
+enrich("ruokavirasto-peltolohkorekisteri-2024", "keywords",
+       '["maatalous", "CAP", "tukialue"]')
+```
+
+**Kontribuoi rikastuksia muille:**
+
+```bash
+aura export-enrichments -o contributions/omat-rikastukset.json
+git add contributions/
+git commit -m "data: enrich Ruokaviraston datasettejä"
+# Avaa pull request
+```
+
+**Tuetut rikastuskentät:**
+
+| Kenttä | Tyyppi | Kuvaus |
+|--------|--------|--------|
+| `keywords` | lista | Lisäavainsanat (`'["maatalous", "peltolohko"]'`) |
+| `tags` | lista | Vapaamuotoiset tagit (`'["paikkatietoaineisto"]'`) |
+| `data_fields` | lista | Datasetin kentät (`'["id", "nimi", "pinta_ala"]'`) |
+| `description_extended` | teksti | Laajennettu kuvaus |
+| `api_endpoint` | teksti | Löydetty rajapinta-URL |
+| `api_format` | teksti | Rajapinnan formaatti |
+| `access_instructions` | teksti | Ohjeet datan hakemiseen |
+| `quality_notes` | teksti | Huomioita datan laadusta |
+| `use_case` | teksti | Käyttötapausesimerkki |
+| `related_datasets` | teksti | Liittyvät datasetit |
+| `temporal_coverage` | teksti | Ajallinen kattavuus |
+| `update_frequency_actual` | teksti | Havaittu päivitystiheys |
+| `organization_context` | teksti | Taustatietoa julkaisijasta |
+
+### Lisää uusia datalähteitä
+
+Katso **[CONTRIBUTING.md](CONTRIBUTING.md)** ohjeet uuden harvesterin luomiseen.
+
+### Raportoi ja ehdota
+
+Avaa [issue GitHubissa](https://github.com/trotor/aura/issues).
 
 ## Projektirakenne
 
@@ -122,54 +230,36 @@ Aura tarjoaa tekoälyille seuraavat MCP-työkalut:
 aura/
 ├── src/aura/               # Pääpaketti
 │   ├── server.py           # MCP-server (FastMCP)
-│   ├── database.py         # SQLite + FTS5
+│   ├── database.py         # SQLite + FTS5 + enrichments
 │   ├── models.py           # Pydantic-tietomallit
-│   ├── search.py           # Hakutoiminnot
-│   ├── size_estimator.py   # Datakoon arviointi
+│   ├── search.py           # Hakutoiminnot ja muotoilu
 │   ├── cli.py              # Komentorivityökalu
-│   ├── spatial_probe.py    # Paikkatietojen kokoluotaus
 │   └── harvesters/         # Datalähteiden keräimet (13 kpl)
-│       ├── base.py         # BaseHarvester + _make_dataset()
-│       ├── ckan.py         # CkanHarvester-kantaluokka
-│       ├── pxweb.py        # PxWebHarvester-kantaluokka
-│       └── ...             # Lähdekohtaiset harvesterit
 ├── data/aura.db            # SQLite-tietokanta (osa repoa)
-├── docs/
-│   ├── CATALOG.md          # Kaikki datasetit listattuna
-│   └── SOURCES.md          # Lähteiden tekniset tiedot
-├── scripts/                # Migraatiot ja apuskriptit
-│   └── migrations/         # Tietokantamigraatiot
-└── tests/
+├── contributions/          # Jaetut rikastukset (JSON)
+├── scripts/migrations/     # Tietokantamigraatiot
+├── docs/                   # Dokumentaatio
+└── tests/                  # Testit
 ```
-
-## Tekoälykehittäjille
-
-Projektin `.mcp.json` konfiguroi MCP-palvelimen automaattisesti Claude Codelle. Katso [docs/MCP_SETUP.md](docs/MCP_SETUP.md) lisäohjeet Claude Desktopille ja muille MCP-yhteensopiville työkaluille.
 
 ## Tietokanta
 
 SQLite + FTS5 -täystekstihaku. Tietokanta on osa git-repoa — ei tarvitse harvestoida erikseen.
 
-Skeemamuutokset hoidetaan migraatiojärjestelmällä (`scripts/migrations/`). Katso [docs/SOURCES.md](docs/SOURCES.md).
+Skeemamuutokset hoidetaan migraatiojärjestelmällä (`scripts/migrations/`). Migraatiot ajetaan automaattisesti `init_db()`:n yhteydessä — tietokanta ei nollaudu päivityksessä.
 
 ## Kehitys
 
 ```bash
-# Aktivoi venv (aina ensin!)
 source .venv/bin/activate
-
-# Asenna
 pip install -e ".[dev]"
 
-# Testit
-pytest
-
-# Lintteri
-ruff check src/
-
-# Tyypintarkistus
-mypy src/
+pytest              # testit
+ruff check src/     # lintteri
+mypy src/           # tyypintarkistus
 ```
+
+Katso **[CONTRIBUTING.md](CONTRIBUTING.md)** tarkemmat ohjeet.
 
 ## Versiointi
 

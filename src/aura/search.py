@@ -58,7 +58,24 @@ ENRICHMENT_FIELD_LABELS: dict[str, str] = {
     "organization_context": "Organisaation tausta",
     "temporal_coverage": "Ajallinen kattavuus",
     "update_frequency_actual": "Havaittu päivitystiheys",
+    "keywords": "Lisäavainsanat",
+    "tags": "Tagit",
 }
+
+# Kentät joiden arvo on JSON-taulukko
+_LIST_FIELDS = {"data_fields", "keywords", "tags"}
+
+
+def _format_enrichment_value(field: str, value: str) -> str:
+    """Muotoile rikastuksen arvo kenttätyypin mukaan."""
+    if field in _LIST_FIELDS:
+        try:
+            items = json.loads(value)
+            if isinstance(items, list):
+                return ", ".join(str(v) for v in items)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return value
 
 
 def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
@@ -70,7 +87,7 @@ def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
     for e in enrichments:
         field = e.get("field", "")
         label = ENRICHMENT_FIELD_LABELS.get(field, field)
-        value = e.get("value", "")
+        value = _format_enrichment_value(field, e.get("value", ""))
         confidence = e.get("confidence", "")
         source_type = e.get("source_type", "")
 

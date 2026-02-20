@@ -451,6 +451,8 @@ def enrich(
             - api_endpoint: löydetty rajapinta-URL
             - api_format: rajapinnan formaatti (REST, WFS, OData, jne.)
             - data_fields: JSON-lista datasetin kentistä/sarakkeista
+            - keywords: lisäavainsanat JSON-listana (esim. '["maatalous", "peltolohko"]')
+            - tags: vapaamuotoiset tagit JSON-listana (esim. '["paikkatietoaineisto", "INSPIRE"]')
             - related_datasets: liittyvät datasetit
             - quality_notes: huomioita datan laadusta
             - use_case: käyttötapausesimerkki
@@ -468,7 +470,8 @@ def enrich(
 
     valid_fields = {
         "description_extended", "api_endpoint", "api_format",
-        "data_fields", "related_datasets", "quality_notes",
+        "data_fields", "keywords", "tags",
+        "related_datasets", "quality_notes",
         "use_case", "access_instructions", "organization_context",
         "temporal_coverage", "update_frequency_actual",
     }
