@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import xml.etree.ElementTree as ET
+from typing import Any
 
 from aura.database import upsert_dataset
 from aura.harvesters.base import BaseHarvester
@@ -12,22 +12,32 @@ from aura.models import Dataset, Resource
 logger = logging.getLogger(__name__)
 
 GEOSERVER_BASE = "https://avoin.metsakeskus.fi/rajapinnat/v1"
+DOWNLOAD_BASE = "https://avoin.metsakeskus.fi/aineistot"
+INFO_PAGE_URL = "https://avoin.metsakeskus.fi"
 
 # Tunnetut palvelut ja niiden kuvaukset
-SERVICES: list[dict] = [
+SERVICES: list[dict[str, Any]] = [
     {
         "endpoint": "stand",
         "title": "Metsävarakuviot",
-        "description": "Kuviotason metsävaratiedot: puulaji, tilavuus, ikä, pituus, läpimitta, kasvupaikka",
+        "description": (
+            "Kuviotason metsävaratiedot: puulaji, tilavuus, ikä,"
+            " pituus, läpimitta, kasvupaikka"
+        ),
         "keywords": ["metsä", "kuviotiedot", "puusto", "metsävarat"],
         "estimated_size_gb": 50,
+        "download_dir": "Metsavarakuviot",
     },
     {
         "endpoint": "gridcell",
         "title": "Hilatiedot (16m ruutudata)",
-        "description": "Laserkeilauspohjaiset metsävaratiedot 16m ruuduissa: puulajikohtaiset tiedot",
+        "description": (
+            "Laserkeilauspohjaiset metsävaratiedot 16m ruuduissa:"
+            " puulajikohtaiset tiedot"
+        ),
         "keywords": ["metsä", "hila", "laserkeilaus", "LiDAR"],
         "estimated_size_gb": 200,
+        "download_dir": "Hila",
     },
     {
         "endpoint": "habitat",
@@ -35,6 +45,7 @@ SERVICES: list[dict] = [
         "description": "Metsälain 10 §:n mukaiset erityisen tärkeät elinympäristöt",
         "keywords": ["metsä", "elinympäristö", "luonnonsuojelu", "metsälaki"],
         "estimated_size_gb": 5,
+        "download_dir": "Erityisen_tarkeat_elinymparistokuviot",
     },
     {
         "endpoint": "forestusedeclaration",
@@ -42,6 +53,7 @@ SERVICES: list[dict] = [
         "description": "Hakkuu- ja muut metsänkäyttöilmoitukset",
         "keywords": ["metsä", "hakkuu", "metsänkäyttöilmoitus"],
         "estimated_size_gb": 10,
+        "download_dir": "Metsankayttoilmoitukset",
     },
     {
         "endpoint": "forestmask",
@@ -49,6 +61,7 @@ SERVICES: list[dict] = [
         "description": "Metsä/ei-metsä-luokitus",
         "keywords": ["metsä", "maankäyttö", "luokitus"],
         "estimated_size_gb": 5,
+        "download_dir": "Metsamaski",
     },
     {
         "endpoint": "inventory_sampleplot",
@@ -56,6 +69,7 @@ SERVICES: list[dict] = [
         "description": "Maastoinventoinnin koealat metsävarojen kalibrointiin",
         "keywords": ["metsä", "inventointi", "koeala"],
         "estimated_size_gb": 1,
+        "download_dir": "Inventointikoealat",
     },
     {
         "endpoint": "sampleplot",
@@ -63,6 +77,7 @@ SERVICES: list[dict] = [
         "description": "Kaukokartoituksen referenssikoealat",
         "keywords": ["metsä", "kaukokartoitus", "koeala"],
         "estimated_size_gb": 1,
+        "download_dir": "Kaukokartoituskoealat",
     },
     {
         "endpoint": "CHM_newest",
@@ -100,6 +115,18 @@ SERVICES: list[dict] = [
 
 # Latvusmallin vuosiversiot (2008–2022)
 CHM_YEARS = list(range(2008, 2023))
+
+# Lataus-only datasetit (ei API-endpointia)
+DOWNLOAD_ONLY_DATASETS: list[dict[str, Any]] = [
+    {
+        "id": "korjuukelpoisuus",
+        "title": "Korjuukelpoisuus",
+        "description": "Korjuukelpoisuuskartat maakunnittain (~130 ZIP-tiedostoa)",
+        "keywords": ["metsä", "korjuukelpoisuus", "hakkuu"],
+        "download_dir": "Korjuukelpoisuus",
+        "estimated_size_gb": 10,
+    },
+]
 
 # Kemera-tukitoimenpiteiden endpointit
 KEMERA_ENDPOINTS = [
@@ -155,15 +182,53 @@ class MetsakeskusHarvester(BaseHarvester):
             upsert_dataset(self.conn, dataset)
             count += 1
 
+        # Lataus-only datasetit
+        for cfg in DOWNLOAD_ONLY_DATASETS:
+            dataset = self._download_only_dataset(cfg)
+            upsert_dataset(self.conn, dataset)
+            count += 1
+
         self.conn.commit()
         logger.info("[metsakeskus] Harvest valmis: %d datasettiä", count)
         return count
 
-    def _service_to_dataset(self, svc: dict) -> Dataset:
+    def _service_to_dataset(self, svc: dict[str, Any]) -> Dataset:
         endpoint = svc["endpoint"]
         fmt = svc.get("format", "WFS")
         url = f"{GEOSERVER_BASE}/{endpoint}/ows"
         size_bytes = svc.get("estimated_size_gb", 1) * 1024 * 1024 * 1024
+        download_dir = svc.get("download_dir")
+
+        resources = [
+            Resource(
+                id=f"metsakeskus-{endpoint.lower()}-{fmt.lower()}",
+                name=f"{svc['title']} ({fmt})",
+                name_fi=f"{svc['title']} — {fmt}-rajapinta",
+                format=fmt,
+                url=url,
+            ),
+        ]
+
+        if download_dir:
+            resources.append(
+                Resource(
+                    id=f"metsakeskus-{endpoint.lower()}-download",
+                    name=f"{svc['title']} (lataus)",
+                    name_fi=f"{svc['title']} — tiedostolataus",
+                    format="ZIP",
+                    url=f"{DOWNLOAD_BASE}/{download_dir}/",
+                ),
+            )
+        else:
+            resources.append(
+                Resource(
+                    id=f"metsakeskus-{endpoint.lower()}-info",
+                    name=f"{svc['title']} (infosivu)",
+                    name_fi=f"{svc['title']} — lisätiedot",
+                    format="HTML",
+                    url=INFO_PAGE_URL,
+                ),
+            )
 
         return Dataset(
             id=f"metsakeskus-{endpoint.lower()}",
@@ -179,23 +244,8 @@ class MetsakeskusHarvester(BaseHarvester):
             keywords_fi=svc.get("keywords", ["metsä"]),
             geographical_coverage=["Suomi"],
             collection_type="Open Data",
-            num_resources=2,
-            resources=[
-                Resource(
-                    id=f"metsakeskus-{endpoint.lower()}-{fmt.lower()}",
-                    name=f"{svc['title']} ({fmt})",
-                    name_fi=f"{svc['title']} — {fmt}-rajapinta",
-                    format=fmt,
-                    url=url,
-                ),
-                Resource(
-                    id=f"metsakeskus-{endpoint.lower()}-download",
-                    name=f"{svc['title']} (lataus)",
-                    name_fi=f"{svc['title']} — tiedostolataus",
-                    format="ZIP",
-                    url=f"https://avoin.metsakeskus.fi/aineistot/",
-                ),
-            ],
+            num_resources=len(resources),
+            resources=resources,
             source="metsakeskus",
             estimated_size_bytes=int(size_bytes),
         )
@@ -216,7 +266,7 @@ class MetsakeskusHarvester(BaseHarvester):
             keywords_fi=["metsä", "latvusmalli", "CHM", "LiDAR", str(year)],
             geographical_coverage=["Suomi"],
             collection_type="Open Data",
-            num_resources=1,
+            num_resources=2,
             resources=[
                 Resource(
                     id=f"metsakeskus-chm-{year}-wcs",
@@ -224,6 +274,13 @@ class MetsakeskusHarvester(BaseHarvester):
                     name_fi=f"Latvusmalli {year} — WCS-rajapinta",
                     format="WCS",
                     url=f"{GEOSERVER_BASE}/{endpoint}/ows",
+                ),
+                Resource(
+                    id=f"metsakeskus-chm-{year}-download",
+                    name=f"Latvusmalli {year} (lataus)",
+                    name_fi=f"Latvusmalli {year} — tiedostolataus",
+                    format="ZIP",
+                    url=f"{DOWNLOAD_BASE}/Latvusmalli/",
                 ),
             ],
             source="metsakeskus",
@@ -245,7 +302,7 @@ class MetsakeskusHarvester(BaseHarvester):
             keywords_fi=["metsä", "kemera", "tuki", "metsänhoito"],
             geographical_coverage=["Suomi"],
             collection_type="Open Data",
-            num_resources=1,
+            num_resources=2,
             resources=[
                 Resource(
                     id=f"metsakeskus-{endpoint.lower()}-wfs",
@@ -254,7 +311,46 @@ class MetsakeskusHarvester(BaseHarvester):
                     format="WFS",
                     url=f"{GEOSERVER_BASE}/{endpoint}/ows",
                 ),
+                Resource(
+                    id=f"metsakeskus-{endpoint.lower()}-download",
+                    name=f"{title} (lataus)",
+                    name_fi=f"{title} — tiedostolataus",
+                    format="ZIP",
+                    url=f"{DOWNLOAD_BASE}/Kemera/",
+                ),
             ],
             source="metsakeskus",
             estimated_size_bytes=500 * 1024 * 1024,  # ~500 MB per Kemera-setti
+        )
+
+    def _download_only_dataset(self, cfg: dict[str, Any]) -> Dataset:
+        ds_id = cfg["id"]
+        return Dataset(
+            id=f"metsakeskus-{ds_id}",
+            name=f"metsakeskus-{ds_id}",
+            title=cfg["title"],
+            title_fi=cfg["title"],
+            notes_fi=cfg["description"],
+            license_id="cc-by-4.0",
+            license_title="CC BY 4.0",
+            organization_id="metsakeskus",
+            organization_name="metsakeskus",
+            organization_title="Suomen metsäkeskus",
+            keywords_fi=cfg.get("keywords", ["metsä"]),
+            geographical_coverage=["Suomi"],
+            collection_type="Open Data",
+            num_resources=1,
+            resources=[
+                Resource(
+                    id=f"metsakeskus-{ds_id}-download",
+                    name=f"{cfg['title']} (lataus)",
+                    name_fi=f"{cfg['title']} — tiedostolataus",
+                    format="ZIP",
+                    url=f"{DOWNLOAD_BASE}/{cfg['download_dir']}/",
+                ),
+            ],
+            source="metsakeskus",
+            estimated_size_bytes=int(
+                cfg.get("estimated_size_gb", 1) * 1024 * 1024 * 1024
+            ),
         )
