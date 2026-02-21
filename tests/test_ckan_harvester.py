@@ -42,6 +42,23 @@ SAMPLE_CKAN_DATASET = {
     ],
 }
 
+SAMPLE_CKAN_WITH_EXTRAS = {
+    **SAMPLE_CKAN_DATASET,
+    "id": "test-extras-1",
+    "name": "test-extras",
+    "extras": [
+        {"key": "contact-email", "value": "data@example.fi"},
+        {"key": "lineage", "value": "Aineisto tuotettu vuonna 2023."},
+        {"key": "topic-category", "value": '["farming", "environment"]'},
+        {"key": "bbox-west-long", "value": "19.5"},
+        {"key": "bbox-south-lat", "value": "59.7"},
+        {"key": "bbox-east-long", "value": "31.6"},
+        {"key": "bbox-north-lat", "value": "70.1"},
+        {"key": "temporal_coverage_from", "value": "2020-01-01"},
+        {"key": "temporal_coverage_to", "value": "2023-12-31"},
+    ],
+}
+
 
 def _mock_ckan_response(datasets: list[dict], total: int | None = None) -> dict:
     if total is None:
@@ -137,3 +154,140 @@ class TestCkanHarvesterHarvest:
 
         row = conn.execute("SELECT source FROM datasets WHERE id = 'test-dataset-1'").fetchone()
         assert row[0] == "hri.fi"
+
+
+class TestCkanExtrasEnrichment:
+    """CKAN extras → enrichment -testit."""
+
+    @pytest.mark.asyncio
+    async def test_extras_create_enrichments(self):
+        """CKAN extras rikastuu enrichment-tauluun."""
+        conn = _memory_db()
+        h = AvoindataHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = _mock_ckan_response(
+            [SAMPLE_CKAN_WITH_EXTRAS], total=1
+        )
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest()
+
+        enrichments = conn.execute(
+            "SELECT field, value FROM enrichments WHERE dataset_id = 'test-extras-1' ORDER BY field"
+        ).fetchall()
+        fields = {e["field"] for e in enrichments}
+
+        assert "access_instructions" in fields  # contact-email
+        assert "description_extended" in fields  # lineage
+        assert "temporal_coverage" in fields  # temporal from+to
+        assert "data_fields" in fields  # bbox
+
+    @pytest.mark.asyncio
+    async def test_extras_idempotent(self):
+        """Toinen harvest ei luo duplikaatti-enrichmentteja."""
+        conn = _memory_db()
+        h = AvoindataHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = _mock_ckan_response(
+            [SAMPLE_CKAN_WITH_EXTRAS], total=1
+        )
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest()
+            await h.harvest()  # toinen kerta
+
+        count = conn.execute(
+            "SELECT COUNT(*) FROM enrichments WHERE dataset_id = 'test-extras-1'"
+        ).fetchone()[0]
+        # Jokainen enrichment vain kerran
+        unique_count = conn.execute(
+            "SELECT COUNT(DISTINCT field || '|' || value) FROM enrichments "
+            "WHERE dataset_id = 'test-extras-1'"
+        ).fetchone()[0]
+        assert count == unique_count
+
+    @pytest.mark.asyncio
+    async def test_no_extras_no_enrichments(self):
+        """Dataset ilman extras:ia ei luo enrichmentteja."""
+        conn = _memory_db()
+        h = AvoindataHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = _mock_ckan_response(
+            [SAMPLE_CKAN_DATASET], total=1
+        )
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest()
+
+        count = conn.execute(
+            "SELECT COUNT(*) FROM enrichments WHERE dataset_id = 'test-dataset-1'"
+        ).fetchone()[0]
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_temporal_coverage_combined(self):
+        """Temporal coverage yhdistää from ja to."""
+        conn = _memory_db()
+        h = AvoindataHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = _mock_ckan_response(
+            [SAMPLE_CKAN_WITH_EXTRAS], total=1
+        )
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest()
+
+        row = conn.execute(
+            "SELECT value FROM enrichments "
+            "WHERE dataset_id = 'test-extras-1' AND field = 'temporal_coverage'"
+        ).fetchone()
+        assert "2020-01-01" in row["value"]
+        assert "2023-12-31" in row["value"]
+
+    @pytest.mark.asyncio
+    async def test_source_type_is_harvest(self):
+        """Harvest-enrichmentit saavat source_type='harvest'."""
+        conn = _memory_db()
+        h = AvoindataHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = _mock_ckan_response(
+            [SAMPLE_CKAN_WITH_EXTRAS], total=1
+        )
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest()
+
+        rows = conn.execute(
+            "SELECT source_type FROM enrichments WHERE dataset_id = 'test-extras-1'"
+        ).fetchall()
+        assert all(r["source_type"] == "harvest" for r in rows)

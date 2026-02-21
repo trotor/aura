@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -67,6 +68,7 @@ class CkanHarvester(BaseHarvester):
                 for raw in datasets:
                     dataset = Dataset.from_ckan(raw, source=self.ckan_source)
                     upsert_dataset(self.conn, dataset)
+                    self._enrich_from_extras(dataset.id, raw)
                     total_harvested += 1
 
                 self.conn.commit()
@@ -80,6 +82,100 @@ class CkanHarvester(BaseHarvester):
 
         logger.info("[%s] Harvest valmis: %d datasettiä", self.name, total_harvested)
         return total_harvested
+
+    # CKAN extras → enrichment-kenttä
+    EXTRAS_FIELD_MAP: dict[str, str] = {
+        "temporal_coverage_from": "temporal_coverage",
+        "temporal_coverage_to": "temporal_coverage",
+        "contact-email": "access_instructions",
+        "maintainer_email": "access_instructions",
+        "lineage": "description_extended",
+        "spatial-reference-system": "data_fields",
+        "topic-category": "keywords",
+    }
+
+    def _enrich_from_extras(
+        self, dataset_id: str, raw: dict[str, Any]
+    ) -> None:
+        """Rikasta datasetti CKAN extras -kentistä."""
+        extras = raw.get("extras", [])
+        if not extras:
+            return
+
+        temporal_parts: list[str] = []
+
+        for extra in extras:
+            key = extra.get("key", "")
+            val = extra.get("value", "")
+            if not key or not val:
+                continue
+
+            # Bbox → enrichment
+            if key.startswith("bbox-"):
+                continue  # kerätään alla erikseen
+
+            # Temporal coverage: yhdistä from+to
+            if key in ("temporal_coverage_from", "temporal_coverage_to"):
+                temporal_parts.append(val)
+                continue
+
+            # Mappaus
+            field = self.EXTRAS_FIELD_MAP.get(key)
+            if field:
+                # JSON-arvot: parsitaan ja muotoillaan
+                display_val = self._format_extra_value(val)
+                detail = f"CKAN extras: {key}"
+                self._add_enrichment(
+                    dataset_id, field, display_val,
+                    source_detail=detail,
+                )
+
+        # Temporal coverage yhdistettynä
+        if temporal_parts:
+            self._add_enrichment(
+                dataset_id, "temporal_coverage",
+                " – ".join(sorted(temporal_parts)),
+                source_detail="CKAN extras: temporal_coverage",
+            )
+
+        # Bbox → spatial enrichment
+        bbox = self._extract_bbox(extras)
+        if bbox:
+            self._add_enrichment(
+                dataset_id, "data_fields",
+                f"bbox: [{bbox}]",
+                source_detail="CKAN extras: bbox",
+            )
+
+    @staticmethod
+    def _format_extra_value(val: str) -> str:
+        """Muotoile CKAN extras -arvo luettavaksi."""
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return ", ".join(str(v) for v in parsed)
+            if isinstance(parsed, dict):
+                return json.dumps(parsed, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return val
+
+    @staticmethod
+    def _extract_bbox(extras: list[dict[str, str]]) -> str:
+        """Kokoa bbox-arvot CKAN extras -kentistä."""
+        bbox: dict[str, str] = {}
+        for extra in extras:
+            key = extra.get("key", "")
+            if key.startswith("bbox-"):
+                bbox[key] = extra.get("value", "")
+        if len(bbox) == 4:
+            return (
+                f"W:{bbox.get('bbox-west-long', '')}, "
+                f"S:{bbox.get('bbox-south-lat', '')}, "
+                f"E:{bbox.get('bbox-east-long', '')}, "
+                f"N:{bbox.get('bbox-north-lat', '')}"
+            )
+        return ""
 
     async def _fetch_page(
         self,

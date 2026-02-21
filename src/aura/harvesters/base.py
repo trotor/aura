@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from aura.database import get_connection, init_db
+from aura.database import add_enrichment, get_connection, init_db
 from aura.models import Dataset
 
 logger = logging.getLogger(__name__)
@@ -157,3 +157,36 @@ class BaseHarvester(ABC):
         }
         defaults.update(kwargs)
         return Dataset(**defaults)
+
+    def _add_enrichment(
+        self,
+        dataset_id: str,
+        field: str,
+        value: str,
+        *,
+        confidence: str = "high",
+        source_detail: str = "",
+    ) -> None:
+        """Lisää harvest-aikainen enrichment idempotentisti.
+
+        Tarkistaa onko sama (dataset_id, field, value) jo olemassa
+        ennen kuin luo uuden. Ei commitoi — kutsujan vastuulla.
+        """
+        if not value or not value.strip():
+            return
+        existing = self.conn.execute(
+            """
+            SELECT 1 FROM enrichments
+            WHERE dataset_id = ? AND field = ? AND value = ?
+            LIMIT 1
+            """,
+            (dataset_id, field, value),
+        ).fetchone()
+        if existing:
+            return
+        add_enrichment(
+            self.conn, dataset_id, field, value,
+            confidence=confidence,
+            source_type="harvest",
+            source_detail=source_detail or self.name,
+        )

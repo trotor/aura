@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 
 import httpx
 
@@ -117,8 +119,48 @@ class DigitrafficHarvester(BaseHarvester):
             )
 
             upsert_dataset(self.conn, dataset)
+
+            # Enrichment: OpenAPI-skeeman kentät
+            self._enrich_from_openapi(dataset_id, get_info)
             count += 1
 
         self.conn.commit()
         logger.info("[digitraffic/%s] %d endpointia", api_key, count)
         return count
+
+    def _enrich_from_openapi(
+        self, dataset_id: str, get_info: dict[str, Any]
+    ) -> None:
+        """Rikasta datasetti OpenAPI-speksin tiedoilla."""
+        # Response-skeeman kentät
+        responses = get_info.get("responses", {})
+        ok_resp = responses.get("200", responses.get("2XX", {}))
+        content = ok_resp.get("content", {})
+        json_schema = content.get("application/json", {}).get("schema", {})
+
+        # Suora properties tai items.properties (taulukko)
+        props = json_schema.get("properties", {})
+        if not props and "items" in json_schema:
+            props = json_schema["items"].get("properties", {})
+
+        if props:
+            fields = sorted(props.keys())[:30]  # max 30 kenttää
+            self._add_enrichment(
+                dataset_id, "data_fields",
+                json.dumps(fields, ensure_ascii=False),
+                confidence="verified",
+                source_detail="OpenAPI schema",
+            )
+
+        # Parametrit → access_instructions
+        params = get_info.get("parameters", [])
+        if params:
+            param_names = [
+                f"{p.get('name', '')} ({p.get('in', '')})"
+                for p in params[:10]
+            ]
+            self._add_enrichment(
+                dataset_id, "access_instructions",
+                f"Query-parametrit: {', '.join(param_names)}",
+                source_detail="OpenAPI parameters",
+            )
