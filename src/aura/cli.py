@@ -107,6 +107,13 @@ def main() -> None:
         help="Poista rikastukset vanhempia kuin N päivää (oletus: 365)",
     )
 
+    # quality
+    quality_parser = subparsers.add_parser("quality", help="Laske datasettien laatupisteet")
+    quality_parser.add_argument(
+        "--source", default="",
+        help="Rajaa lähteeseen (esim. avoindata.fi)",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -307,6 +314,53 @@ def main() -> None:
             print(f"Poistettu {count} rikastusta (vanhempia kuin {args.older_than} pv).")
         else:
             print("Ei poistettavia rikastuksia.")
+
+    elif args.command == "quality":
+        from aura.database import get_connection, init_db
+        from aura.quality import score_all_datasets
+
+        conn = get_connection()
+        init_db(conn)
+        count = score_all_datasets(conn, source=args.source)
+        print(f"Laatupisteet laskettu {count} datasetille.")
+
+        # Yhteenveto
+        rows = conn.execute(
+            """
+            SELECT
+                ROUND(AVG(score), 1) as avg_score,
+                ROUND(MIN(score), 1) as min_score,
+                ROUND(MAX(score), 1) as max_score
+            FROM quality_scores
+            WHERE dimension = 'overall'
+            """
+        ).fetchone()
+        if rows and rows["avg_score"] is not None:
+            print(
+                f"Kokonaislaatu: ka. {rows['avg_score']}, "
+                f"min {rows['min_score']}, max {rows['max_score']}"
+            )
+
+        # Top ja bottom 5
+        for label, order in [("Parhaat", "DESC"), ("Heikoimmat", "ASC")]:
+            top = conn.execute(
+                f"""
+                SELECT q.dataset_id, q.score,
+                       COALESCE(d.title_fi, d.title) as title
+                FROM quality_scores q
+                JOIN datasets d ON q.dataset_id = d.id
+                WHERE q.dimension = 'overall'
+                ORDER BY q.score {order}
+                LIMIT 5
+                """,
+            ).fetchall()
+            if top:
+                print(f"\n{label}:")
+                for r in top:
+                    title = r["title"] or r["dataset_id"]
+                    if len(title) > 60:
+                        title = title[:57] + "..."
+                    print(f"  {r['score']:5.1f}  {title}")
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations
