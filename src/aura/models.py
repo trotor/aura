@@ -92,7 +92,7 @@ class Dataset(BaseModel):
             resources.append(
                 Resource(
                     id=r.get("id", ""),
-                    name=r.get("name", ""),
+                    name=r.get("name") or "",
                     name_fi=name_tr.get("fi", ""),
                     name_en=name_tr.get("en", ""),
                     description=r.get("description", ""),
