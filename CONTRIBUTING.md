@@ -2,6 +2,11 @@
 
 Aura on avoin projekti ja kaikki kontribuutiot ovat tervetulleita! Voit osallistua monella tavalla — koodin kirjoittamisesta datan rikastamiseen.
 
+## Vaatimukset
+
+- **Python 3.11+** — tarkista: `python3 --version`
+- **git**
+
 ## Pikastartti
 
 ```bash
@@ -134,6 +139,51 @@ Skeemamuutokset tehdään migraatioina:
 1. Luo `scripts/migrations/NNN_kuvaus.sql`
 2. Migraatio ajetaan automaattisesti seuraavan `init_db()`-kutsun yhteydessä
 3. Versionumero parsitaan tiedostonimestä (`003_...` → versio 3)
+
+## Rajausaineistot (valinnainen)
+
+Paikkatietoaineistojen aluerajauksia varten tarvitaan karttalehtijako. Se ei tule repon mukana:
+
+```bash
+mkdir -p data/boundaries
+curl -L -o /tmp/karttalehtijako.zip \
+  "https://kartat.kapsi.fi/files/karttalehtijako_ruudukko/kaikki/etrs89/gpkg/TM35_karttalehtijako_GeoPackage.zip"
+unzip -o /tmp/karttalehtijako.zip -d data/boundaries/
+mv data/boundaries/TM35_karttalehtijako.gpkg data/boundaries/karttalehtijako.gpkg
+```
+
+Rajausaineistot eivät ole pakollisia — testit ja perusominaisuudet toimivat ilman niitä.
+
+## Yleisiä ongelmia
+
+### "No module named aura"
+
+Virtuaaliympäristö ei ole aktiivinen:
+
+```bash
+source .venv/bin/activate
+```
+
+### "fts5: syntax error" tai FTS5-haku ei toimi
+
+Python-versiosi SQLite ei tue FTS5:tä. Päivitä Python >=3.11 joka sisältää SQLite >=3.37 FTS5-tuella.
+
+```bash
+python3 -c "import sqlite3; print(sqlite3.sqlite_version)"
+# Pitäisi olla >=3.9.0 (mieluiten >=3.37.0)
+```
+
+### WAL-tiedostot git statusissa
+
+`data/aura.db-shm` ja `data/aura.db-wal` ovat SQLiten transientteja tiedostoja. Ne ovat `.gitignore`-tiedostossa — jos näet ne git statusissa, päivitä `.gitignore`:
+
+```bash
+git checkout .gitignore
+```
+
+### Testit epäonnistuvat rajausaineistojen puuttuessa
+
+Osa testeistä voi ohittua ilman `data/boundaries/`-aineistoja. Lataa ne yllä olevien ohjeiden mukaisesti.
 
 ## Pull request -prosessi
 

@@ -19,6 +19,17 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 - **Rikastaa joukkoistamalla** — MCP-sessiot kerryttävät tietoa dataseteistä
 - **Palvelee tekoälyjä** MCP-serverin kautta (Claude, GPT, jne.)
 
+## Vaatimukset
+
+- **Python 3.11+** — tarkista: `python3 --version`
+- **pip** tai [**uv**](https://docs.astral.sh/uv/) pakettien asennukseen
+- **git** repon kloonaamiseen
+
+SQLite tulee Python 3.11:n mukana (FTS5-tuki sisäänrakennettu). Erillistä SQLite-asennusta ei tarvita.
+
+**Valinnainen:**
+- **MML API-avain** — Maanmittauslaitoksen aineistoihin (ks. [Rajausaineistot](#rajausaineistot))
+
 ## Käyttöönotto
 
 ### Claude Code (toimii sellaisenaan)

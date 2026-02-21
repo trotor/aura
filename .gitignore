@@ -37,4 +37,8 @@ htmlcov/
 # Rajausaineistot (ladataan MML:stä, ei versionhallintaan)
 data/boundaries/
 
+# SQLite WAL-tiedostot (transientit, syntyy WAL-moodissa)
+data/aura.db-shm
+data/aura.db-wal
+
 # NOTE: data/aura.db is NOT ignored — it's part of the project
