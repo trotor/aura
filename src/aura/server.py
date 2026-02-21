@@ -159,6 +159,9 @@ def describe(dataset_id: str, ctx: Context | None = None) -> str:
     if quality and "overall" in quality:
         result += _format_quality_section(quality)
 
+    # Enrichment-kehotus: puuttuvat kentät
+    result += _format_enrichment_gaps(ds_id, enrichments)
+
     return result
 
 
@@ -554,6 +557,52 @@ def _format_quality_section(quality: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+# Enrichment-kentät prioriteettijärjestyksessä
+_ENRICHMENT_PRIORITIES = [
+    ("access_instructions", "Miten dataa haetaan käytännössä?"),
+    ("data_fields", "Mitä kenttiä/sarakkeita data sisältää?"),
+    ("use_case", "Mihin dataa voi käyttää?"),
+    ("temporal_coverage", "Miltä ajanjaksolta data on?"),
+    ("description_extended", "Laajempi kuvaus aineistosta"),
+    ("keywords", "Lisäavainsanat haun parantamiseksi"),
+    ("api_endpoint", "Rajapinnan URL"),
+    ("api_format", "Rajapinnan formaatti (REST, WFS, OData)"),
+    ("quality_notes", "Huomioita datan laadusta"),
+    ("organization_context", "Taustatietoa julkaisijasta"),
+    ("update_frequency_actual", "Havaittu päivitystiheys"),
+]
+
+
+def _format_enrichment_gaps(
+    dataset_id: str,
+    enrichments: list[dict[str, Any]],
+    max_gaps: int = 5,
+) -> str:
+    """Muotoile puuttuvien enrichment-kenttien kehotus."""
+    existing_fields = {e.get("field", "") for e in enrichments}
+
+    missing = [
+        (field, desc)
+        for field, desc in _ENRICHMENT_PRIORITIES
+        if field not in existing_fields
+    ]
+
+    if not missing:
+        return ""
+
+    show = missing[:max_gaps]
+    parts = ["\n\n### Puuttuvat tiedot\n"]
+    for field, desc in show:
+        parts.append(f"- **{field}**: {desc}")
+
+    parts.append(
+        f'\nTallenna: enrich(dataset_id="{dataset_id}", '
+        'field="...", value="...")'
+    )
+
+    return "\n".join(parts)
+
+
 @mcp.tool()
 def quality_report(
     dataset_id: str, ctx: Context | None = None
@@ -910,6 +959,71 @@ def enrich(
         f"Rikastus tallennettu (id: {enrichment_id}). "
         f"Datasetti: {dataset_id}, kenttä: {field}."
     )
+
+
+@mcp.tool()
+def batch_enrich(
+    enrichments: list[dict[str, str]],
+    ctx: Context | None = None,
+) -> str:
+    """Tallenna useita rikastuksia kerralla.
+
+    Tehokkaampi kuin yksittäiset enrich()-kutsut kun haluat
+    tallentaa monta löydöstä samalla kertaa.
+
+    Args:
+        enrichments: Lista rikastuksista. Jokainen sisältää:
+            - dataset_id: Datasetin ID tai nimi
+            - field: Rikastettava kenttä (samat kuin enrich()-työkalussa)
+            - value: Rikastuksen arvo
+            - confidence: (valinnainen) "low"/"medium"/"high"/"verified"
+            - source_type: (valinnainen) lähdetyyppi
+            - source_detail: (valinnainen) lähteen kuvaus
+    """
+    conn = _get_conn(ctx)
+
+    valid_fields = {
+        "description_extended", "api_endpoint", "api_format",
+        "data_fields", "keywords", "tags",
+        "related_datasets", "quality_notes",
+        "use_case", "access_instructions", "organization_context",
+        "temporal_coverage", "update_frequency_actual",
+    }
+
+    results: list[str] = []
+    errors: list[str] = []
+
+    for i, e in enumerate(enrichments):
+        ds_id = e.get("dataset_id", "")
+        field = e.get("field", "")
+        value = e.get("value", "")
+
+        if not ds_id or not field or not value:
+            errors.append(f"#{i + 1}: puuttuva dataset_id/field/value")
+            continue
+        if field not in valid_fields:
+            errors.append(f"#{i + 1}: tuntematon kenttä '{field}'")
+            continue
+
+        add_enrichment(
+            conn, ds_id, field, value,
+            confidence=e.get("confidence", "medium"),
+            source_type=e.get("source_type", "mcp_session"),
+            source_detail=e.get("source_detail", ""),
+        )
+        results.append(f"- {ds_id}/{field}")
+
+    parts: list[str] = []
+    if results:
+        parts.append(f"Tallennettu {len(results)} rikastusta:")
+        parts.extend(results)
+    if errors:
+        parts.append(f"\nVirheet ({len(errors)}):")
+        parts.extend(errors)
+    if not results and not errors:
+        parts.append("Ei rikastuksia tallennettavaksi.")
+
+    return "\n".join(parts)
 
 
 @mcp.tool()
