@@ -108,7 +108,21 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
-    """Lisää tai päivitä datasetti tietokantaan."""
+    """Lisää tai päivitä datasetti tietokantaan.
+
+    Käyttää savepointia taatakseen atomisen päivityksen:
+    datasetti + resurssit päivittyvät joko kokonaan tai eivät ollenkaan.
+    """
+    conn.execute("SAVEPOINT upsert_ds")
+    try:
+        _upsert_dataset_inner(conn, dataset)
+        conn.execute("RELEASE upsert_ds")
+    except Exception:
+        conn.execute("ROLLBACK TO upsert_ds")
+        raise
+
+
+def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
     conn.execute(
         """
         INSERT INTO datasets (
@@ -138,8 +152,16 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
             organization_id=excluded.organization_id,
             organization_name=excluded.organization_name,
             organization_title=excluded.organization_title,
-            metadata_created=excluded.metadata_created,
-            metadata_modified=excluded.metadata_modified,
+            metadata_created=CASE
+                WHEN excluded.metadata_created != '' AND excluded.metadata_created IS NOT NULL
+                THEN excluded.metadata_created
+                ELSE datasets.metadata_created
+            END,
+            metadata_modified=CASE
+                WHEN excluded.metadata_modified != '' AND excluded.metadata_modified IS NOT NULL
+                THEN excluded.metadata_modified
+                ELSE datasets.metadata_modified
+            END,
             keywords_fi=excluded.keywords_fi, keywords_en=excluded.keywords_en,
             geographical_coverage=excluded.geographical_coverage,
             update_frequency=excluded.update_frequency,
