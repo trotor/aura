@@ -123,6 +123,7 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
 
 
 def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
+    num_resources = len(dataset.resources)
     conn.execute(
         """
         INSERT INTO datasets (
@@ -183,7 +184,7 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
             json.dumps(dataset.keywords_en, ensure_ascii=False),
             json.dumps(dataset.geographical_coverage, ensure_ascii=False),
             dataset.update_frequency, dataset.collection_type,
-            dataset.num_resources, dataset.source,
+            num_resources, dataset.source,
             dataset.access_level, dataset.estimated_size_bytes,
         ),
     )
