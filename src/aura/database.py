@@ -253,12 +253,8 @@ def search_datasets(
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
-    # Enrichment-avainsanahaku: etsi datasetit joiden keywords/tags/description
-    # sisältää hakutermin (LIKE-haku enrichments-taulusta)
-    enrich_like = f"%{query}%"
-
-    # Parametrit: FTS match, enrichment LIKE ×2 (id + name), suodattimet ×1, limit, offset
-    params: list[Any] = [query, enrich_like, enrich_like, *filter_params, limit, offset]
+    # Parametrit: FTS match, enrichment FTS match, suodattimet, limit, offset
+    params: list[Any] = [query, query, *filter_params, limit, offset]
 
     rows = conn.execute(
         f"""
@@ -272,14 +268,8 @@ def search_datasets(
         WHERE (
             fts.rowid IS NOT NULL
             OR d.id IN (
-                SELECT DISTINCT dataset_id FROM enrichments
-                WHERE field IN ('keywords', 'tags', 'description_extended')
-                AND value LIKE ?
-            )
-            OR d.name IN (
-                SELECT DISTINCT dataset_id FROM enrichments
-                WHERE field IN ('keywords', 'tags', 'description_extended')
-                AND value LIKE ?
+                SELECT DISTINCT dataset_id FROM enrichments_fts
+                WHERE enrichments_fts MATCH ?
             )
         )
         {filter_where}
