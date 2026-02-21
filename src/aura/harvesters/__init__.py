@@ -19,6 +19,7 @@ from aura.harvesters.static import StaticHarvester  # noqa: F401
 from aura.harvesters.syke import SykeHarvester
 from aura.harvesters.taustakartat import TaustakartatHarvester
 from aura.harvesters.traficom import TraficomHarvester
+from aura.harvesters.vaalirahoitus import VaalirahoitusHarvester
 
 # Rekisteri kaikista harvestereista
 HARVESTERS: dict[str, type[BaseHarvester]] = {
@@ -35,6 +36,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "taustakartat": TaustakartatHarvester,
     "overture": OvertureHarvester,
     "ruokavirasto": RuokavirastoHarvester,
+    "vaalirahoitus": VaalirahoitusHarvester,
 }
 
 
