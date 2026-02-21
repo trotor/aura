@@ -20,6 +20,7 @@ from aura.harvesters.syke import SykeHarvester
 from aura.harvesters.taustakartat import TaustakartatHarvester
 from aura.harvesters.traficom import TraficomHarvester
 from aura.harvesters.vaalirahoitus import VaalirahoitusHarvester
+from aura.harvesters.valtiokonttori import ValtiokonttoriHarvester
 
 # Rekisteri kaikista harvestereista
 HARVESTERS: dict[str, type[BaseHarvester]] = {
@@ -37,6 +38,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "overture": OvertureHarvester,
     "ruokavirasto": RuokavirastoHarvester,
     "vaalirahoitus": VaalirahoitusHarvester,
+    "valtiokonttori": ValtiokonttoriHarvester,
 }
 
 
