@@ -280,7 +280,14 @@ Arvot tulevat eri lähteistä:
 
 ### Rajausaineistot
 
-Paikallisina rajausaineistoina käytetään GeoPackage-tiedostoja `data/boundaries/`-kansiossa. Kansio on gitignoressa — aineistot ladataan erikseen.
+Paikallisina rajausaineistoina käytetään GeoPackage-tiedostoja `data/boundaries/`-kansiossa. Kansio on gitignoressa — aineistot ladataan erikseen. Lähde: [Kapsi.fi](https://kartat.kapsi.fi/files/) (MML:n avoin data, CC BY 4.0).
+
+```bash
+# Lataa kaikki rajausaineistot yhdellä komennolla (~40 MB)
+bash scripts/download_boundaries.sh
+```
+
+Skripti on idempotentti — ohittaa jo ladatut tiedostot.
 
 #### Karttalehtijako (TM35)
 
@@ -296,21 +303,13 @@ MML:n karttalehtijako kattaa koko Suomen ETRS-TM35FIN (EPSG:3067) -koordinaatist
 | 6 | 1:5 000 | `L4133A3` | 3 × 3 km | 106 496 |
 | 7 | 1:1 000 | `L4133A3_1` | 1 × 1 km | 398 286 |
 
-```bash
-# Lataa karttalehtijako (Kapsi.fi-peili, ei vaadi API-avainta)
-mkdir -p data/boundaries
-curl -L -o /tmp/karttalehtijako.zip \
-  "https://kartat.kapsi.fi/files/karttalehtijako_ruudukko/kaikki/etrs89/gpkg/TM35_karttalehtijako_GeoPackage.zip"
-unzip -o /tmp/karttalehtijako.zip -d data/boundaries/
-mv data/boundaries/TM35_karttalehtijako.gpkg data/boundaries/karttalehtijako.gpkg
-```
+#### Kuntajako (hallinnolliset rajat)
 
-#### Tulevat aineistot
+MML:n hallinnolliset aluejaot: 308 kuntaa, 19 maakuntaa, 23 hyvinvointialuetta, Suomen raja. Kaksi mittakaavaa: 1:1M (yleiskäyttö) ja 1:10k (tarkka geometria).
 
-| Aineisto | Lähde | Tila |
-|----------|-------|------|
-| Kunnat ja maakunnat | Tilastokeskus / MML | Suunniteltu |
-| Kiinteistörajat | MML Kiinteistötietopalvelu WFS | Rajapinnasta (liian suuri lokaaliin) |
+#### Kiinteistörajat
+
+Kiinteistörajat haetaan MML:n rajapintapalvelusta (liian suuria lokaaliin tallennukseen).
 
 #### MML API-avain
 

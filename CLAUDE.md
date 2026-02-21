@@ -139,6 +139,50 @@ sheets = gpkg.execute(
 - `utm25` (3 328) — kaupunkitasoiset haut
 - `utm10` (26 624) — yksityiskohtaiset paikkatietohaut
 
+### Kuntajako (`data/boundaries/kuntajako_1000k.gpkg` ja `kuntajako_10k.gpkg`)
+
+MML:n hallinnolliset aluejaot sisältävät Suomen hallinnolliset rajat. Kaksi mittakaavaa: 1:1M (928 KB, yleiskäyttö) ja 1:10k (35 MB, tarkka). Molemmat sisältävät 4 tasoa:
+
+| Taso | Sisältö | Attribuutit |
+|------|---------|-------------|
+| `Kunta` (308) | Kunnat | `natcode` (kuntanumero), `namefin`, `nameswe`, `landarea`, `totalarea` |
+| `Maakunta` (19) | Maakunnat | `natcode` (maakuntakoodi), `namefin`, `nameswe` |
+| `Hyvinvointialue` (23) | Hyvinvointialueet | `natcode`, `namefin`, `nameswe` |
+| `Valtakunta` (1) | Suomen raja | `natcode`, `namefin`, `nameswe` |
+
+**Käyttö aluerajauksissa:**
+
+```python
+import sqlite3
+
+kj = sqlite3.connect("data/boundaries/kuntajako_1000k.gpkg")
+
+# Hae kunnan bbox WFS-kyselyä varten
+row = kj.execute("""
+    SELECT MbrMinX(multipolygon) as minx, MbrMinY(multipolygon) as miny,
+           MbrMaxX(multipolygon) as maxx, MbrMaxY(multipolygon) as maxy
+    FROM Kunta WHERE namefin = 'Helsinki'
+""").fetchone()
+bbox = f"{row[0]},{row[1]},{row[2]},{row[3]},EPSG:3067"
+
+# Listaa maakunnan kunnat
+kunnat = kj.execute("""
+    SELECT k.natcode, k.namefin FROM Kunta k, Maakunta m
+    WHERE m.namefin = 'Uusimaa'
+      AND ST_Within(ST_Centroid(k.multipolygon), m.multipolygon)
+""").fetchall()
+# Huom: SpatiaLite-funktiot vaativat mod_spatialite-laajennuksen.
+# Ilman sitä käytä bbox-vertailua:
+kunnat = kj.execute("""
+    SELECT k.natcode, k.namefin FROM Kunta k, Maakunta m
+    WHERE m.namefin = 'Uusimaa'
+      AND MbrMinX(k.multipolygon) > MbrMinX(m.multipolygon)
+      AND MbrMaxX(k.multipolygon) < MbrMaxX(m.multipolygon)
+      AND MbrMinY(k.multipolygon) > MbrMinY(m.multipolygon)
+      AND MbrMaxY(k.multipolygon) < MbrMaxY(m.multipolygon)
+""").fetchall()
+```
+
 ## MCP-testaus Claude Codella
 
 Projektin `.mcp.json` konfiguroi MCP-palvelimen automaattisesti:
