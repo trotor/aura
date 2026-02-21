@@ -25,6 +25,7 @@ from aura.database import (
     init_db,
     search_datasets,
 )
+from aura.quality import get_quality_scores
 from aura.search import (
     format_dataset_detail,
     format_dataset_summary,
@@ -146,12 +147,19 @@ def describe(dataset_id: str, ctx: Context | None = None) -> str:
     stale = get_stale_enrichments(conn, ds_id)
     stale_ids = {e["id"] for e in stale}
     conflicts = get_conflicting_enrichments(conn, ds_id)
-    return format_dataset_detail(
+    result = format_dataset_detail(
         dataset,
         enrichments=enrichments,
         stale_ids=stale_ids,
         conflicts=conflicts,
     )
+
+    # Laatupisteet
+    quality = get_quality_scores(conn, ds_id)
+    if quality and "overall" in quality:
+        result += _format_quality_section(quality)
+
+    return result
 
 
 @mcp.tool()
@@ -396,6 +404,7 @@ def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
     ds_ids = [d["id"] for d in results]
     enrichment_counts = _batch_enrichment_counts(conn, ds_ids)
     format_map = _batch_formats(conn, ds_ids)
+    quality_scores = _batch_quality_scores(conn, ds_ids)
 
     now = datetime.now(tz=UTC)
 
@@ -433,6 +442,10 @@ def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
         formats = format_map.get(ds_id, set())
         if formats & MACHINE_READABLE_FORMATS:
             score -= 0.3
+
+        # Quality score -bonus (0–100 → 0–1.0 bonus)
+        qs = quality_scores.get(ds_id, 0)
+        score -= qs * 0.01
 
         scored.append((score, d))
 
@@ -499,6 +512,278 @@ def _batch_formats(
     for row in rows:
         result.setdefault(row["dataset_id"], set()).add(row["format"])
     return result
+
+
+def _batch_quality_scores(
+    conn: sqlite3.Connection, dataset_ids: list[str]
+) -> dict[str, float]:
+    """Hae overall-laatupisteet dataseteille yhdellä kyselyllä."""
+    if not dataset_ids:
+        return {}
+    placeholders = ",".join("?" for _ in dataset_ids)
+    rows = conn.execute(
+        f"""
+        SELECT dataset_id, score
+        FROM quality_scores
+        WHERE dataset_id IN ({placeholders}) AND dimension = 'overall'
+        """,
+        dataset_ids,
+    ).fetchall()
+    return {row["dataset_id"]: row["score"] for row in rows}
+
+
+def _format_quality_section(quality: dict[str, Any]) -> str:
+    """Muotoile laatupisteet describe()-tulokseen."""
+    overall = quality.get("overall", {}).get("score", 0)
+
+    dim_labels = {
+        "completeness": "Täydellisyys",
+        "timeliness": "Ajantasaisuus",
+        "accessibility": "Saavutettavuus",
+        "documentation": "Dokumentointi",
+    }
+
+    parts = [f"\n\n### Laatuarvio: {overall:.0f}/100\n"]
+    for dim, label in dim_labels.items():
+        if dim in quality:
+            s = quality[dim]["score"]
+            bar_len = int(s / 10)
+            bar = "\u2588" * bar_len + "\u2591" * (10 - bar_len)
+            parts.append(f"  {label:16s} {s:5.0f}/100 {bar}")
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def quality_report(
+    dataset_id: str, ctx: Context | None = None
+) -> str:
+    """Näytä datasetin laatupisteet dimensioittain.
+
+    Args:
+        dataset_id: Datasetin ID tai nimi
+    """
+    conn = _get_conn(ctx)
+    dataset = get_dataset(conn, dataset_id)
+    if dataset is None:
+        return f"Datasettiä '{dataset_id}' ei löytynyt."
+
+    ds_id = dataset["id"]
+    quality = get_quality_scores(conn, ds_id)
+    if not quality:
+        # Laske lennossa
+        from aura.quality import calculate_quality, save_quality_scores
+
+        resources = [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM resources WHERE dataset_id = ?", (ds_id,)
+            ).fetchall()
+        ]
+        enr_row = conn.execute(
+            "SELECT COUNT(DISTINCT field) FROM enrichments WHERE dataset_id = ?",
+            (ds_id,),
+        ).fetchone()
+        enr_count = enr_row[0] if enr_row else 0
+        scores = calculate_quality(dataset, resources, enr_count)
+        save_quality_scores(conn, ds_id, scores)
+        conn.commit()
+        quality = get_quality_scores(conn, ds_id)
+
+    if not quality:
+        return "Laatupisteitä ei voitu laskea."
+
+    title = dataset.get("title_fi") or dataset.get("title") or ds_id
+    overall = quality.get("overall", {}).get("score", 0)
+
+    dim_info = {
+        "completeness": "Täydellisyys",
+        "timeliness": "Ajantasaisuus",
+        "accessibility": "Saavutettavuus",
+        "documentation": "Dokumentointi",
+    }
+
+    parts = [f"# Laatuarvio: {title}\n"]
+    parts.append(f"**Kokonaispistemäärä: {overall:.0f}/100**\n")
+
+    for dim, label in dim_info.items():
+        if dim in quality:
+            s = quality[dim]["score"]
+            bar_len = int(s / 10)
+            bar = "\u2588" * bar_len + "\u2591" * (10 - bar_len)
+            parts.append(f"  {label:16s} {s:5.0f}/100 {bar}")
+            details = quality[dim].get("details", {})
+            if isinstance(details, dict):
+                for k, v in details.items():
+                    if not k.endswith("_score"):
+                        parts.append(f"    {k}: {v}")
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def quality_overview(
+    source: str = "",
+    min_score: float = 0,
+    max_results: int = 10,
+    ctx: Context | None = None,
+) -> str:
+    """Yhteenveto laatupisteistä lähteen tai koko kannan tasolla.
+
+    Args:
+        source: Rajaa lähteeseen (tyhjä = kaikki)
+        min_score: Näytä vain yli tämän pistemäärän (0-100)
+        max_results: Tulosten enimmäismäärä
+    """
+    conn = _get_conn(ctx)
+
+    if source:
+        rows = conn.execute(
+            """
+            SELECT q.score, d.source
+            FROM quality_scores q
+            JOIN datasets d ON q.dataset_id = d.id
+            WHERE q.dimension = 'overall' AND d.source = ?
+            ORDER BY q.score DESC
+            """,
+            (source,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT q.score
+            FROM quality_scores q
+            WHERE q.dimension = 'overall'
+            ORDER BY q.score DESC
+            """,
+        ).fetchall()
+
+    if not rows:
+        label = f"lähteestä '{source}'" if source else "tietokannasta"
+        return f"Laatupisteitä ei löytynyt {label}. Aja ensin 'aura quality'."
+
+    scores = [r["score"] for r in rows]
+    total = len(scores)
+    avg = sum(scores) / total
+    mid = sorted(scores)[total // 2]
+    over_80 = sum(1 for s in scores if s >= 80)
+    under_30 = sum(1 for s in scores if s < 30)
+
+    # Dimensiokohtaiset keskiarvot
+    dims = ["completeness", "timeliness", "accessibility", "documentation"]
+    dim_labels = {
+        "completeness": "Täydellisyys",
+        "timeliness": "Ajantasaisuus",
+        "accessibility": "Saavutettavuus",
+        "documentation": "Dokumentointi",
+    }
+
+    label = source if source else "koko tietokanta"
+    parts = [f"# Laadun yhteenveto: {label} ({total} datasettiä)\n"]
+    parts.append(f"**Keskiarvo:** {avg:.0f}/100")
+    parts.append(f"**Mediaani:** {mid:.0f}/100")
+    parts.append(f"**Yli 80:** {over_80} ({over_80 * 100 // total}%)")
+    parts.append(f"**Alle 30:** {under_30} ({under_30 * 100 // total}%)")
+
+    parts.append("\n### Dimensiot\n")
+    for dim in dims:
+        if source:
+            dim_rows = conn.execute(
+                """
+                SELECT AVG(q.score) as avg_s
+                FROM quality_scores q
+                JOIN datasets d ON q.dataset_id = d.id
+                WHERE q.dimension = ? AND d.source = ?
+                """,
+                (dim, source),
+            ).fetchone()
+        else:
+            dim_rows = conn.execute(
+                "SELECT AVG(score) as avg_s FROM quality_scores WHERE dimension = ?",
+                (dim,),
+            ).fetchone()
+        if dim_rows and dim_rows["avg_s"] is not None:
+            s = dim_rows["avg_s"]
+            parts.append(f"  {dim_labels[dim]:16s} ka. {s:.0f}/100")
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def quality_ranking(
+    dimension: str = "overall",
+    source: str = "",
+    limit: int = 10,
+    ctx: Context | None = None,
+) -> str:
+    """Parhaiten pisteytetyt datasetit laadun mukaan.
+
+    Args:
+        dimension: Laatudimensio: "overall", "completeness", "timeliness",
+            "accessibility", "documentation"
+        source: Rajaa lähteeseen (tyhjä = kaikki)
+        limit: Tulosten enimmäismäärä (oletus 10)
+    """
+    conn = _get_conn(ctx)
+
+    valid_dims = {
+        "overall", "completeness", "timeliness",
+        "accessibility", "documentation",
+    }
+    if dimension not in valid_dims:
+        return f"Tuntematon dimensio '{dimension}'. Valitse: {', '.join(sorted(valid_dims))}"
+
+    if source:
+        rows = conn.execute(
+            """
+            SELECT q.dataset_id, q.score,
+                   COALESCE(d.title_fi, d.title) as title,
+                   d.organization_title as org
+            FROM quality_scores q
+            JOIN datasets d ON q.dataset_id = d.id
+            WHERE q.dimension = ? AND d.source = ?
+            ORDER BY q.score DESC
+            LIMIT ?
+            """,
+            (dimension, source, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT q.dataset_id, q.score,
+                   COALESCE(d.title_fi, d.title) as title,
+                   d.organization_title as org
+            FROM quality_scores q
+            JOIN datasets d ON q.dataset_id = d.id
+            WHERE q.dimension = ?
+            ORDER BY q.score DESC
+            LIMIT ?
+            """,
+            (dimension, limit),
+        ).fetchall()
+
+    if not rows:
+        return "Ei laatupisteitä. Aja ensin 'aura quality'."
+
+    dim_labels = {
+        "overall": "Kokonaislaatu",
+        "completeness": "Täydellisyys",
+        "timeliness": "Ajantasaisuus",
+        "accessibility": "Saavutettavuus",
+        "documentation": "Dokumentointi",
+    }
+    label = dim_labels.get(dimension, dimension)
+    parts = [f"# Parhaat datasetit: {label}\n"]
+
+    for i, row in enumerate(rows, 1):
+        title = row["title"] or row["dataset_id"]
+        if len(title) > 60:
+            title = title[:57] + "..."
+        org = row["org"] or ""
+        parts.append(f"{i:2d}. **{title}** ({row['score']:.0f}/100)")
+        if org:
+            parts.append(f"    {org}")
+
+    return "\n".join(parts)
 
 
 @mcp.tool()
