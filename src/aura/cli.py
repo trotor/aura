@@ -30,7 +30,12 @@ def main() -> None:
         help="Lähde tai 'all' kaikille (oletus: all)",
     )
     harvest_parser.add_argument(
-        "--list", action="store_true", dest="list_sources", help="Listaa saatavilla olevat lähteet"
+        "--list", action="store_true", dest="list_sources",
+        help="Listaa saatavilla olevat lähteet",
+    )
+    harvest_parser.add_argument(
+        "--include-static", action="store_true",
+        help="Sisällytä staattiset harvesterit (oletuksena ohitetaan)",
     )
 
     # serve
@@ -114,20 +119,29 @@ def main() -> None:
 
     if args.command == "harvest":
         from aura.harvesters import get_all_harvesters, get_harvester
+        from aura.harvesters.static import StaticHarvester
 
         if args.list_sources:
             for name, cls in get_all_harvesters().items():
-                print(f"  {name:25s} {cls.description}")
+                tag = " (staattinen)" if issubclass(cls, StaticHarvester) else ""
+                print(f"  {name:25s} {cls.description}{tag}")
             return
 
         if args.source == "all":
             total = 0
+            skipped = []
             for name, cls in get_all_harvesters().items():
+                if issubclass(cls, StaticHarvester) and not args.include_static:
+                    skipped.append(name)
+                    continue
                 print(f"Harvestoidaan: {name}...")
                 harvester = cls()
                 count = asyncio.run(harvester.harvest())
                 print(f"  {name}: {count} datasettiä")
                 total += count
+            if skipped:
+                print(f"\nOhitettu staattiset: {', '.join(skipped)}")
+                print("  (käytä --include-static sisällyttääksesi)")
             print(f"\nYhteensä: {total} datasettiä")
         else:
             cls = get_harvester(args.source)

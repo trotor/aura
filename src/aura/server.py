@@ -6,7 +6,7 @@ import asyncio
 import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import Context, FastMCP
@@ -369,6 +369,12 @@ def search_structured(
     )
 
 
+MACHINE_READABLE_FORMATS = {
+    "CSV", "JSON", "GeoJSON", "WFS", "WMS", "OData", "XML", "API",
+    "Parquet", "GeoParquet", "GPKG", "SQLite", "WCS",
+}
+
+
 @mcp.tool()
 def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
     """Suosittele parhaita datasettejä aiheesta.
@@ -386,14 +392,48 @@ def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
     if not results:
         return f"Ei datasettejä aiheesta '{topic}'. Kokeile eri hakusanoja."
 
-    # Pisteytä: relevanssi (rank, pienempi = parempi), resurssimäärä, tuoreus
+    # Hae lisätiedot batch-kyselyillä tehokkuuden vuoksi
+    ds_ids = [d["id"] for d in results]
+    enrichment_counts = _batch_enrichment_counts(conn, ds_ids)
+    format_map = _batch_formats(conn, ds_ids)
+
+    now = datetime.now(tz=UTC)
+
     scored = []
     for d in results:
         rank = abs(d.get("rank", 0))
         num_res = d.get("num_resources", 0) or 0
         size = d.get("estimated_size_bytes", 0) or 0
-        # Normalisoi pisteeksi: pienempi rank = parempi
-        score = rank - (num_res * 0.1) - (1 if size > 0 else 0)
+        ds_id = d["id"]
+
+        score = rank
+        score -= num_res * 0.1
+        score -= 1 if size > 0 else 0
+
+        # Tuoreusbonus: metadata_modified viime vuodelta
+        modified = d.get("metadata_modified", "")
+        if modified:
+            try:
+                mod_dt = datetime.fromisoformat(modified).replace(
+                    tzinfo=UTC
+                )
+                days_old = (now - mod_dt).days
+                if days_old < 90:
+                    score -= 0.8  # erittäin tuore
+                elif days_old < 365:
+                    score -= 0.4  # tuore
+            except (ValueError, TypeError):
+                pass
+
+        # Enrichment-bonus: dokumentointi
+        enr_count = enrichment_counts.get(ds_id, 0)
+        score -= min(enr_count * 0.3, 1.5)  # max 1.5 bonus
+
+        # Koneluettavuusbonus
+        formats = format_map.get(ds_id, set())
+        if formats & MACHINE_READABLE_FORMATS:
+            score -= 0.3
+
         scored.append((score, d))
 
     scored.sort(key=lambda x: x[0])
@@ -419,6 +459,46 @@ def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
         parts.append("")
 
     return "\n".join(parts)
+
+
+def _batch_enrichment_counts(
+    conn: sqlite3.Connection, dataset_ids: list[str]
+) -> dict[str, int]:
+    """Hae enrichment-lukumäärät yhdellä kyselyllä."""
+    if not dataset_ids:
+        return {}
+    placeholders = ",".join("?" for _ in dataset_ids)
+    rows = conn.execute(
+        f"""
+        SELECT dataset_id, COUNT(DISTINCT field) as cnt
+        FROM enrichments
+        WHERE dataset_id IN ({placeholders})
+        GROUP BY dataset_id
+        """,
+        dataset_ids,
+    ).fetchall()
+    return {row["dataset_id"]: row["cnt"] for row in rows}
+
+
+def _batch_formats(
+    conn: sqlite3.Connection, dataset_ids: list[str]
+) -> dict[str, set[str]]:
+    """Hae resurssiformaatit dataseteille yhdellä kyselyllä."""
+    if not dataset_ids:
+        return {}
+    placeholders = ",".join("?" for _ in dataset_ids)
+    rows = conn.execute(
+        f"""
+        SELECT dataset_id, format
+        FROM resources
+        WHERE dataset_id IN ({placeholders}) AND format != ''
+        """,
+        dataset_ids,
+    ).fetchall()
+    result: dict[str, set[str]] = {}
+    for row in rows:
+        result.setdefault(row["dataset_id"], set()).add(row["format"])
+    return result
 
 
 @mcp.tool()
