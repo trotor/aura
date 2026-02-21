@@ -58,8 +58,14 @@ class GtkHarvester(StaticHarvester):
             "keywords_fi": ["geologia", "kiviaines", "sora", "hiekka", "GTK"],
             "estimated_size_bytes": int(0.5 * 1024**3),
             "resources": [
-                {"format": "WFS", "url": f"{ARCGIS_BASE}/GTK_Kiviainesvarannot_WFS/MapServer/WFSServer"},
-                {"format": "WMS", "url": f"{ARCGIS_BASE}/GTK_Kiviainesvarannot_WFS/MapServer/WMSServer"},
+                {
+                    "format": "WFS",
+                    "url": f"{ARCGIS_BASE}/GTK_Kiviainesvarannot_WFS/MapServer/WFSServer",
+                },
+                {
+                    "format": "WMS",
+                    "url": f"{ARCGIS_BASE}/GTK_Kiviainesvarannot_WFS/MapServer/WMSServer",
+                },
             ],
         },
         # --- WMS-only -palvelut ---

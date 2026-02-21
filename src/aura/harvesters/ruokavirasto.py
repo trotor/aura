@@ -115,7 +115,8 @@ _INSPIRE_DATASETS = [
     ),
     _inspire(
         "maisemapiirteet", "Maisemapiirteet",
-        "Maatalousympäristön maisemapiirteet: suojakaistat, pientareet ja luonnon monimuotoisuuskohteet.",
+        "Maatalousympäristön maisemapiirteet: suojakaistat, pientareet"
+        " ja luonnon monimuotoisuuskohteet.",
         ["maisemapiirre", "ympäristö", "INSPIRE", "Ruokavirasto"],
         "inspire_maisemapiirre",
     ),

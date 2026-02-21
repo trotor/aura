@@ -8,7 +8,6 @@ from aura.spatial_probe import (
     METSAKESKUS_WFS_TARGETS,
     SAMPLE_BBOXES,
     ProbeResult,
-    ProbeTarget,
     SampleResult,
     _bbox_area_km2,
     _format_bytes,

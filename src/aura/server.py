@@ -7,7 +7,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import UTC
 
-from fastmcp import FastMCP, Context
+from fastmcp import Context, FastMCP
 
 from aura.database import (
     add_enrichment,
@@ -60,7 +60,8 @@ mcp = FastMCP(
         "Tasot: Kunta (308), Maakunta (19), Hyvinvointialue (23), Valtakunta (1). "
         "Kentät: natcode (koodi), namefin (nimi fi), nameswe (nimi sv), landarea, totalarea. "
         "Käytä kunnan/maakunnan bbox:ia aluerajauksiin: "
-        "SELECT MbrMinX(multipolygon),MbrMinY(multipolygon),MbrMaxX(multipolygon),MbrMaxY(multipolygon) "
+        "SELECT MbrMinX(multipolygon),MbrMinY(multipolygon),"
+        "MbrMaxX(multipolygon),MbrMaxY(multipolygon) "
         "FROM Kunta WHERE namefin='Helsinki'."
     ),
     lifespan=_lifespan,

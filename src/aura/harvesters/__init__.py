@@ -5,8 +5,6 @@ from __future__ import annotations
 from aura.harvesters.avoindata import AvoindataHarvester
 from aura.harvesters.base import BaseHarvester
 from aura.harvesters.digitraffic import DigitrafficHarvester
-# noqa: F401 — StaticHarvester ei käytetä suoraan, mutta viedään osaksi API:a
-from aura.harvesters.static import StaticHarvester  # noqa: F401
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
 from aura.harvesters.hri import HriHarvester
@@ -15,6 +13,9 @@ from aura.harvesters.metsakeskus import MetsakeskusHarvester
 from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.statfin import StatfinHarvester
+
+# noqa: F401 — StaticHarvester ei käytetä suoraan, mutta viedään osaksi API:a
+from aura.harvesters.static import StaticHarvester  # noqa: F401
 from aura.harvesters.syke import SykeHarvester
 from aura.harvesters.taustakartat import TaustakartatHarvester
 from aura.harvesters.traficom import TraficomHarvester
