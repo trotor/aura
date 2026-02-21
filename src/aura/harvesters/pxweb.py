@@ -58,8 +58,7 @@ class PxWebHarvester(BaseHarvester):
     ) -> int:
         """Käy rekursiivisesti läpi PxWeb-puun."""
         try:
-            response = await client.get(url)
-            response.raise_for_status()
+            response = await self._fetch(client, url)
             items = response.json()
         except Exception as e:
             logger.warning("[%s] Virhe haettaessa %s: %s", self.name, url, e)

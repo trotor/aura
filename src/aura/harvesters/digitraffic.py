@@ -62,11 +62,11 @@ class DigitrafficHarvester(BaseHarvester):
     ) -> int:
         """Hae yhden Digitraffic-rajapinnan OpenAPI-speksi ja luo datasetit."""
         try:
-            response = await client.get(
+            response = await self._fetch(
+                client,
                 api_info["swagger_url"],
                 headers={"Accept-Encoding": "gzip"},
             )
-            response.raise_for_status()
             spec = response.json()
         except Exception as e:
             logger.warning("[digitraffic] Virhe haettaessa %s: %s", api_key, e)

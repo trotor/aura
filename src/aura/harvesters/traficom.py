@@ -147,8 +147,7 @@ class TraficomHarvester(BaseHarvester):
         async with self._make_client(timeout=60.0) as client:
             # Hae saatavilla olevat entity setit
             try:
-                response = await client.get(f"{ODATA_BASE}/")
-                response.raise_for_status()
+                response = await self._fetch(client, f"{ODATA_BASE}/")
                 data = response.json()
             except Exception as e:
                 logger.warning("[traficom] Virhe haettaessa OData-juurta: %s", e)

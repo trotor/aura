@@ -41,8 +41,7 @@ class FmiHarvester(BaseHarvester):
 
     async def harvest(self) -> int:
         async with self._make_client(timeout=60.0) as client:
-            response = await client.get(LIST_QUERIES_URL)
-            response.raise_for_status()
+            response = await self._fetch(client, LIST_QUERIES_URL)
             xml_text = response.text
 
         root = ET.fromstring(xml_text)

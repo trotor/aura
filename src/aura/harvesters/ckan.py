@@ -87,10 +87,10 @@ class CkanHarvester(BaseHarvester):
         rows: int = DEFAULT_BATCH_SIZE,
         start: int = 0,
     ) -> dict[str, Any]:
-        response = await client.get(
+        response = await self._fetch(
+            client,
             f"{self.ckan_base_url}/package_search",
             params={"rows": rows, "start": start, "sort": "metadata_modified desc"},
         )
-        response.raise_for_status()
         result: dict[str, Any] = response.json()
         return result
