@@ -20,6 +20,7 @@ class GtkHarvester(StaticHarvester):
     org_id = "gtk"
     org_name = "gtk"
     org_title = "Geologian tutkimuskeskus"
+    default_update_frequency = "tarvittaessa"
 
     datasets_config = [
         # --- WFS + WMS -palvelut ---

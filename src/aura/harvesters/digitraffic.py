@@ -100,6 +100,7 @@ class DigitrafficHarvester(BaseHarvester):
                 organization_id="digitraffic",
                 organization_name="digitraffic",
                 organization_title="Fintraffic / Digitraffic",
+                update_frequency="reaaliaikainen",
                 keywords_fi=["liikenne", api_info["name"].lower()]
                 + [t.lower() for t in tags],
                 num_resources=1,

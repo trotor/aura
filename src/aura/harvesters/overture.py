@@ -64,6 +64,7 @@ class OvertureHarvester(StaticHarvester):
     name = "overture"
     description = "Overture Maps — globaali avoin kartta-aineisto (GeoParquet)"
     url = "https://overturemaps.org"
+    default_update_frequency = "kuukausittain"
     org_id = "overture"
     org_name = "overture"
     org_title = "Overture Maps Foundation"

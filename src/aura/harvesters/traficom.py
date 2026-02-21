@@ -119,6 +119,7 @@ ENTITY_SETS: dict[str, dict[str, Any]] = {
         "keywords": ["liikenne", "automaattimittaus"],
         "estimated_records": 100_000,
         "estimated_row_bytes": 200,
+        "update_frequency": "reaaliaikainen",
     },
     "AutoreporterUTC": {
         "title_fi": "Autoreporter-liikennetiedot (UTC)",
@@ -126,6 +127,7 @@ ENTITY_SETS: dict[str, dict[str, Any]] = {
         "keywords": ["liikenne", "automaattimittaus"],
         "estimated_records": 100_000,
         "estimated_row_bytes": 200,
+        "update_frequency": "reaaliaikainen",
     },
 }
 
@@ -168,12 +170,15 @@ class TraficomHarvester(BaseHarvester):
                 records = info.get("estimated_records", 10_000)
                 row_bytes = info.get("estimated_row_bytes", 300)
 
+                freq = info.get("update_frequency", "kuukausittain")
+
                 dataset = self._make_dataset(
                     id=f"traficom-{es_name.lower()}",
                     name=f"traficom-{es_name.lower()}",
                     title=title,
                     title_fi=title,
                     notes_fi=desc,
+                    update_frequency=freq,
                     organization_id="traficom",
                     organization_name="traficom",
                     organization_title="Liikenne- ja viestintävirasto Traficom",

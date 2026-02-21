@@ -166,5 +166,6 @@ class MetsakeskusHarvester(StaticHarvester):
     org_id = "metsakeskus"
     org_name = "metsakeskus"
     org_title = "Suomen metsäkeskus"
+    default_update_frequency = "vuosittain"
 
     datasets_config = _MAIN_SERVICES + _CHM_YEARS + _KEMERA_DATASETS + _DOWNLOAD_ONLY

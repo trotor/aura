@@ -44,6 +44,7 @@ class StaticHarvester(BaseHarvester):
     org_id: str = ""
     org_name: str = ""
     org_title: str = ""
+    default_update_frequency: str = ""
     datasets_config: list[dict[str, Any]] = []
 
     async def harvest(self) -> int:
@@ -109,12 +110,17 @@ class StaticHarvester(BaseHarvester):
             "estimated_size_bytes": cfg.get("estimated_size_bytes", 0),
         }
 
-        # Salli oletusarvojen yliajo (lisenssi, access_level jne.)
+        # Salli oletusarvojen yliajo (lisenssi, access_level, taajuus jne.)
         for key in (
             "license_id", "license_title", "collection_type",
             "geographical_coverage", "access_level",
+            "update_frequency", "metadata_modified",
         ):
             if key in cfg:
                 kwargs[key] = cfg[key]
+
+        # Luokkatason oletustaajuus jos ei konfiguraatiossa
+        if "update_frequency" not in kwargs and self.default_update_frequency:
+            kwargs["update_frequency"] = self.default_update_frequency
 
         return self._make_dataset(**kwargs)

@@ -93,12 +93,21 @@ class PxWebHarvester(BaseHarvester):
         table_url = f"{base_url}{table_id}"
         web_url = f"{self.web_base_url}/{self.root_path}/{path}/{table_id}"
 
+        # PxWeb ei tarjoa päivitystaajuutta — arvioidaan polun perusteella
+        freq = "vuosittain"
+        path_lower = path.lower()
+        if "kuukau" in path_lower or "kk" in path_lower:
+            freq = "kuukausittain"
+        elif "neljännes" in path_lower or "vuosinelj" in path_lower:
+            freq = "neljännesvuosittain"
+
         return self._make_dataset(
             id=dataset_id,
             name=f"{self.dataset_id_prefix}-{table_id.replace('.px', '').lower()}",
             title=title,
             title_fi=title,
             notes_fi=f"{self.notes_template}. Polku: {path}/{table_id}",
+            update_frequency=freq,
             organization_id=self.org_id,
             organization_name=self.org_name,
             organization_title=self.org_title,

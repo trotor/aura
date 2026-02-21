@@ -15,6 +15,7 @@ class TaustakartatHarvester(StaticHarvester):
     name = "taustakartat"
     description = "Taustakartat — MML (Kapsi) ja OpenStreetMap -tiilipalvelut"
     url = "https://kartat.kapsi.fi"
+    default_update_frequency = "kuukausittain"
 
     datasets_config = [
         {

@@ -80,14 +80,16 @@ class FmiHarvester(BaseHarvester):
                 keywords.append(category)
                 break
 
-        # Arvioi koko: säädata on usein isoa aikasarja-dataa
+        # Arvioi koko ja päivitystaajuus kyselytyypin perusteella
         size = 50_000_000  # 50 MB oletus
+        freq = "reaaliaikainen"
         if "radar" in query_id:
             size = 500_000_000  # 500 MB tutka
         elif "satellite" in query_id:
             size = 1_000_000_000  # 1 GB satelliitti
         elif "forecast" in query_id:
             size = 100_000_000  # 100 MB ennuste
+            freq = "useita kertoja päivässä"
 
         return self._make_dataset(
             id=dataset_id,
@@ -95,6 +97,7 @@ class FmiHarvester(BaseHarvester):
             title=title,
             title_fi=title,
             notes_fi=abstract,
+            update_frequency=freq,
             organization_id="fmi",
             organization_name="fmi",
             organization_title="Ilmatieteen laitos",

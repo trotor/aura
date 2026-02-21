@@ -205,6 +205,7 @@ class RuokavirastoHarvester(StaticHarvester):
     name = "ruokavirasto"
     description = "Ruokavirasto — maatalous, elintarvike- ja eläinvalvonta"
     url = "https://www.ruokavirasto.fi"
+    default_update_frequency = "vuosittain"
     org_id = "ruokavirasto"
     org_name = "ruokavirasto"
     org_title = "Ruokavirasto"

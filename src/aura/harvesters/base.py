@@ -6,6 +6,7 @@ import asyncio
 import logging
 import sqlite3
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -142,7 +143,9 @@ class BaseHarvester(ABC):
             - collection_type: Open Data
             - geographical_coverage: ["Suomi"]
             - source: self.name
+            - metadata_modified: ISO-aikaleima (jos ei annettu)
         """
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
         defaults: dict[str, Any] = {
             "license_id": "cc-by-4.0",
             "license_title": "CC BY 4.0",
@@ -150,6 +153,7 @@ class BaseHarvester(ABC):
             "geographical_coverage": ["Suomi"],
             "source": self.name,
             "access_level": "open",
+            "metadata_modified": now,
         }
         defaults.update(kwargs)
         return Dataset(**defaults)
