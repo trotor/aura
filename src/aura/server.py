@@ -159,6 +159,9 @@ def describe(dataset_id: str, ctx: Context | None = None) -> str:
     if quality and "overall" in quality:
         result += _format_quality_section(quality)
 
+    # Resurssien saatavuus
+    result += _format_health_section(conn, ds_id)
+
     # Enrichment-kehotus: puuttuvat kentät
     result += _format_enrichment_gaps(ds_id, enrichments)
 
@@ -553,6 +556,30 @@ def _format_quality_section(quality: dict[str, Any]) -> str:
             bar_len = int(s / 10)
             bar = "\u2588" * bar_len + "\u2591" * (10 - bar_len)
             parts.append(f"  {label:16s} {s:5.0f}/100 {bar}")
+
+    return "\n".join(parts)
+
+
+def _format_health_section(conn: sqlite3.Connection, dataset_id: str) -> str:
+    """Muotoile datasetin resurssien saatavuustiedot."""
+    from aura.health import get_dataset_health
+
+    health = get_dataset_health(conn, dataset_id)
+    if not health:
+        return ""
+
+    total = len(health)
+    avail = sum(1 for h in health if h["is_available"])
+    parts = [f"\n\n### Resurssien saatavuus ({avail}/{total})\n"]
+
+    for h in health:
+        icon = "+" if h["is_available"] else "-"
+        ms = f" ({h['response_time_ms']}ms)" if h.get("response_time_ms") else ""
+        err = f" — {h['error_message']}" if h.get("error_message") else ""
+        url = h.get("url", "")
+        if len(url) > 70:
+            url = url[:67] + "..."
+        parts.append(f"- [{icon}] {url}{ms}{err}")
 
     return "\n".join(parts)
 
@@ -1040,6 +1067,178 @@ def get_enrichments_tool(dataset_id: str, ctx: Context | None = None) -> str:
         return f"Ei rikastuksia datasetille '{dataset_id}'."
 
     return format_enrichments(enrichments)
+
+
+@mcp.tool()
+def quality_gaps(
+    source: str = "",
+    limit: int = 10,
+    ctx: Context | None = None,
+) -> str:
+    """Analysoi metatiedon puutteet ja ehdota parannuksia.
+
+    Args:
+        source: Rajaa lähteeseen (esim. "avoindata.fi")
+        limit: Parannusehdotusten enimmäismäärä (oletus 10)
+    """
+    from aura.quality import analyze_metadata_gaps, suggest_improvements
+
+    conn = _get_conn(ctx)
+    report = analyze_metadata_gaps(conn, source=source)
+    suggestions = suggest_improvements(conn, source=source, limit=limit)
+
+    parts: list[str] = ["# Metatiedon puutteet\n"]
+
+    # Lähdekohtainen yhteenveto
+    sources = report.get("sources", [])
+    if sources:
+        parts.append("| Lähde | Datasettejä | Kuvaus | Avainsanat "
+                      "| Päivitystiheys | Lisenssi | Täydellisyys |")
+        parts.append("|-------|-------------|--------|----------"
+                      "|----------------|----------|--------------|")
+        for s in sources:
+            total = s["total"]
+            parts.append(
+                f"| {s['source']} | {total} "
+                f"| {s['missing_desc']} ({_pct(s['missing_desc'], total)}) "
+                f"| {s['missing_keywords']} ({_pct(s['missing_keywords'], total)}) "
+                f"| {s['missing_freq']} ({_pct(s['missing_freq'], total)}) "
+                f"| {s['missing_license']} ({_pct(s['missing_license'], total)}) "
+                f"| {s.get('completeness_pct', 0):.0f}% |"
+            )
+
+    # Kokonaistilanne
+    totals = report.get("totals", {})
+    total_all = totals.get("total", 0)
+    if total_all > 0:
+        parts.append(
+            f"\n**Kokonaismetatiedon täydellisyys: "
+            f"{totals.get('completeness_pct', 0):.0f}%** "
+            f"({total_all} datasettiä)"
+        )
+
+        # Monikielisyys
+        en_title = totals.get("missing_title_en", 0)
+        en_notes = totals.get("missing_notes_en", 0)
+        parts.append(
+            f"\nMonikielisyys: {en_title} datasetiltä puuttuu "
+            f"englanninkielinen otsikko ({_pct(en_title, total_all)}), "
+            f"{en_notes} englanninkielinen kuvaus ({_pct(en_notes, total_all)})"
+        )
+
+    # Parannusehdotukset
+    if suggestions:
+        parts.append(f"\n## Helpoimmin parannettavat ({len(suggestions)} kpl)\n")
+        for i, s in enumerate(suggestions, 1):
+            title = s["title"] or s["name"]
+            if len(title) > 50:
+                title = title[:47] + "..."
+            missing = ", ".join(s["missing_fields"])
+            parts.append(f"{i}. **{title}** ({s['source']})")
+            parts.append(f"   Puuttuu: {missing}")
+
+    return "\n".join(parts)
+
+
+def _pct(n: int, total: int) -> str:
+    """Formatoi prosenttiluku."""
+    if total == 0:
+        return "0%"
+    return f"{100.0 * n / total:.0f}%"
+
+
+@mcp.tool()
+def health_check(
+    source: str = "",
+    limit: int = 50,
+    stale_days: int = 7,
+    ctx: Context | None = None,
+) -> str:
+    """Tarkista resurssien saatavuus (HTTP HEAD/GET).
+
+    Args:
+        source: Rajaa lähteeseen (esim. "avoindata.fi")
+        limit: Tarkistettavien resurssien enimmäismäärä (oletus 50)
+        stale_days: Tarkista uudelleen vain N päivää vanhat (oletus 7)
+    """
+    from aura.health import check_all_resources as _check_all
+
+    conn = _get_conn(ctx)
+    summary = asyncio.run(_check_all(
+        conn, source=source, stale_days=stale_days, limit=limit,
+    ))
+
+    if summary.total == 0:
+        return "Ei tarkistettavia resursseja."
+
+    parts = [
+        "# Resurssien saatavuustarkistus\n",
+        "| Mittari | Arvo |",
+        "|---------|------|",
+        f"| Tarkistettu | {summary.total} |",
+        f"| Saatavilla | {summary.available} |",
+        f"| Ei saatavilla | {summary.unavailable} |",
+        f"| Saatavuus | {summary.availability_pct:.1f}% |",
+    ]
+    if summary.avg_response_ms > 0:
+        parts.append(f"| Vasteaika ka. | {summary.avg_response_ms:.0f} ms |")
+
+    broken = [r for r in summary.results if not r.is_available]
+    if broken:
+        parts.append(f"\n## Ei saatavilla ({len(broken)})\n")
+        for r in broken[:20]:
+            err = r.error_message or f"HTTP {r.status_code}"
+            parts.append(f"- {err}: {r.url}")
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def health_report(source: str = "", ctx: Context | None = None) -> str:
+    """Näytä resurssien saatavuusraportti aiempien tarkistusten perusteella.
+
+    Args:
+        source: Rajaa lähteeseen (esim. "avoindata.fi")
+    """
+    from aura.health import get_health_summary, get_unavailable_resources
+
+    conn = _get_conn(ctx)
+    summary = get_health_summary(conn, source=source)
+
+    if summary.get("total", 0) == 0:
+        return (
+            "Ei saatavuustarkistuksia. "
+            "Aja ensin: health_check(source=..., limit=100)"
+        )
+
+    total = summary["total"]
+    avail = summary.get("available", 0) or 0
+    unavail = summary.get("unavailable", 0) or 0
+    avg_ms = summary.get("avg_response_ms", 0) or 0
+    pct = 100.0 * avail / total if total > 0 else 0
+
+    parts = [
+        "# Saatavuusraportti\n",
+        "| Mittari | Arvo |",
+        "|---------|------|",
+        f"| Tarkistettu resursseja | {total} |",
+        f"| Saatavilla | {avail} ({pct:.1f}%) |",
+        f"| Ei saatavilla | {unavail} |",
+        f"| Vasteaika ka. | {avg_ms:.0f} ms |",
+        f"| Vanhin tarkistus | {(summary.get('oldest_check') or '')[:16]} |",
+        f"| Uusin tarkistus | {(summary.get('newest_check') or '')[:16]} |",
+    ]
+
+    broken = get_unavailable_resources(conn, source=source, limit=15)
+    if broken:
+        parts.append(f"\n## Ei saatavilla ({len(broken)} näytetään)\n")
+        for r in broken:
+            err = r.get("error_message") or f"HTTP {r.get('status_code', '?')}"
+            title = r.get("dataset_title", "")[:50]
+            parts.append(f"- **{title}**: {err}")
+            parts.append(f"  {r.get('url', '')}")
+
+    return "\n".join(parts)
 
 
 @mcp.tool()

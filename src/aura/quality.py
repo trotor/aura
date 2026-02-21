@@ -287,6 +287,157 @@ def score_all_datasets(conn: sqlite3.Connection, source: str = "") -> int:
     return count
 
 
+def analyze_metadata_gaps(
+    conn: sqlite3.Connection,
+    source: str = "",
+) -> dict[str, Any]:
+    """Analysoi metatiedon puutteet lähteittäin.
+
+    Returns:
+        Dict jossa lähdekohtaiset tilastot ja parannusehdotukset.
+    """
+    where = "WHERE d.source = ?" if source else ""
+    params: list[str] = [source] if source else []
+
+    # Perustilastot
+    rows = conn.execute(
+        f"""
+        SELECT
+            d.source,
+            COUNT(*) as total,
+            SUM(CASE WHEN COALESCE(d.notes_fi, '') = '' THEN 1 ELSE 0 END) as missing_desc,
+            SUM(CASE WHEN COALESCE(d.keywords_fi, '[]') IN ('[]', '', '[""]')
+                THEN 1 ELSE 0 END) as missing_keywords,
+            SUM(CASE WHEN COALESCE(d.update_frequency, '') = '' THEN 1 ELSE 0 END)
+                as missing_freq,
+            SUM(CASE WHEN COALESCE(d.license_id, '') = '' THEN 1 ELSE 0 END)
+                as missing_license,
+            SUM(CASE WHEN COALESCE(d.title_en, '') = '' THEN 1 ELSE 0 END)
+                as missing_title_en,
+            SUM(CASE WHEN COALESCE(d.notes_en, '') = '' THEN 1 ELSE 0 END)
+                as missing_notes_en
+        FROM datasets d
+        {where}
+        GROUP BY d.source
+        ORDER BY total DESC
+        """,
+        params,
+    ).fetchall()
+
+    sources: list[dict[str, Any]] = []
+    totals = {
+        "total": 0,
+        "missing_desc": 0,
+        "missing_keywords": 0,
+        "missing_freq": 0,
+        "missing_license": 0,
+        "missing_title_en": 0,
+        "missing_notes_en": 0,
+    }
+
+    for row in rows:
+        src: dict[str, Any] = dict(row)
+        # Lasketaan täydellisyysprosentti
+        total = src["total"]
+        if total > 0:
+            filled = sum(
+                total - src.get(f, 0)
+                for f in [
+                    "missing_desc", "missing_keywords", "missing_freq",
+                    "missing_license",
+                ]
+            )
+            src["completeness_pct"] = round(100.0 * filled / (total * 4), 1)
+        else:
+            src["completeness_pct"] = 0.0
+
+        sources.append(src)
+        for key in totals:
+            totals[key] += src.get(key, 0)
+
+    total_all = totals["total"]
+    if total_all > 0:
+        filled_all = sum(
+            total_all - totals[f]
+            for f in [
+                "missing_desc", "missing_keywords", "missing_freq",
+                "missing_license",
+            ]
+        )
+        totals["completeness_pct"] = round(
+            100.0 * filled_all / (total_all * 4), 1,
+        )
+    else:
+        totals["completeness_pct"] = 0.0
+
+    return {
+        "sources": sources,
+        "totals": totals,
+    }
+
+
+def suggest_improvements(
+    conn: sqlite3.Connection,
+    source: str = "",
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Ehdota helposti parannettavia datasettejä.
+
+    Palauttaa datasetit joilla on eniten puutteita mutta jotka ovat
+    helposti rikastettavissa.
+    """
+    where = "AND d.source = ?" if source else ""
+    params: list[Any] = [source] if source else []
+
+    rows = conn.execute(
+        f"""
+        SELECT * FROM (
+            SELECT d.id, d.name,
+                   COALESCE(d.title_fi, d.title) as title,
+                   d.source,
+                   d.organization_title as org,
+                   (CASE WHEN COALESCE(d.notes_fi, '') = '' THEN 1 ELSE 0 END
+                    + CASE WHEN COALESCE(d.keywords_fi, '[]') IN ('[]', '', '[""]')
+                        THEN 1 ELSE 0 END
+                    + CASE WHEN COALESCE(d.update_frequency, '') = '' THEN 1 ELSE 0 END
+                    + CASE WHEN COALESCE(d.license_id, '') = '' THEN 1 ELSE 0 END
+                   ) as gap_count,
+                   CASE WHEN COALESCE(d.notes_fi, '') = ''
+                       THEN 'kuvaus' ELSE '' END as m1,
+                   CASE WHEN COALESCE(d.keywords_fi, '[]') IN ('[]', '', '[""]')
+                       THEN 'avainsanat' ELSE '' END as m2,
+                   CASE WHEN COALESCE(d.update_frequency, '') = ''
+                       THEN 'päivitystiheys' ELSE '' END as m3,
+                   CASE WHEN COALESCE(d.license_id, '') = ''
+                       THEN 'lisenssi' ELSE '' END as m4
+            FROM datasets d
+            WHERE 1=1 {where}
+        ) sub
+        WHERE gap_count > 0
+        ORDER BY gap_count DESC
+        LIMIT ?
+        """,
+        [*params, limit],
+    ).fetchall()
+
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        missing = [
+            v for v in [row["m1"], row["m2"], row["m3"], row["m4"]] if v
+        ]
+        results.append({
+            "id": row["id"],
+            "name": row["name"],
+            "title": row["title"],
+            "source": row["source"],
+            "org": row["org"],
+            "gap_count": row["gap_count"],
+            "missing_fields": missing,
+        })
+
+    return results
+
+
 def _keyword_count(dataset: dict[str, Any]) -> int:
     """Palauta avainsanojen lukumäärä (JSON-string tai lista)."""
     raw = dataset.get("keywords_fi", "[]")

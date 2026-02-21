@@ -107,11 +107,32 @@ def main() -> None:
         help="Poista rikastukset vanhempia kuin N päivää (oletus: 365)",
     )
 
+    # health
+    health_parser = subparsers.add_parser(
+        "health", help="Tarkista resurssien saatavuus"
+    )
+    health_parser.add_argument(
+        "--source", default="",
+        help="Rajaa lähteeseen (esim. avoindata.fi)",
+    )
+    health_parser.add_argument(
+        "--stale-days", type=int, default=7,
+        help="Tarkista uudelleen N päivän jälkeen (oletus: 7)",
+    )
+    health_parser.add_argument(
+        "--limit", type=int, default=100,
+        help="Tarkistettavien resurssien enimmäismäärä (oletus: 100)",
+    )
+
     # quality
     quality_parser = subparsers.add_parser("quality", help="Laske datasettien laatupisteet")
     quality_parser.add_argument(
         "--source", default="",
         help="Rajaa lähteeseen (esim. avoindata.fi)",
+    )
+    quality_parser.add_argument(
+        "--gaps", action="store_true",
+        help="Näytä metatiedon puuteanalyysi",
     )
 
     # migrate
@@ -315,12 +336,87 @@ def main() -> None:
         else:
             print("Ei poistettavia rikastuksia.")
 
-    elif args.command == "quality":
+    elif args.command == "health":
         from aura.database import get_connection, init_db
-        from aura.quality import score_all_datasets
+        from aura.health import check_all_resources
 
         conn = get_connection()
         init_db(conn)
+
+        print(f"Tarkistetaan resurssien saatavuus (max {args.limit})...")
+        summary = asyncio.run(check_all_resources(
+            conn,
+            source=args.source,
+            stale_days=args.stale_days,
+            limit=args.limit,
+        ))
+
+        print("\nTulokset:")
+        print(f"  Tarkistettu:   {summary.total}")
+        print(f"  Saatavilla:    {summary.available}")
+        print(f"  Ei saatavilla: {summary.unavailable}")
+        print(f"  Virheitä:      {summary.errors}")
+        if summary.total > 0:
+            print(f"  Saatavuus:     {summary.availability_pct:.1f}%")
+        if summary.avg_response_ms > 0:
+            print(f"  Vasteaika ka:  {summary.avg_response_ms:.0f} ms")
+
+        # Näytä ei-saatavilla olevat
+        broken = [r for r in summary.results if not r.is_available]
+        if broken:
+            print(f"\nEi saatavilla ({len(broken)}):")
+            for r in broken[:20]:
+                err = r.error_message or f"HTTP {r.status_code}"
+                print(f"  {err:20s} {r.url[:80]}")
+
+    elif args.command == "quality":
+        from aura.database import get_connection, init_db
+
+        conn = get_connection()
+        init_db(conn)
+
+        if args.gaps:
+            from aura.quality import analyze_metadata_gaps, suggest_improvements
+
+            report = analyze_metadata_gaps(conn, source=args.source)
+            sources = report.get("sources", [])
+
+            print("Metatiedon puutteet lähteittäin:\n")
+            print(f"  {'Lähde':25s} {'Yht':>5s} {'Kuvaus':>8s} "
+                  f"{'Avains':>8s} {'Päiv.':>8s} {'Lis.':>8s} {'Täyd.':>6s}")
+            print("  " + "-" * 70)
+            for s in sources:
+                t = s["total"]
+                print(
+                    f"  {s['source']:25s} {t:5d} "
+                    f"{s['missing_desc']:5d}{_gap_pct(s['missing_desc'], t)} "
+                    f"{s['missing_keywords']:5d}{_gap_pct(s['missing_keywords'], t)} "
+                    f"{s['missing_freq']:5d}{_gap_pct(s['missing_freq'], t)} "
+                    f"{s['missing_license']:5d}{_gap_pct(s['missing_license'], t)} "
+                    f"{s.get('completeness_pct', 0):5.0f}%"
+                )
+
+            totals = report.get("totals", {})
+            print(f"\n  Kokonaismetatiedon täydellisyys: "
+                  f"{totals.get('completeness_pct', 0):.0f}%")
+
+            suggestions = suggest_improvements(
+                conn, source=args.source, limit=10,
+            )
+            if suggestions:
+                print(f"\nHelpoimmin parannettavat ({len(suggestions)} kpl):")
+                for i, s in enumerate(suggestions, 1):
+                    title = s["title"] or s["name"]
+                    if len(title) > 50:
+                        title = title[:47] + "..."
+                    missing = ", ".join(s["missing_fields"])
+                    print(f"  {i:2d}. {title}")
+                    print(f"      Puuttuu: {missing}")
+
+            return
+
+        from aura.quality import score_all_datasets
+
         count = score_all_datasets(conn, source=args.source)
         print(f"Laatupisteet laskettu {count} datasetille.")
 
@@ -374,6 +470,13 @@ def main() -> None:
 
     else:
         parser.print_help()
+
+
+def _gap_pct(n: int, total: int) -> str:
+    """Formatoi puuteprosentti sulkuihin."""
+    if total == 0:
+        return " (0%)"
+    return f" ({100 * n // total}%)"
 
 
 if __name__ == "__main__":

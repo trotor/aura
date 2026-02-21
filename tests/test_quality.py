@@ -7,6 +7,7 @@ import pytest
 from aura.database import init_db, upsert_dataset
 from aura.models import Dataset, Resource
 from aura.quality import (
+    analyze_metadata_gaps,
     calculate_accessibility,
     calculate_completeness,
     calculate_documentation,
@@ -15,6 +16,7 @@ from aura.quality import (
     get_quality_scores,
     save_quality_scores,
     score_all_datasets,
+    suggest_improvements,
 )
 
 
@@ -217,3 +219,106 @@ class TestDatabase:
         result = get_quality_scores(conn, "test-ds")
         assert result is not None
         assert result["overall"]["score"] > 0
+
+
+class TestMetadataGaps:
+    """analyze_metadata_gaps() ja suggest_improvements() testit."""
+
+    def test_gaps_empty_db(self):
+        conn = _memory_db()
+        report = analyze_metadata_gaps(conn)
+        assert report["totals"]["total"] == 0
+
+    def test_gaps_with_complete_dataset(self):
+        conn = _memory_db()
+        ds = Dataset(
+            id="full", name="full", title="Full",
+            title_fi="Täysi", notes_fi="Kuvaus tässä",
+            keywords_fi=["a", "b", "c"],
+            update_frequency="kuukausittain",
+            license_id="cc-by-4.0",
+            source="test",
+        )
+        upsert_dataset(conn, ds)
+        conn.commit()
+
+        report = analyze_metadata_gaps(conn)
+        totals = report["totals"]
+        assert totals["total"] == 1
+        assert totals["missing_desc"] == 0
+        assert totals["missing_keywords"] == 0
+        assert totals["missing_freq"] == 0
+        assert totals["missing_license"] == 0
+        assert totals["completeness_pct"] == 100.0
+
+    def test_gaps_with_incomplete_dataset(self):
+        conn = _memory_db()
+        ds = Dataset(
+            id="empty", name="empty", title="Empty",
+            source="test",
+        )
+        upsert_dataset(conn, ds)
+        conn.commit()
+
+        report = analyze_metadata_gaps(conn)
+        totals = report["totals"]
+        assert totals["missing_desc"] == 1
+        assert totals["missing_keywords"] == 1
+        assert totals["missing_freq"] == 1
+
+    def test_gaps_by_source(self):
+        conn = _memory_db()
+        for src in ["a", "b"]:
+            ds = Dataset(id=f"ds-{src}", name=f"ds-{src}",
+                         title=f"DS {src}", source=src)
+            upsert_dataset(conn, ds)
+        conn.commit()
+
+        report = analyze_metadata_gaps(conn, source="a")
+        assert len(report["sources"]) == 1
+        assert report["sources"][0]["source"] == "a"
+
+    def test_suggest_improvements_empty(self):
+        conn = _memory_db()
+        suggestions = suggest_improvements(conn)
+        assert suggestions == []
+
+    def test_suggest_improvements_ranks_by_gaps(self):
+        conn = _memory_db()
+        # Dataset with 3 gaps
+        ds1 = Dataset(
+            id="many-gaps", name="many-gaps", title="Many Gaps",
+            source="test",
+            # missing: notes_fi, keywords_fi, update_frequency
+            license_id="cc-by-4.0",
+        )
+        # Dataset with 1 gap
+        ds2 = Dataset(
+            id="few-gaps", name="few-gaps", title="Few Gaps",
+            title_fi="Vähän puutteita",
+            notes_fi="Kuvaus",
+            keywords_fi=["x"],
+            update_frequency="vuosittain",
+            source="test",
+            # missing: license_id
+        )
+        upsert_dataset(conn, ds1)
+        upsert_dataset(conn, ds2)
+        conn.commit()
+
+        suggestions = suggest_improvements(conn, limit=5)
+        assert len(suggestions) == 2
+        assert suggestions[0]["id"] == "many-gaps"
+        assert suggestions[0]["gap_count"] == 3
+        assert "kuvaus" in suggestions[0]["missing_fields"]
+
+    def test_suggest_improvements_limit(self):
+        conn = _memory_db()
+        for i in range(5):
+            ds = Dataset(id=f"ds-{i}", name=f"ds-{i}",
+                         title=f"DS {i}", source="test")
+            upsert_dataset(conn, ds)
+        conn.commit()
+
+        suggestions = suggest_improvements(conn, limit=2)
+        assert len(suggestions) == 2
