@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from aura.database import init_db
-from aura.harvesters.taustakartat import TILE_SERVICES, TaustakartatHarvester
+from aura.harvesters.taustakartat import TaustakartatHarvester
 
 
 def _memory_db() -> sqlite3.Connection:
@@ -19,53 +19,38 @@ def _harvester() -> TaustakartatHarvester:
     return TaustakartatHarvester(conn=_memory_db())
 
 
-class TestTileDataset:
-    """Tiilipalveluiden datasetit."""
+def _cfg(harvester: TaustakartatHarvester, dataset_id: str) -> dict:
+    return next(c for c in harvester.datasets_config if c["id"] == dataset_id)
+
+
+class TestConfig:
+    """Konfiguraation rakenne."""
 
     def test_tms_format(self):
-        """Resurssien formaatti on TMS."""
+        """Kaikki resurssit ovat TMS-formaatissa."""
         h = _harvester()
-        for svc in TILE_SERVICES:
-            ds = h._tile_to_dataset(svc)
-            assert ds.resources[0].format == "TMS"
+        for cfg in h.datasets_config:
+            for r in cfg["resources"]:
+                assert r["format"] == "TMS"
 
     def test_url_template_contains_xyz(self):
         """URL-template sisältää {z}/{x}/{y} -muuttujat."""
         h = _harvester()
-        for svc in TILE_SERVICES:
-            ds = h._tile_to_dataset(svc)
-            url = ds.resources[0].url
+        for cfg in h.datasets_config:
+            url = cfg["resources"][0]["url"]
             assert "{z}" in url
             assert "{x}" in url
             assert "{y}" in url
 
     def test_osm_has_odbl_license(self):
         """OSM-tiilipalvelulla on ODbL-lisenssi."""
-        h = _harvester()
-        osm_svc = next(s for s in TILE_SERVICES if s["id"] == "osm-standard")
-        ds = h._tile_to_dataset(osm_svc)
-        assert ds.license_title == "ODbL"
-
-    def test_kapsi_has_cc_by_license(self):
-        """Kapsi-tiilipalvelulla on CC BY 4.0 -lisenssi."""
-        h = _harvester()
-        kapsi_svc = next(s for s in TILE_SERVICES if s["id"] == "kapsi-peruskartta")
-        ds = h._tile_to_dataset(kapsi_svc)
-        assert ds.license_title == "CC BY 4.0"
+        cfg = _cfg(_harvester(), "taustakartat-osm-standard")
+        assert cfg["license_title"] == "ODbL"
 
     def test_osm_coverage_is_global(self):
         """OSM-datasetin kattavuus on Maailma."""
-        h = _harvester()
-        osm_svc = next(s for s in TILE_SERVICES if s["id"] == "osm-standard")
-        ds = h._tile_to_dataset(osm_svc)
-        assert ds.geographical_coverage == ["Maailma"]
-
-    def test_kapsi_coverage_is_finland(self):
-        """Kapsi-datasetin kattavuus on Suomi."""
-        h = _harvester()
-        kapsi_svc = next(s for s in TILE_SERVICES if s["id"] == "kapsi-peruskartta")
-        ds = h._tile_to_dataset(kapsi_svc)
-        assert ds.geographical_coverage == ["Suomi"]
+        cfg = _cfg(_harvester(), "taustakartat-osm-standard")
+        assert cfg["geographical_coverage"] == ["Maailma"]
 
 
 class TestHarvest:
@@ -79,12 +64,23 @@ class TestHarvest:
         assert count == 4
 
     @pytest.mark.asyncio
-    async def test_harvest_writes_to_db(self):
-        """harvest() tallentaa datasetit tietokantaan."""
+    async def test_osm_gets_odbl_in_db(self):
+        """OSM-datasetti saa ODbL-lisenssin tietokantaan."""
         h = _harvester()
         await h.harvest()
 
-        rows = h.conn.execute(
-            "SELECT COUNT(*) FROM datasets WHERE source = 'taustakartat'"
+        row = h.conn.execute(
+            "SELECT license_title FROM datasets WHERE id = 'taustakartat-osm-standard'"
         ).fetchone()
-        assert rows[0] == 4
+        assert row["license_title"] == "ODbL"
+
+    @pytest.mark.asyncio
+    async def test_kapsi_gets_cc_by_in_db(self):
+        """Kapsi-datasetti saa CC BY 4.0 -lisenssin tietokantaan."""
+        h = _harvester()
+        await h.harvest()
+
+        row = h.conn.execute(
+            "SELECT license_title FROM datasets WHERE id = 'taustakartat-kapsi-peruskartta'"
+        ).fetchone()
+        assert row["license_title"] == "CC BY 4.0"

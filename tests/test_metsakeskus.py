@@ -7,9 +7,7 @@ import pytest
 from aura.database import init_db
 from aura.harvesters.metsakeskus import (
     DOWNLOAD_BASE,
-    DOWNLOAD_ONLY_DATASETS,
     INFO_PAGE_URL,
-    SERVICES,
     MetsakeskusHarvester,
 )
 
@@ -25,106 +23,91 @@ def _harvester() -> MetsakeskusHarvester:
     return MetsakeskusHarvester(conn=_memory_db())
 
 
-class TestServiceToDataset:
-    """Palveluiden resurssien URL-osoitteet."""
+class TestMainServices:
+    """Pääpalveluiden konfiguraatiot."""
 
     def test_download_url_is_specific(self):
-        """Palvelut joilla on download_dir saavat spesifisen lataus-URLin."""
+        """Palvelut joilla on tiedostolataus saavat spesifisen lataus-URLin."""
         h = _harvester()
-        svc = next(s for s in SERVICES if s["endpoint"] == "stand")
-        ds = h._service_to_dataset(svc)
-
-        download_resources = [r for r in ds.resources if r.format == "ZIP"]
-        assert len(download_resources) == 1
-        assert download_resources[0].url == f"{DOWNLOAD_BASE}/Metsavarakuviot/"
-        assert "Metsavarakuviot" in download_resources[0].url
+        stand = next(c for c in h.datasets_config if c["id"] == "metsakeskus-stand")
+        zip_resources = [r for r in stand["resources"] if r["format"] == "ZIP"]
+        assert len(zip_resources) == 1
+        assert zip_resources[0]["url"] == f"{DOWNLOAD_BASE}/Metsavarakuviot/"
 
     def test_no_generic_download_url(self):
         """Yksikään resurssi ei osoita geneeriseen /aineistot/ ilman alihakemistoa."""
         h = _harvester()
-        for svc in SERVICES:
-            ds = h._service_to_dataset(svc)
-            for r in ds.resources:
-                if r.format == "ZIP":
-                    assert r.url != "https://avoin.metsakeskus.fi/aineistot/"
-                    assert r.url != f"{DOWNLOAD_BASE}/"
+        for cfg in h.datasets_config:
+            for r in cfg["resources"]:
+                if r["format"] == "ZIP":
+                    assert r["url"] != f"{DOWNLOAD_BASE}/"
 
     def test_service_without_download_dir_gets_html(self):
-        """WCS-palvelut ilman download_dir:iä saavat HTML-infosivun."""
+        """WCS-palvelut ilman tiedostolatausta saavat HTML-infosivun."""
         h = _harvester()
-        svc = next(s for s in SERVICES if s["endpoint"] == "CHM_newest")
-        ds = h._service_to_dataset(svc)
-
-        html_resources = [r for r in ds.resources if r.format == "HTML"]
+        chm = next(c for c in h.datasets_config if c["id"] == "metsakeskus-chm_newest")
+        html_resources = [r for r in chm["resources"] if r["format"] == "HTML"]
+        zip_resources = [r for r in chm["resources"] if r["format"] == "ZIP"]
         assert len(html_resources) == 1
-        assert html_resources[0].url == INFO_PAGE_URL
-
-        zip_resources = [r for r in ds.resources if r.format == "ZIP"]
+        assert html_resources[0]["url"] == INFO_PAGE_URL
         assert len(zip_resources) == 0
 
-    def test_num_resources_matches(self):
-        """num_resources vastaa resurssien todellista määrää."""
+
+class TestChmYears:
+    """CHM-vuosiversioiden konfiguraatio."""
+
+    def test_chm_year_config_has_years(self):
+        """CHM-vuosiversion konfiguraatiossa on years-kenttä."""
         h = _harvester()
-        for svc in SERVICES:
-            ds = h._service_to_dataset(svc)
-            assert ds.num_resources == len(ds.resources)
+        chm_year = next(
+            c for c in h.datasets_config
+            if "years" in c and "chm" in c["id"]
+        )
+        assert list(chm_year["years"]) == list(range(2008, 2023))
 
-
-class TestChmYearDataset:
-    """CHM-vuosiversioiden datasetit."""
-
-    def test_chm_has_zip_resource(self):
-        """CHM-vuosiversion datasetissä on ZIP-resurssi."""
+    def test_chm_has_wcs_and_zip(self):
+        """CHM-vuosiversion konfiguraatiossa on WCS ja ZIP."""
         h = _harvester()
-        ds = h._chm_year_dataset(2020)
+        chm_year = next(
+            c for c in h.datasets_config
+            if "years" in c and "chm" in c["id"]
+        )
+        formats = {r["format"] for r in chm_year["resources"]}
+        assert formats == {"WCS", "ZIP"}
 
-        zip_resources = [r for r in ds.resources if r.format == "ZIP"]
-        assert len(zip_resources) == 1
-        assert zip_resources[0].url == f"{DOWNLOAD_BASE}/Latvusmalli/"
 
-    def test_chm_num_resources(self):
-        """CHM-datasetissä on 2 resurssia (WCS + ZIP)."""
+class TestKemera:
+    """Kemera-datasettien konfiguraatio."""
+
+    def test_kemera_has_wfs_and_zip(self):
+        """Kemera-dataseteissä on WFS ja ZIP."""
         h = _harvester()
-        ds = h._chm_year_dataset(2015)
-        assert ds.num_resources == 2
-        assert len(ds.resources) == 2
+        kemera = [c for c in h.datasets_config if "kemera" in c.get("title", "").lower()]
+        assert len(kemera) == 16
+        for cfg in kemera:
+            formats = {r["format"] for r in cfg["resources"]}
+            assert formats == {"WFS", "ZIP"}
 
-
-class TestKemeraDataset:
-    """Kemera-datasettien resurssit."""
-
-    def test_kemera_has_zip_resource(self):
-        """Kemera-datasetissä on ZIP-resurssi."""
+    def test_kemera_zip_url_points_to_kemera_dir(self):
+        """Kemera-datasettien ZIP-URL osoittaa Kemera-hakemistoon."""
         h = _harvester()
-        ds = h._kemera_dataset("application_stand_06_16", "Kemera: taimikon varhaishoito (hakemus)")
+        kemera = [c for c in h.datasets_config if "kemera" in c.get("title", "").lower()]
+        for cfg in kemera:
+            zip_r = next(r for r in cfg["resources"] if r["format"] == "ZIP")
+            assert zip_r["url"] == f"{DOWNLOAD_BASE}/Kemera/"
 
-        zip_resources = [r for r in ds.resources if r.format == "ZIP"]
-        assert len(zip_resources) == 1
-        assert zip_resources[0].url == f"{DOWNLOAD_BASE}/Kemera/"
 
-    def test_kemera_num_resources(self):
-        """Kemera-datasetissä on 2 resurssia (WFS + ZIP)."""
+class TestDownloadOnly:
+    """Lataus-only datasetit."""
+
+    def test_korjuukelpoisuus(self):
+        """Korjuukelpoisuus-datasetti on konfiguroitu oikein."""
         h = _harvester()
-        ds = h._kemera_dataset("application_stand_06_16", "Kemera: test")
-        assert ds.num_resources == 2
-        assert len(ds.resources) == 2
-
-
-class TestDownloadOnlyDataset:
-    """Lataus-only datasetit (ei API-endpointia)."""
-
-    def test_korjuukelpoisuus_dataset(self):
-        """Korjuukelpoisuus-datasetti luodaan oikein."""
-        h = _harvester()
-        cfg = DOWNLOAD_ONLY_DATASETS[0]
-        ds = h._download_only_dataset(cfg)
-
-        assert ds.id == "metsakeskus-korjuukelpoisuus"
-        assert ds.title == "Korjuukelpoisuus"
-        assert ds.num_resources == 1
-        assert len(ds.resources) == 1
-        assert ds.resources[0].format == "ZIP"
-        assert ds.resources[0].url == f"{DOWNLOAD_BASE}/Korjuukelpoisuus/"
+        cfg = next(c for c in h.datasets_config if c["id"] == "metsakeskus-korjuukelpoisuus")
+        assert cfg["title"] == "Korjuukelpoisuus"
+        assert len(cfg["resources"]) == 1
+        assert cfg["resources"][0]["format"] == "ZIP"
+        assert cfg["resources"][0]["url"] == f"{DOWNLOAD_BASE}/Korjuukelpoisuus/"
 
 
 class TestHarvest:
@@ -137,3 +120,19 @@ class TestHarvest:
         count = await h.harvest()
         # 11 pääpalvelua + 15 CHM-vuotta + 16 Kemeraa + 1 Korjuukelpoisuus = 43
         assert count == 43
+
+    @pytest.mark.asyncio
+    async def test_harvest_num_resources_matches(self):
+        """num_resources vastaa resurssien todellista määrää."""
+        h = _harvester()
+        await h.harvest()
+
+        datasets = h.conn.execute(
+            "SELECT id, num_resources FROM datasets WHERE source = 'metsakeskus'"
+        ).fetchall()
+        for ds in datasets:
+            actual = h.conn.execute(
+                "SELECT COUNT(*) FROM resources WHERE dataset_id = ?",
+                (ds["id"],),
+            ).fetchone()[0]
+            assert ds["num_resources"] == actual, f"Mismatch for {ds['id']}"

@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from contextlib import asynccontextmanager
 from datetime import UTC
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
 from aura.database import (
     add_enrichment,
     find_related_datasets,
+    get_conflicting_enrichments,
     get_connection,
     get_dataset,
     get_datasets_by_ids,
     get_enrichment_count,
     get_latest_enrichments,
+    get_stale_enrichments,
     get_stats,
     init_db,
     search_datasets,
@@ -27,6 +30,18 @@ from aura.search import (
     format_stats,
 )
 
+
+@asynccontextmanager
+async def _lifespan(server):
+    """Hallitse tietokantayhteyttä serverin elinkaaren ajan."""
+    conn = get_connection(check_same_thread=False)
+    init_db(conn)
+    try:
+        yield {"db": conn}
+    finally:
+        conn.close()
+
+
 mcp = FastMCP(
     "Aura",
     instructions=(
@@ -34,19 +49,34 @@ mcp = FastMCP(
         "Hae ja ymmärrä Suomen avoimia datasettejä. "
         "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
         "(kenttiä, käyttöohjeita, laatuhuomioita), "
-        "tallenna löydökset enrich()-työkalulla."
+        "tallenna löydökset enrich()-työkalulla.\n\n"
+        "RAJAUSAINEISTOT: Paikallinen karttalehtijako-aineisto on tiedostossa "
+        "data/boundaries/karttalehtijako.gpkg (EPSG:3067, MML:n TM35-ruutujako). "
+        "Tasot: utm200 (1:200k, 65 ruutua), utm100, utm50, utm25, utm10, utm5 (1:5k, 106k ruutua), utm1 (1:1k). "
+        "Jokaisessa ruudussa on lehtitunnus (esim. 'L4133A') ja geometry. "
+        "Käytä karttalehtien bbox-rajauksia kun haet dataa WFS/WCS/OGC-rajapinnoista tietylle alueelle. "
+        "Hierarkia: L4→L41→L413→L4133→L4133A→L4133A3 — käytä LIKE-hakua alatason lehdille. "
+        "Valitse mittakaava kutsukoon mukaan: utm50 maakunnille, utm25 kaupungeille, utm10 yksityiskohdille."
     ),
+    lifespan=_lifespan,
 )
 
-_conn = None
 
+def _get_conn(ctx: Context | None = None) -> sqlite3.Connection:
+    """Hae tietokantayhteys lifespan-kontekstista tai luo uusi.
 
-def _get_conn() -> sqlite3.Connection:
-    global _conn
-    if _conn is None:
-        _conn = get_connection()
-        init_db(_conn)
-    return _conn
+    Lifespan-yhteys on suositeltava (thread-safe, jaettu).
+    Fallback luo uuden yhteyden (CLI-käyttö, testit).
+    """
+    if ctx is not None:
+        try:
+            return ctx.lifespan_context["db"]
+        except (AttributeError, KeyError):
+            pass
+    # Fallback: luo uusi yhteys (esim. CLI, testit, vanha kutsupolku)
+    conn = get_connection(check_same_thread=False)
+    init_db(conn)
+    return conn
 
 
 @mcp.tool()
@@ -58,6 +88,7 @@ def search(
     format: str = "",
     organization: str = "",
     access_level: str = "",
+    ctx: Context = None,
 ) -> str:
     """Hae suomalaisia avoimia datasettejä luonnollisella kielellä.
 
@@ -70,7 +101,7 @@ def search(
         organization: Suodata organisaation mukaan (osa nimestä riittää)
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
@@ -89,37 +120,46 @@ def search(
 
 
 @mcp.tool()
-def describe(dataset_id: str) -> str:
+def describe(dataset_id: str, ctx: Context = None) -> str:
     """Kuvaa yksittäinen datasetti yksityiskohtaisesti.
 
     Args:
         dataset_id: Datasetin ID tai nimi (esim. "helsinkikanava-open-data")
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     dataset = get_dataset(conn, dataset_id)
 
     if dataset is None:
         return f"Datasettiä '{dataset_id}' ei löytynyt."
 
-    enrichments = get_latest_enrichments(conn, dataset["id"])
-    return format_dataset_detail(dataset, enrichments=enrichments)
+    ds_id = dataset["id"]
+    enrichments = get_latest_enrichments(conn, ds_id)
+    stale = get_stale_enrichments(conn, ds_id)
+    stale_ids = {e["id"] for e in stale}
+    conflicts = get_conflicting_enrichments(conn, ds_id)
+    return format_dataset_detail(
+        dataset,
+        enrichments=enrichments,
+        stale_ids=stale_ids,
+        conflicts=conflicts,
+    )
 
 
 @mcp.tool()
-def stats() -> str:
+def stats(ctx: Context = None) -> str:
     """Näytä tilastot Auran tietokannasta: datasettien, organisaatioiden ja formaattien määrät."""
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     return format_stats(get_stats(conn))
 
 
 @mcp.tool()
-def list_organizations(limit: int = 20) -> str:
+def list_organizations(limit: int = 20, ctx: Context = None) -> str:
     """Listaa avoimen datan julkaisijat datasettien lukumäärän mukaan.
 
     Args:
         limit: Näytettävien organisaatioiden enimmäismäärä
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     rows = conn.execute(
         """
         SELECT organization_title, COUNT(*) as count
@@ -142,13 +182,13 @@ def list_organizations(limit: int = 20) -> str:
 
 
 @mcp.tool()
-def list_formats(limit: int = 20) -> str:
+def list_formats(limit: int = 20, ctx: Context = None) -> str:
     """Listaa saatavilla olevat dataformaatit resurssien lukumäärän mukaan.
 
     Args:
         limit: Näytettävien formaattien enimmäismäärä
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     rows = conn.execute(
         """
         SELECT format, COUNT(*) as count
@@ -171,7 +211,7 @@ def list_formats(limit: int = 20) -> str:
 
 
 @mcp.tool()
-def harvest(source: str = "all") -> str:
+def harvest(source: str = "all", ctx: Context = None) -> str:
     """Hae datasettien metatiedot lähteistä ja tallenna tietokantaan.
 
     Args:
@@ -179,11 +219,12 @@ def harvest(source: str = "all") -> str:
     """
     from aura.harvesters import get_all_harvesters, get_harvester
 
+    conn = _get_conn(ctx)
     if source == "all":
         total = 0
         parts = []
         for name, cls in get_all_harvesters().items():
-            harvester = cls(conn=_get_conn())
+            harvester = cls(conn=conn)
             count = asyncio.run(harvester.harvest())
             parts.append(f"- {name}: {count} datasettiä")
             total += count
@@ -195,19 +236,19 @@ def harvest(source: str = "all") -> str:
     except ValueError as e:
         return str(e)
 
-    harvester = cls(conn=_get_conn())
+    harvester = cls(conn=conn)
     count = asyncio.run(harvester.harvest())
     return f"Haettu {count} datasettiä lähteestä {source}."
 
 
 @mcp.tool()
-def list_sources() -> str:
+def list_sources(ctx: Context = None) -> str:
     """Listaa kaikki datalähteet, niiden datasettien lukumäärät ja harvestoinnin tila."""
     from datetime import datetime
 
     from aura.harvesters import get_all_harvesters
 
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     parts = ["# Datalähteet\n"]
     now = datetime.now(tz=UTC)
 
@@ -239,7 +280,7 @@ def list_sources() -> str:
 
 
 @mcp.tool()
-def probe_sizes(source: str = "all") -> str:
+def probe_sizes(source: str = "all", ctx: Context = None) -> str:
     """Mittaa paikkatietoaineistojen koot otoskyselyillä (WFS/WCS).
 
     Args:
@@ -260,6 +301,7 @@ def search_structured(
     format: str = "",
     organization: str = "",
     access_level: str = "",
+    ctx: Context = None,
 ) -> str:
     """Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille.
 
@@ -276,7 +318,7 @@ def search_structured(
     """
     import json
 
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
@@ -319,7 +361,7 @@ def search_structured(
 
 
 @mcp.tool()
-def recommend(topic: str, limit: int = 5) -> str:
+def recommend(topic: str, limit: int = 5, ctx: Context = None) -> str:
     """Suosittele parhaita datasettejä aiheesta.
 
     Etsii datasettejä ja järjestää ne relevanssin, tuoreuden ja resurssimäärän mukaan.
@@ -328,7 +370,7 @@ def recommend(topic: str, limit: int = 5) -> str:
         topic: Aihe tai teema (esim. "liikenne Helsinki", "ilmastonmuutos")
         limit: Suositusten enimmäismäärä (oletus 5)
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     # Hae enemmän tuloksia kuin limit, jotta voidaan järjestää uudelleen
     results = search_datasets(conn, topic, limit=limit * 3)
 
@@ -371,7 +413,7 @@ def recommend(topic: str, limit: int = 5) -> str:
 
 
 @mcp.tool()
-def compare(dataset_ids: list[str]) -> str:
+def compare(dataset_ids: list[str], ctx: Context = None) -> str:
     """Vertaile datasettejä rinnakkain.
 
     Args:
@@ -384,7 +426,7 @@ def compare(dataset_ids: list[str]) -> str:
 
     import json
 
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     datasets = get_datasets_by_ids(conn, dataset_ids)
 
     if not datasets:
@@ -439,6 +481,7 @@ def enrich(
     confidence: str = "medium",
     source_type: str = "mcp_session",
     source_detail: str = "",
+    ctx: Context = None,
 ) -> str:
     """Rikasta datasetin tietoja. Tallentaa löydetyn tiedon kantaan.
 
@@ -466,7 +509,7 @@ def enrich(
             "manual", "ai_analysis"
         source_detail: Lähteen kuvaus tai URL
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
 
     valid_fields = {
         "description_extended", "api_endpoint", "api_format",
@@ -496,13 +539,13 @@ def enrich(
 
 
 @mcp.tool()
-def get_enrichments_tool(dataset_id: str) -> str:
+def get_enrichments_tool(dataset_id: str, ctx: Context = None) -> str:
     """Näytä datasetin rikastukset (crowdsourced enrichments).
 
     Args:
         dataset_id: Datasetin ID tai nimi
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     enrichments = get_latest_enrichments(conn, dataset_id)
 
     if not enrichments:
@@ -512,14 +555,14 @@ def get_enrichments_tool(dataset_id: str) -> str:
 
 
 @mcp.tool()
-def find_related(dataset_id: str, limit: int = 5) -> str:
+def find_related(dataset_id: str, limit: int = 5, ctx: Context = None) -> str:
     """Etsi samankaltaiset datasetit avainsanojen ja organisaation perusteella.
 
     Args:
         dataset_id: Datasetin ID tai nimi
         limit: Tulosten enimmäismäärä (oletus 5)
     """
-    conn = _get_conn()
+    conn = _get_conn(ctx)
     dataset = get_dataset(conn, dataset_id)
     if dataset is None:
         return f"Datasettiä '{dataset_id}' ei löytynyt."

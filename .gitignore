@@ -34,4 +34,7 @@ htmlcov/
 .env
 .env.local
 
+# Rajausaineistot (ladataan MML:stä, ei versionhallintaan)
+data/boundaries/
+
 # NOTE: data/aura.db is NOT ignored — it's part of the project

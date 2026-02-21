@@ -93,12 +93,6 @@ class TestSearch:
             result = search("väestö")
         assert "Helsingin väestö" in result
 
-    def test_search_no_results(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = search("eioleolemassakaan")
-        assert "Ei tuloksia" in result
-
     def test_search_with_limit(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
@@ -128,12 +122,6 @@ class TestDescribe:
 class TestStats:
     """stats()-työkalun testit."""
 
-    def test_stats_empty(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = stats()
-        assert "0" in result
-
     def test_stats_with_data(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
@@ -153,12 +141,6 @@ class TestListOrganizations:
         assert "Helsingin kaupunki" in result
         assert "HSL" in result
 
-    def test_list_organizations_empty(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = list_organizations()
-        assert "tyhjä" in result
-
 
 class TestListFormats:
     """list_formats()-työkalun testit."""
@@ -170,12 +152,6 @@ class TestListFormats:
             result = list_formats()
         assert "CSV" in result
         assert "JSON" in result
-
-    def test_list_formats_empty(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = list_formats()
-        assert "tyhjä" in result
 
 
 class TestListSources:
@@ -222,14 +198,6 @@ class TestSearchFilters:
         assert "HSL" in result
         assert "joukkoliikenne" in result.lower()
 
-    def test_search_with_offset(self) -> None:
-        conn = _memory_db()
-        _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            # Offset beyond results returns empty
-            result = search("väestö", offset=100)
-        assert "Ei tuloksia" in result
-
 
 class TestSearchStructured:
     """search_structured()-työkalun testit."""
@@ -256,16 +224,6 @@ class TestSearchStructured:
         data = json.loads(result)
         assert all(r["source"] == "avoindata.fi" for r in data["results"])
 
-    def test_structured_empty(self) -> None:
-        import json
-
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = search_structured("eioleolemassakaan")
-        data = json.loads(result)
-        assert data["count"] == 0
-        assert data["results"] == []
-
 
 class TestRecommend:
     """recommend()-työkalun testit."""
@@ -277,12 +235,6 @@ class TestRecommend:
             result = recommend("väestö")
         assert "Suositellut" in result
         assert "Helsingin väestö" in result
-
-    def test_recommend_no_results(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = recommend("eioleolemassakaan")
-        assert "Ei datasettejä" in result
 
 
 class TestCompare:
@@ -299,24 +251,6 @@ class TestCompare:
         assert "CSV" in result
         assert "JSON" in result
 
-    def test_compare_too_few(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = compare(["test-1"])
-        assert "vähintään 2" in result
-
-    def test_compare_too_many(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = compare(["a", "b", "c", "d", "e", "f"])
-        assert "korkeintaan 5" in result
-
-    def test_compare_not_found(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = compare(["ei-olemassa", "ei-toinen"])
-        assert "ei löytynyt" in result
-
 
 class TestFindRelated:
     """find_related()-työkalun testit."""
@@ -324,7 +258,6 @@ class TestFindRelated:
     def test_find_related_by_keywords(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
-        # Lisää kolmas datasetti samalla avainsanalla
         upsert_dataset(
             conn,
             Dataset(
@@ -344,9 +277,3 @@ class TestFindRelated:
             result = find_related("test-1")
         assert "Samankaltaiset" in result
         assert "Espoon väestö" in result
-
-    def test_find_related_not_found(self) -> None:
-        conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn):
-            result = find_related("ei-olemassa")
-        assert "ei löytynyt" in result

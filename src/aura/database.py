@@ -17,10 +17,20 @@ DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "aura.db"
 MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "scripts" / "migrations"
 
 
-def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    """Avaa tietokantayhteys."""
+def get_connection(
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    check_same_thread: bool = True,
+) -> sqlite3.Connection:
+    """Avaa tietokantayhteys.
+
+    Args:
+        db_path: Polku tietokantatiedostoon.
+        check_same_thread: Jos False, sallii yhteyden käytön eri threadeista.
+            Turvallista WAL-moden kanssa read-heavy käytössä (esim. MCP-server).
+    """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -187,6 +197,9 @@ def search_datasets(
 ) -> list[dict[str, Any]]:
     """Hae datasettejä FTS5-täystekstihaulla ja suodattimilla.
 
+    Hakee sekä FTS5-indeksistä että enrichment-avainsanoista (keywords, tags,
+    description_extended). FTS-osumat tulevat ensin, enrichment-osumat perässä.
+
     Args:
         query: Hakusanat.
         limit: Tulosten enimmäismäärä.
@@ -197,33 +210,57 @@ def search_datasets(
         organization: Suodata organisaation mukaan (osa nimestä riittää).
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted").
     """
-    conditions = ["datasets_fts MATCH ?"]
-    params: list[Any] = [query]
+    # Suodattimet (yhteinen FTS- ja enrichment-haulle)
+    filter_conditions: list[str] = []
+    filter_params: list[Any] = []
 
     if source:
-        conditions.append("d.source = ?")
-        params.append(source)
+        filter_conditions.append("d.source = ?")
+        filter_params.append(source)
     if organization:
-        conditions.append("d.organization_title LIKE ?")
-        params.append(f"%{organization}%")
+        filter_conditions.append("d.organization_title LIKE ?")
+        filter_params.append(f"%{organization}%")
     if access_level:
-        conditions.append("d.access_level = ?")
-        params.append(access_level)
+        filter_conditions.append("d.access_level = ?")
+        filter_params.append(access_level)
     if fmt:
-        conditions.append(
+        filter_conditions.append(
             "d.id IN (SELECT dataset_id FROM resources WHERE format = ? COLLATE NOCASE)"
         )
-        params.append(fmt)
+        filter_params.append(fmt)
 
-    where = " AND ".join(conditions)
-    params.extend([limit, offset])
+    filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
+
+    # Enrichment-avainsanahaku: etsi datasetit joiden keywords/tags/description
+    # sisältää hakutermin (LIKE-haku enrichments-taulusta)
+    enrich_like = f"%{query}%"
+
+    # Parametrit: FTS match, enrichment LIKE ×2 (id + name), suodattimet ×1, limit, offset
+    params: list[Any] = [query, enrich_like, enrich_like, *filter_params, limit, offset]
 
     rows = conn.execute(
         f"""
-        SELECT d.*, rank
-        FROM datasets_fts fts
-        JOIN datasets d ON d.rowid = fts.rowid
-        WHERE {where}
+        SELECT d.*, COALESCE(fts.rank, 0) as rank
+        FROM datasets d
+        LEFT JOIN (
+            SELECT rowid, rank
+            FROM datasets_fts
+            WHERE datasets_fts MATCH ?
+        ) fts ON d.rowid = fts.rowid
+        WHERE (
+            fts.rowid IS NOT NULL
+            OR d.id IN (
+                SELECT DISTINCT dataset_id FROM enrichments
+                WHERE field IN ('keywords', 'tags', 'description_extended')
+                AND value LIKE ?
+            )
+            OR d.name IN (
+                SELECT DISTINCT dataset_id FROM enrichments
+                WHERE field IN ('keywords', 'tags', 'description_extended')
+                AND value LIKE ?
+            )
+        )
+        {filter_where}
         ORDER BY rank
         LIMIT ? OFFSET ?
         """,
@@ -373,6 +410,25 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
 # --- Enrichments ---
 
 
+def _resolve_dataset_ids(
+    conn: sqlite3.Connection, dataset_id: str
+) -> list[str]:
+    """Palauta kaikki datasetin tunnisteet (id ja name).
+
+    Enrichments voivat olla tallennettu joko UUID:llä tai slug-nimellä,
+    joten haut pitää tehdä molemmilla.
+    """
+    row = conn.execute(
+        "SELECT id, name FROM datasets WHERE id = ? OR name = ?",
+        (dataset_id, dataset_id),
+    ).fetchone()
+    if row is None:
+        return [dataset_id]
+    ids = {row[0], row[1]}
+    ids.discard("")
+    return list(ids) if ids else [dataset_id]
+
+
 def add_enrichment(
     conn: sqlite3.Connection,
     dataset_id: str,
@@ -411,14 +467,17 @@ def get_enrichments(
     """Hae datasetin rikastukset, uusin ensin.
 
     Palauttaa kaikki rikastukset (myös vanhat versiot).
+    Etsii sekä UUID:llä että slug-nimellä.
     """
+    ids = _resolve_dataset_ids(conn, dataset_id)
+    placeholders = ",".join("?" for _ in ids)
     rows = conn.execute(
-        """
+        f"""
         SELECT * FROM enrichments
-        WHERE dataset_id = ?
+        WHERE dataset_id IN ({placeholders})
         ORDER BY field, created_at DESC
         """,
-        (dataset_id,),
+        ids,
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -427,20 +486,25 @@ def get_latest_enrichments(
     conn: sqlite3.Connection,
     dataset_id: str,
 ) -> list[dict[str, Any]]:
-    """Hae datasetin uusimmat rikastukset (yksi per kenttä)."""
+    """Hae datasetin uusimmat rikastukset (yksi per kenttä).
+
+    Etsii sekä UUID:llä että slug-nimellä.
+    """
+    ids = _resolve_dataset_ids(conn, dataset_id)
+    placeholders = ",".join("?" for _ in ids)
     rows = conn.execute(
-        """
+        f"""
         SELECT e.*
         FROM enrichments e
         INNER JOIN (
             SELECT field, MAX(rowid) as max_rowid
             FROM enrichments
-            WHERE dataset_id = ?
+            WHERE dataset_id IN ({placeholders})
             GROUP BY field
         ) latest ON e.rowid = latest.max_rowid
         ORDER BY e.field
         """,
-        (dataset_id,),
+        ids,
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -449,12 +513,102 @@ def get_enrichment_count(
     conn: sqlite3.Connection,
     dataset_id: str,
 ) -> int:
-    """Palauta datasetin uniikkien rikastuskenttien lukumäärä."""
+    """Palauta datasetin uniikkien rikastuskenttien lukumäärä.
+
+    Etsii sekä UUID:llä että slug-nimellä.
+    """
+    ids = _resolve_dataset_ids(conn, dataset_id)
+    placeholders = ",".join("?" for _ in ids)
     row = conn.execute(
-        "SELECT COUNT(DISTINCT field) FROM enrichments WHERE dataset_id = ?",
-        (dataset_id,),
+        f"SELECT COUNT(DISTINCT field) FROM enrichments WHERE dataset_id IN ({placeholders})",
+        ids,
     ).fetchone()
     return row[0] if row else 0
+
+
+def get_conflicting_enrichments(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+) -> list[dict[str, Any]]:
+    """Hae datasetin ristiriitaiset rikastukset.
+
+    Palauttaa kentät joilla on useampi eri arvo.
+    Tuloksessa jokainen rivi on yksi enrichment, ryhmitettynä kentän mukaan.
+    """
+    ids = _resolve_dataset_ids(conn, dataset_id)
+    placeholders = ",".join("?" for _ in ids)
+    rows = conn.execute(
+        f"""
+        SELECT e.*
+        FROM enrichments e
+        WHERE e.dataset_id IN ({placeholders})
+        AND e.field IN (
+            SELECT field FROM enrichments
+            WHERE dataset_id IN ({placeholders})
+            GROUP BY field
+            HAVING COUNT(DISTINCT value) > 1
+        )
+        ORDER BY e.field,
+            CASE e.confidence
+                WHEN 'verified' THEN 0
+                WHEN 'high' THEN 1
+                WHEN 'medium' THEN 2
+                WHEN 'low' THEN 3
+                ELSE 4
+            END,
+            e.created_at DESC
+        """,
+        ids + ids,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_stale_enrichments(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+) -> list[dict[str, Any]]:
+    """Hae datasetin vanhentuneet rikastukset.
+
+    Rikastus on vanhentunut jos datasetin metadata_modified on
+    uudempi kuin rikastuksen created_at.
+    """
+    ids = _resolve_dataset_ids(conn, dataset_id)
+    placeholders = ",".join("?" for _ in ids)
+    rows = conn.execute(
+        f"""
+        SELECT e.*
+        FROM enrichments e
+        JOIN datasets d ON (e.dataset_id = d.id OR e.dataset_id = d.name)
+        WHERE e.dataset_id IN ({placeholders})
+        AND d.metadata_modified > e.created_at
+        AND d.metadata_modified != ''
+        """,
+        ids,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def prune_enrichments(
+    conn: sqlite3.Connection,
+    older_than_days: int = 365,
+) -> int:
+    """Poista vanhat rikastukset.
+
+    Args:
+        older_than_days: Poista rikastukset jotka ovat vanhempia kuin N päivää.
+
+    Returns:
+        Poistettujen rikastusten lukumäärä.
+    """
+    result = conn.execute(
+        """
+        DELETE FROM enrichments
+        WHERE created_at < datetime('now', '-' || ? || ' days')
+        """,
+        (older_than_days,),
+    )
+    conn.commit()
+    return result.rowcount
 
 
 def export_enrichments(

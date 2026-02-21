@@ -235,7 +235,9 @@ aura/
 │   ├── search.py           # Hakutoiminnot ja muotoilu
 │   ├── cli.py              # Komentorivityökalu
 │   └── harvesters/         # Datalähteiden keräimet (13 kpl)
-├── data/aura.db            # SQLite-tietokanta (osa repoa)
+├── data/
+│   ├── aura.db             # SQLite-tietokanta (osa repoa)
+│   └── boundaries/         # Rajausaineistot GeoPackage (gitignore)
 ├── contributions/          # Jaetut rikastukset (JSON)
 ├── scripts/migrations/     # Tietokantamigraatiot
 ├── docs/                   # Dokumentaatio
@@ -247,6 +249,78 @@ aura/
 SQLite + FTS5 -täystekstihaku. Tietokanta on osa git-repoa — ei tarvitse harvestoida erikseen.
 
 Skeemamuutokset hoidetaan migraatiojärjestelmällä (`scripts/migrations/`). Migraatiot ajetaan automaattisesti `init_db()`:n yhteydessä — tietokanta ei nollaudu päivityksessä.
+
+## Maantieteellinen kattavuus ja rajausaineistot
+
+Aura tallentaa jokaiselle datasetille `geographical_coverage`-kentän, joka kertoo minkä alueen dataa datasetti sisältää. Tieto tulee pääasiassa harvestoinnin yhteydessä.
+
+### Nykytila
+
+| Tilasto | Arvo |
+|---------|------|
+| Datasettejä joilla aluetieto | ~1 166 / 3 774 (31%) |
+| Yleisimmät arvot | `Helsinki`, `Turku`, `Oulu`, `Espoo`, `Vantaa` |
+| Oletusarvo | `["Suomi"]` (kaikki harvestarit ellei tarkempaa tietoa) |
+
+Arvot tulevat eri lähteistä:
+- **avoindata.fi** — API palauttaa kaupunkien ja alueiden nimet
+- **Staattiset harvestarit** — konfiguraatiossa (esim. Overture Maps → `["Maailma"]`)
+- **Muut** — oletusarvo `["Suomi"]`
+
+### Rajausaineistot
+
+Paikallisina rajausaineistoina käytetään GeoPackage-tiedostoja `data/boundaries/`-kansiossa. Kansio on gitignoressa — aineistot ladataan erikseen.
+
+#### Karttalehtijako (TM35)
+
+MML:n karttalehtijako kattaa koko Suomen ETRS-TM35FIN (EPSG:3067) -koordinaatistossa. 7 hierarkiatasoa:
+
+| Taso | Mittakaava | Koodimuoto | Ruudun koko | Ruutuja |
+|------|-----------|------------|-------------|---------|
+| 1 | 1:200 000 | `L4` | 192 × 96 km | 65 |
+| 2 | 1:100 000 | `L41` | 96 × 48 km | 208 |
+| 3 | 1:50 000 | `L413` | 48 × 24 km | 832 |
+| 4 | 1:25 000 | `L4133` | 24 × 12 km | 3 328 |
+| 5 | 1:10 000 | `L4133A` | 6 × 6 km | 26 624 |
+| 6 | 1:5 000 | `L4133A3` | 3 × 3 km | 106 496 |
+| 7 | 1:1 000 | `L4133A3_1` | 1 × 1 km | 398 286 |
+
+```bash
+# Lataa karttalehtijako (Kapsi.fi-peili, ei vaadi API-avainta)
+mkdir -p data/boundaries
+curl -L -o /tmp/karttalehtijako.zip \
+  "https://kartat.kapsi.fi/files/karttalehtijako_ruudukko/kaikki/etrs89/gpkg/TM35_karttalehtijako_GeoPackage.zip"
+unzip -o /tmp/karttalehtijako.zip -d data/boundaries/
+mv data/boundaries/TM35_karttalehtijako.gpkg data/boundaries/karttalehtijako.gpkg
+```
+
+#### Tulevat aineistot
+
+| Aineisto | Lähde | Tila |
+|----------|-------|------|
+| Kunnat ja maakunnat | Tilastokeskus / MML | Suunniteltu |
+| Kiinteistörajat | MML Kiinteistötietopalvelu WFS | Rajapinnasta (liian suuri lokaaliin) |
+
+#### MML API-avain
+
+MML:n OGC API Processes -tiedostopalvelu vaatii ilmaisen API-avaimen. Kapsi.fi-peili toimii ilman avainta, mutta muihin MML-aineistoihin avain tarvitaan:
+
+1. Rekisteröidy: https://omatili.maanmittauslaitos.fi/user/new/avoimet-rajapintapalvelut
+2. Luo API-avain OmaTili-palvelussa
+3. Tallenna `.env`-tiedostoon: `MML_API_KEY=avaimesi`
+
+### Hakusuodatin (tulossa)
+
+Tavoitteena on `region`-suodatin MCP-työkaluihin:
+
+```python
+search("joukkoliikenne", region="Helsinki")     # kaupunkitaso
+search("ympäristödata", region="Uusimaa")        # maakuntataso → laajentuu kuntiin
+```
+
+Hierarkkinen haku: haettaessa maakunnalla palautetaan myös maakunnan kuntien aineistot.
+
+Katso kehityssuunnitelma: [#32](https://github.com/trotor/aura/issues/32)
 
 ## Kehitys
 

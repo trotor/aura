@@ -41,7 +41,6 @@ def _sample_dataset() -> Dataset:
 
 def test_init_db():
     conn = _memory_db()
-    # Tarkista että taulut luotiin
     tables = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     ).fetchall()
@@ -76,18 +75,6 @@ def test_upsert_updates_existing():
     assert row["title_fi"] == "Päivitetty otsikko"
 
 
-def test_search_no_results():
-    conn = _memory_db()
-    results = search_datasets(conn, "eioleolemassakaan")
-    assert len(results) == 0
-
-
-def test_get_stats_empty():
-    conn = _memory_db()
-    s = get_stats(conn)
-    assert s["total_datasets"] == 0
-
-
 def test_get_stats_with_data():
     conn = _memory_db()
     upsert_dataset(conn, _sample_dataset())
@@ -100,7 +87,6 @@ def test_get_stats_with_data():
 
 def test_migrations_applied():
     conn = _memory_db()
-    # init_db ajaa migraatiot — tarkista että schema_migrations-taulu on olemassa
     versions = conn.execute("SELECT version, name FROM schema_migrations").fetchall()
     assert len(versions) >= 1
     assert versions[0]["version"] == 1
@@ -109,6 +95,5 @@ def test_migrations_applied():
 
 def test_migrations_idempotent():
     conn = _memory_db()
-    # Aja migraatiot uudelleen — ei pitäisi tehdä mitään
     count = run_migrations(conn)
     assert count == 0

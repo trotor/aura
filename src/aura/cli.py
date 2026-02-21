@@ -91,6 +91,17 @@ def main() -> None:
         "files", nargs="+", help="JSON-tiedostot"
     )
 
+    # prune-enrichments
+    prune_parser = subparsers.add_parser(
+        "prune-enrichments", help="Poista vanhat rikastukset"
+    )
+    prune_parser.add_argument(
+        "--older-than",
+        type=int,
+        default=365,
+        help="Poista rikastukset vanhempia kuin N päivää (oletus: 365)",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -267,6 +278,21 @@ def main() -> None:
             total_imported += count
 
         print(f"\nTuotu yhteensä {total_imported} rikastusta.")
+
+    elif args.command == "prune-enrichments":
+        from aura.database import (
+            get_connection,
+            init_db,
+            prune_enrichments,
+        )
+
+        conn = get_connection()
+        init_db(conn)
+        count = prune_enrichments(conn, older_than_days=args.older_than)
+        if count > 0:
+            print(f"Poistettu {count} rikastusta (vanhempia kuin {args.older_than} pv).")
+        else:
+            print("Ei poistettavia rikastuksia.")
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations

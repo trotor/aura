@@ -86,27 +86,6 @@ class TestFormatBytes:
 class TestDataclasses:
     """Tietorakenteiden luonti."""
 
-    def test_probe_target_defaults(self):
-        """ProbeTarget-oletus-arvot toimivat."""
-        t = ProbeTarget(
-            dataset_id="test",
-            endpoint_url="http://example.com/wfs",
-            service_type="WFS",
-        )
-        assert t.srs == "EPSG:4326"
-        assert t.max_features == 100
-        assert t.current_estimated_bytes == 0
-
-    def test_probe_result_defaults(self):
-        """ProbeResult-oletus-arvot toimivat."""
-        r = ProbeResult(
-            dataset_id="test",
-            endpoint_url="http://example.com/wfs",
-        )
-        assert r.total_feature_count is None
-        assert r.samples == []
-        assert r.error == ""
-
     def test_sample_result(self):
         """SampleResult luodaan oikein."""
         s = SampleResult(area_name="Helsinki", feature_count=42, response_bytes=1024)

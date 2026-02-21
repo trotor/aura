@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -78,10 +79,35 @@ def _format_enrichment_value(field: str, value: str) -> str:
     return value
 
 
-def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
-    """Muotoile rikastukset luettavaan muotoon."""
+def _enrichment_age_warning(created_at: str, max_age_days: int = 180) -> str:
+    """Palauta ikävaroitus jos rikastus on vanha."""
+    if not created_at:
+        return ""
+    try:
+        created = datetime.fromisoformat(created_at)
+        age = (datetime.now(tz=UTC) - created.replace(tzinfo=UTC)).days
+        if age > max_age_days:
+            months = age // 30
+            return f" [{months} kk vanha]"
+    except (ValueError, TypeError):
+        pass
+    return ""
+
+
+def format_enrichments(
+    enrichments: list[dict[str, Any]],
+    stale_ids: set[str] | None = None,
+) -> str:
+    """Muotoile rikastukset luettavaan muotoon.
+
+    Args:
+        enrichments: Lista rikastuksia.
+        stale_ids: Vanhentuneiden rikastusten id:t (näytetään varoitus).
+    """
     if not enrichments:
         return ""
+    if stale_ids is None:
+        stale_ids = set()
 
     parts = ["\n### Rikastukset\n"]
     for e in enrichments:
@@ -90,6 +116,7 @@ def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
         value = _format_enrichment_value(field, e.get("value", ""))
         confidence = e.get("confidence", "")
         source_type = e.get("source_type", "")
+        enrichment_id = e.get("id", "")
 
         conf_marker = ""
         if confidence == "high":
@@ -99,9 +126,39 @@ def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
         elif confidence == "verified":
             conf_marker = " [vahvistettu]"
 
-        parts.append(f"- **{label}:** {value}{conf_marker}")
+        age_warning = _enrichment_age_warning(e.get("created_at", ""))
+
+        stale_marker = ""
+        if enrichment_id in stale_ids:
+            stale_marker = " [vanhentunut]"
+
+        parts.append(f"- **{label}:** {value}{conf_marker}{age_warning}{stale_marker}")
         if source_type and source_type != "mcp_session":
             parts.append(f"  (lähde: {source_type})")
+
+    return "\n".join(parts)
+
+
+def format_conflicts(conflicts: list[dict[str, Any]]) -> str:
+    """Muotoile ristiriitaiset rikastukset."""
+    if not conflicts:
+        return ""
+
+    # Ryhmitä kentän mukaan
+    by_field: dict[str, list[dict[str, Any]]] = {}
+    for c in conflicts:
+        field = c.get("field", "")
+        by_field.setdefault(field, []).append(c)
+
+    parts = ["\n### Ristiriitaiset rikastukset\n"]
+    for field, entries in by_field.items():
+        label = ENRICHMENT_FIELD_LABELS.get(field, field)
+        parts.append(f"**{label}:**")
+        for e in entries:
+            value = _format_enrichment_value(field, e.get("value", ""))
+            confidence = e.get("confidence", "medium")
+            created = (e.get("created_at") or "")[:10]
+            parts.append(f"  - {value} ({confidence}, {created})")
 
     return "\n".join(parts)
 
@@ -109,8 +166,17 @@ def format_enrichments(enrichments: list[dict[str, Any]]) -> str:
 def format_dataset_detail(
     dataset: dict[str, Any],
     enrichments: list[dict[str, Any]] | None = None,
+    stale_ids: set[str] | None = None,
+    conflicts: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Muotoile datasetin täydet tiedot."""
+    """Muotoile datasetin täydet tiedot.
+
+    Args:
+        dataset: Datasetin tiedot.
+        enrichments: Uusimmat rikastukset (yksi per kenttä).
+        stale_ids: Vanhentuneiden rikastusten id:t.
+        conflicts: Ristiriitaiset rikastukset.
+    """
     summary = format_dataset_summary(dataset)
 
     resources = dataset.get("resources", [])
@@ -144,7 +210,10 @@ def format_dataset_detail(
         summary += f"\n**Saatavuus:** {label.get(access_level, access_level)}"
 
     if enrichments:
-        summary += format_enrichments(enrichments)
+        summary += format_enrichments(enrichments, stale_ids=stale_ids)
+
+    if conflicts:
+        summary += format_conflicts(conflicts)
 
     return summary
 

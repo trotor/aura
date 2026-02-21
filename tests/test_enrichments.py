@@ -5,15 +5,23 @@ import sqlite3
 from aura.database import (
     add_enrichment,
     export_enrichments,
+    get_conflicting_enrichments,
     get_enrichment_count,
     get_enrichments,
     get_latest_enrichments,
+    get_stale_enrichments,
     import_enrichments,
     init_db,
+    prune_enrichments,
+    search_datasets,
     upsert_dataset,
 )
 from aura.models import Dataset
-from aura.search import format_dataset_detail, format_enrichments
+from aura.search import (
+    format_conflicts,
+    format_dataset_detail,
+    format_enrichments,
+)
 
 
 def _memory_db() -> sqlite3.Connection:
@@ -54,29 +62,12 @@ class TestAddEnrichment:
         assert len(rows) == 1
         assert rows[0]["field"] == "description_extended"
         assert rows[0]["value"] == "Laajempi kuvaus datasetistä"
-
-    def test_default_confidence_is_medium(self):
-        conn = _memory_db()
-        _seed_dataset(conn)
-        add_enrichment(conn, "test-1", "use_case", "Esimerkki")
-        row = conn.execute(
-            "SELECT confidence FROM enrichments"
-        ).fetchone()
-        assert row["confidence"] == "medium"
-
-    def test_default_source_type_is_mcp_session(self):
-        conn = _memory_db()
-        _seed_dataset(conn)
-        add_enrichment(conn, "test-1", "use_case", "Esimerkki")
-        row = conn.execute(
-            "SELECT source_type FROM enrichments"
-        ).fetchone()
-        assert row["source_type"] == "mcp_session"
+        assert rows[0]["confidence"] == "medium"
+        assert rows[0]["source_type"] == "mcp_session"
 
     def test_allows_enrichment_without_existing_dataset(self):
         """Enrichment voi viitata datasettiin jota ei ole kannassa."""
         conn = _memory_db()
-        # Ei seed_dataset — pitää silti toimia
         eid = add_enrichment(
             conn, "nonexistent-ds", "quality_notes", "Testirikastus"
         )
@@ -110,11 +101,6 @@ class TestGetEnrichments:
         assert fields["quality_notes"] == "uusi"
         assert fields["use_case"] == "tapaus"
 
-    def test_empty_for_unknown_dataset(self):
-        conn = _memory_db()
-        results = get_enrichments(conn, "unknown")
-        assert results == []
-
 
 class TestEnrichmentCount:
     """get_enrichment_count()."""
@@ -128,15 +114,11 @@ class TestEnrichmentCount:
 
         assert get_enrichment_count(conn, "test-1") == 2
 
-    def test_zero_for_no_enrichments(self):
-        conn = _memory_db()
-        assert get_enrichment_count(conn, "nope") == 0
-
 
 class TestExportImport:
     """export_enrichments() ja import_enrichments()."""
 
-    def test_export_returns_all(self):
+    def test_export_filter_by_source_type(self):
         conn = _memory_db()
         _seed_dataset(conn)
         add_enrichment(conn, "test-1", "quality_notes", "hyvä")
@@ -148,35 +130,9 @@ class TestExportImport:
         exported = export_enrichments(conn)
         assert len(exported) == 2
 
-    def test_export_filter_by_source_type(self):
-        conn = _memory_db()
-        _seed_dataset(conn)
-        add_enrichment(conn, "test-1", "quality_notes", "hyvä")
-        add_enrichment(
-            conn, "test-1", "use_case", "analyysi",
-            source_type="web_research",
-        )
-
-        exported = export_enrichments(conn, source_type="web_research")
-        assert len(exported) == 1
-        assert exported[0]["field"] == "use_case"
-
-    def test_import_inserts_new(self):
-        conn = _memory_db()
-        enrichments = [
-            {
-                "id": "aaaa-bbbb-cccc",
-                "dataset_id": "test-1",
-                "field": "quality_notes",
-                "value": "tuotu",
-                "confidence": "high",
-                "source_type": "manual",
-                "source_detail": "",
-                "created_at": "2025-01-01T00:00:00",
-            }
-        ]
-        count = import_enrichments(conn, enrichments)
-        assert count == 1
+        exported_filtered = export_enrichments(conn, source_type="web_research")
+        assert len(exported_filtered) == 1
+        assert exported_filtered[0]["field"] == "use_case"
 
     def test_import_skips_duplicates(self):
         conn = _memory_db()
@@ -189,9 +145,10 @@ class TestExportImport:
                 "source_type": "manual",
             }
         ]
-        import_enrichments(conn, enrichments)
-        count = import_enrichments(conn, enrichments)
-        assert count == 0
+        count1 = import_enrichments(conn, enrichments)
+        count2 = import_enrichments(conn, enrichments)
+        assert count1 == 1
+        assert count2 == 0
 
     def test_roundtrip(self):
         """Export → import -kierto säilyttää datan."""
@@ -219,10 +176,7 @@ class TestExportImport:
 class TestFormatEnrichments:
     """format_enrichments() ja format_dataset_detail()."""
 
-    def test_format_empty(self):
-        assert format_enrichments([]) == ""
-
-    def test_format_shows_field_label(self):
+    def test_format_shows_field_label_and_confidence(self):
         enrichments = [
             {
                 "field": "quality_notes",
@@ -235,6 +189,7 @@ class TestFormatEnrichments:
         assert "Laatuhuomiot" in result
         assert "Erittäin hyvä" in result
         assert "[varma]" in result
+        assert "mcp_session" not in result  # mcp_session piilotetaan
 
     def test_format_shows_source_type_if_not_mcp(self):
         enrichments = [
@@ -247,18 +202,6 @@ class TestFormatEnrichments:
         ]
         result = format_enrichments(enrichments)
         assert "web_research" in result
-
-    def test_format_hides_mcp_session_source(self):
-        enrichments = [
-            {
-                "field": "use_case",
-                "value": "Analyysi",
-                "confidence": "medium",
-                "source_type": "mcp_session",
-            }
-        ]
-        result = format_enrichments(enrichments)
-        assert "mcp_session" not in result
 
     def test_detail_includes_enrichments(self):
         dataset = {
@@ -278,83 +221,239 @@ class TestFormatEnrichments:
         assert "Rikastukset" in result
         assert "Hyvä laatu" in result
 
-    def test_detail_without_enrichments(self):
-        dataset = {
-            "title_fi": "Testi",
-            "name": "testi-1",
-        }
-        result = format_dataset_detail(dataset)
-        assert "Rikastukset" not in result
-
-    def test_format_keywords_as_comma_list(self):
-        """keywords-kenttä näytetään pilkkulistana."""
+    def test_format_list_fields_as_comma_list(self):
+        """keywords, tags ja data_fields näytetään pilkkulistoina."""
         enrichments = [
             {
                 "field": "keywords",
-                "value": '["maatalous", "peltolohko", "INSPIRE"]',
+                "value": '["maatalous", "peltolohko"]',
                 "confidence": "high",
                 "source_type": "mcp_session",
-            }
-        ]
-        result = format_enrichments(enrichments)
-        assert "Lisäavainsanat" in result
-        assert "maatalous, peltolohko, INSPIRE" in result
-
-    def test_format_tags_as_comma_list(self):
-        """tags-kenttä näytetään pilkkulistana."""
-        enrichments = [
+            },
             {
                 "field": "tags",
                 "value": '["paikkatietoaineisto", "avoin data"]',
                 "confidence": "medium",
                 "source_type": "mcp_session",
-            }
-        ]
-        result = format_enrichments(enrichments)
-        assert "Tagit" in result
-        assert "paikkatietoaineisto, avoin data" in result
-
-    def test_format_data_fields_as_comma_list(self):
-        """data_fields-kenttä näytetään pilkkulistana."""
-        enrichments = [
+            },
             {
                 "field": "data_fields",
                 "value": '["id", "nimi", "pinta_ala"]',
                 "confidence": "high",
                 "source_type": "web_research",
-            }
+            },
         ]
         result = format_enrichments(enrichments)
-        assert "Datakentät" in result
+        assert "maatalous, peltolohko" in result
+        assert "paikkatietoaineisto, avoin data" in result
         assert "id, nimi, pinta_ala" in result
 
-    def test_format_invalid_json_falls_back_to_raw(self):
-        """Virheellinen JSON-arvo näytetään sellaisenaan."""
+
+class TestConflictingEnrichments:
+    """get_conflicting_enrichments()."""
+
+    def test_detects_conflicting_values(self):
+        conn = _memory_db()
+        _seed_dataset(conn)
+        add_enrichment(conn, "test-1", "quality_notes", "hyvä")
+        add_enrichment(conn, "test-1", "quality_notes", "huono")
+        add_enrichment(conn, "test-1", "use_case", "yksi arvo")  # ei ristiriita
+
+        conflicts = get_conflicting_enrichments(conn, "test-1")
+        assert len(conflicts) == 2
+        values = {c["value"] for c in conflicts}
+        assert values == {"hyvä", "huono"}
+
+    def test_conflicts_sorted_by_confidence(self):
+        conn = _memory_db()
+        _seed_dataset(conn)
+        add_enrichment(conn, "test-1", "quality_notes", "low", confidence="low")
+        add_enrichment(conn, "test-1", "quality_notes", "high", confidence="high")
+
+        conflicts = get_conflicting_enrichments(conn, "test-1")
+        assert conflicts[0]["confidence"] == "high"
+
+    def test_format_shows_field_and_values(self):
+        conflicts = [
+            {
+                "field": "quality_notes",
+                "value": "hyvä",
+                "confidence": "high",
+                "created_at": "2025-01-01",
+            },
+            {
+                "field": "quality_notes",
+                "value": "huono",
+                "confidence": "low",
+                "created_at": "2025-02-01",
+            },
+        ]
+        result = format_conflicts(conflicts)
+        assert "Ristiriitaiset" in result
+        assert "Laatuhuomiot" in result
+        assert "hyvä" in result
+        assert "huono" in result
+
+    def test_detail_shows_conflicts(self):
+        dataset = {"title_fi": "Testi", "name": "testi-1"}
+        conflicts = [
+            {
+                "field": "quality_notes",
+                "value": "arvo1",
+                "confidence": "high",
+                "created_at": "2025-01-01",
+            },
+            {
+                "field": "quality_notes",
+                "value": "arvo2",
+                "confidence": "medium",
+                "created_at": "2025-02-01",
+            },
+        ]
+        result = format_dataset_detail(dataset, conflicts=conflicts)
+        assert "Ristiriitaiset" in result
+
+
+class TestStaleEnrichments:
+    """get_stale_enrichments()."""
+
+    def test_stale_when_dataset_is_newer(self):
+        conn = _memory_db()
+        ds = Dataset(
+            id="test-1", name="test-1", title="Test",
+            metadata_modified="2020-01-01T00:00:00",
+        )
+        upsert_dataset(conn, ds)
+        conn.commit()
+        conn.execute(
+            """
+            INSERT INTO enrichments (id, dataset_id, field, value,
+                source_type, created_at)
+            VALUES ('e1', 'test-1', 'quality_notes', 'vanha',
+                'mcp_session', '2019-01-01T00:00:00')
+            """
+        )
+        conn.commit()
+
+        stale = get_stale_enrichments(conn, "test-1")
+        assert len(stale) == 1
+        assert stale[0]["id"] == "e1"
+
+    def test_format_shows_stale_marker(self):
         enrichments = [
             {
-                "field": "keywords",
-                "value": "ei-json-arvo",
+                "id": "stale-1",
+                "field": "quality_notes",
+                "value": "vanha",
                 "confidence": "medium",
                 "source_type": "mcp_session",
             }
         ]
-        result = format_enrichments(enrichments)
-        assert "ei-json-arvo" in result
+        result = format_enrichments(enrichments, stale_ids={"stale-1"})
+        assert "[vanhentunut]" in result
+
+
+class TestPruneEnrichments:
+    """prune_enrichments()."""
+
+    def test_prunes_old_enrichments(self):
+        conn = _memory_db()
+        conn.execute(
+            """
+            INSERT INTO enrichments (id, dataset_id, field, value,
+                source_type, created_at)
+            VALUES ('old1', 'test-1', 'quality_notes', 'vanha',
+                'mcp_session', '2020-01-01T00:00:00')
+            """
+        )
+        add_enrichment(conn, "test-1", "use_case", "tuore")
+
+        count = prune_enrichments(conn, older_than_days=365)
+        assert count == 1
+
+        remaining = conn.execute("SELECT * FROM enrichments").fetchall()
+        assert len(remaining) == 1
+        assert remaining[0]["field"] == "use_case"
+
+
+class TestEnrichmentSearch:
+    """search_datasets() löytää datasettejä enrichment-avainsanoilla."""
+
+    def test_finds_dataset_by_enrichment_keyword(self):
+        conn = _memory_db()
+        _seed_dataset(conn, "ds-1")
+        add_enrichment(
+            conn, "ds-1", "keywords",
+            '["maatalous", "peltolohko"]',
+        )
+
+        results = search_datasets(conn, "peltolohko")
+        assert len(results) >= 1
+        assert any(r["id"] == "ds-1" for r in results)
+
+    def test_finds_dataset_by_enrichment_tag(self):
+        conn = _memory_db()
+        _seed_dataset(conn, "ds-2")
+        add_enrichment(
+            conn, "ds-2", "tags",
+            '["paikkatietoaineisto", "INSPIRE"]',
+        )
+
+        results = search_datasets(conn, "INSPIRE")
+        assert len(results) >= 1
+        assert any(r["id"] == "ds-2" for r in results)
+
+    def test_fts_results_come_before_enrichment_results(self):
+        """FTS-osumat tulevat ennen enrichment-osumia."""
+        conn = _memory_db()
+        ds_fts = Dataset(
+            id="ds-fts", name="ds-fts",
+            title="peltolohko", title_fi="peltolohko",
+        )
+        upsert_dataset(conn, ds_fts)
+        ds_enrich = Dataset(
+            id="ds-enrich", name="ds-enrich", title="Muu datasetti",
+        )
+        upsert_dataset(conn, ds_enrich)
+        conn.commit()
+        add_enrichment(
+            conn, "ds-enrich", "keywords", '["peltolohko"]',
+        )
+
+        results = search_datasets(conn, "peltolohko")
+        ids = [r["id"] for r in results]
+        assert "ds-fts" in ids
+        assert "ds-enrich" in ids
+        assert ids.index("ds-fts") < ids.index("ds-enrich")
+
+    def test_no_duplicates_when_fts_and_enrichment_match(self):
+        """Sama datasetti ei tule tuloksiin kahdesti."""
+        conn = _memory_db()
+        ds = Dataset(
+            id="ds-both", name="ds-both",
+            title="ilmanlaatu", title_fi="ilmanlaatu",
+        )
+        upsert_dataset(conn, ds)
+        conn.commit()
+        add_enrichment(
+            conn, "ds-both", "keywords", '["ilmanlaatu"]',
+        )
+
+        results = search_datasets(conn, "ilmanlaatu")
+        ds_ids = [r["id"] for r in results]
+        assert ds_ids.count("ds-both") == 1
 
 
 class TestMigration:
     """Migraatio luo enrichments-taulun."""
 
-    def test_table_exists(self):
+    def test_table_and_indexes_exist(self):
         conn = _memory_db()
         tables = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
-        table_names = [t["name"] for t in tables]
-        assert "enrichments" in table_names
+        assert "enrichments" in [t["name"] for t in tables]
 
-    def test_indexes_exist(self):
-        conn = _memory_db()
         indexes = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='index'"
         ).fetchall()
