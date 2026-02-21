@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC
+from typing import Any
 
 from fastmcp import Context, FastMCP
 
@@ -32,7 +34,7 @@ from aura.search import (
 
 
 @asynccontextmanager
-async def _lifespan(server):
+async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Hallitse tietokantayhteyttä serverin elinkaaren ajan."""
     conn = get_connection(check_same_thread=False)
     init_db(conn)
@@ -76,7 +78,8 @@ def _get_conn(ctx: Context | None = None) -> sqlite3.Connection:
     """
     if ctx is not None:
         try:
-            return ctx.lifespan_context["db"]
+            conn: sqlite3.Connection = ctx.lifespan_context["db"]
+            return conn
         except (AttributeError, KeyError):
             pass
     # Fallback: luo uusi yhteys (esim. CLI, testit, vanha kutsupolku)
@@ -94,7 +97,7 @@ def search(
     format: str = "",
     organization: str = "",
     access_level: str = "",
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Hae suomalaisia avoimia datasettejä luonnollisella kielellä.
 
@@ -126,7 +129,7 @@ def search(
 
 
 @mcp.tool()
-def describe(dataset_id: str, ctx: Context = None) -> str:
+def describe(dataset_id: str, ctx: Context | None = None) -> str:
     """Kuvaa yksittäinen datasetti yksityiskohtaisesti.
 
     Args:
@@ -152,14 +155,14 @@ def describe(dataset_id: str, ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def stats(ctx: Context = None) -> str:
+def stats(ctx: Context | None = None) -> str:
     """Näytä tilastot Auran tietokannasta: datasettien, organisaatioiden ja formaattien määrät."""
     conn = _get_conn(ctx)
     return format_stats(get_stats(conn))
 
 
 @mcp.tool()
-def list_organizations(limit: int = 20, ctx: Context = None) -> str:
+def list_organizations(limit: int = 20, ctx: Context | None = None) -> str:
     """Listaa avoimen datan julkaisijat datasettien lukumäärän mukaan.
 
     Args:
@@ -188,7 +191,7 @@ def list_organizations(limit: int = 20, ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def list_formats(limit: int = 20, ctx: Context = None) -> str:
+def list_formats(limit: int = 20, ctx: Context | None = None) -> str:
     """Listaa saatavilla olevat dataformaatit resurssien lukumäärän mukaan.
 
     Args:
@@ -217,7 +220,7 @@ def list_formats(limit: int = 20, ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def harvest(source: str = "all", ctx: Context = None) -> str:
+def harvest(source: str = "all", ctx: Context | None = None) -> str:
     """Hae datasettien metatiedot lähteistä ja tallenna tietokantaan.
 
     Args:
@@ -248,7 +251,7 @@ def harvest(source: str = "all", ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def list_sources(ctx: Context = None) -> str:
+def list_sources(ctx: Context | None = None) -> str:
     """Listaa kaikki datalähteet, niiden datasettien lukumäärät ja harvestoinnin tila."""
     from datetime import datetime
 
@@ -286,7 +289,7 @@ def list_sources(ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def probe_sizes(source: str = "all", ctx: Context = None) -> str:
+def probe_sizes(source: str = "all", ctx: Context | None = None) -> str:
     """Mittaa paikkatietoaineistojen koot otoskyselyillä (WFS/WCS).
 
     Args:
@@ -307,7 +310,7 @@ def search_structured(
     format: str = "",
     organization: str = "",
     access_level: str = "",
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille.
 
@@ -367,7 +370,7 @@ def search_structured(
 
 
 @mcp.tool()
-def recommend(topic: str, limit: int = 5, ctx: Context = None) -> str:
+def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
     """Suosittele parhaita datasettejä aiheesta.
 
     Etsii datasettejä ja järjestää ne relevanssin, tuoreuden ja resurssimäärän mukaan.
@@ -419,7 +422,7 @@ def recommend(topic: str, limit: int = 5, ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def compare(dataset_ids: list[str], ctx: Context = None) -> str:
+def compare(dataset_ids: list[str], ctx: Context | None = None) -> str:
     """Vertaile datasettejä rinnakkain.
 
     Args:
@@ -487,7 +490,7 @@ def enrich(
     confidence: str = "medium",
     source_type: str = "mcp_session",
     source_detail: str = "",
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> str:
     """Rikasta datasetin tietoja. Tallentaa löydetyn tiedon kantaan.
 
@@ -545,7 +548,7 @@ def enrich(
 
 
 @mcp.tool()
-def get_enrichments_tool(dataset_id: str, ctx: Context = None) -> str:
+def get_enrichments_tool(dataset_id: str, ctx: Context | None = None) -> str:
     """Näytä datasetin rikastukset (crowdsourced enrichments).
 
     Args:
@@ -561,7 +564,7 @@ def get_enrichments_tool(dataset_id: str, ctx: Context = None) -> str:
 
 
 @mcp.tool()
-def find_related(dataset_id: str, limit: int = 5, ctx: Context = None) -> str:
+def find_related(dataset_id: str, limit: int = 5, ctx: Context | None = None) -> str:
     """Etsi samankaltaiset datasetit avainsanojen ja organisaation perusteella.
 
     Args:

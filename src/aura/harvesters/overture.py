@@ -9,7 +9,10 @@ S3_BASE = f"s3://overturemaps-us-west-2/release/{OVERTURE_RELEASE}/theme"
 SOURCE_COOP_BASE = f"https://data.source.coop/overture/overture-{OVERTURE_RELEASE}"
 
 
-def _theme(theme_id: str, title: str, description: str, keywords: list[str], size_gb: int) -> dict:
+def _theme(
+    theme_id: str, title: str, description: str,
+    keywords: list[str], size_gb: int,
+) -> dict[str, object]:
     """Luo Overture-teeman konfiguraatio."""
     return {
         "id": f"overture-{theme_id}",
