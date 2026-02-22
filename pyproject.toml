@@ -60,3 +60,11 @@ asyncio_mode = "auto"
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+# aura.tools.* imports mcp from aura.server, which imports aura.tools
+# → circular import prevents mypy from resolving mcp's type.
+# The @mcp.tool() decorator is well-typed by FastMCP at runtime.
+[[tool.mypy.overrides]]
+module = "aura.tools.*"
+disallow_untyped_decorators = false
+disable_error_code = ["has-type"]
