@@ -26,6 +26,7 @@ from aura.database import (
     search_datasets,
 )
 from aura.quality import get_quality_scores
+from aura.yso import YsoClient, build_fts5_query
 from aura.search import (
     format_dataset_detail,
     format_dataset_summary,
@@ -40,7 +41,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     conn = get_connection(check_same_thread=False)
     init_db(conn)
     try:
-        yield {"db": conn, "findings": []}
+        yield {"db": conn, "findings": [], "yso": YsoClient()}
     finally:
         conn.close()
 
@@ -90,8 +91,36 @@ def _get_conn(ctx: Context | None = None) -> sqlite3.Connection:
     return conn
 
 
+def _get_yso(ctx: Context | None) -> YsoClient | None:
+    """Hae YsoClient lifespan-kontekstista."""
+    if ctx:
+        try:
+            return ctx.lifespan_context.get("yso")
+        except (AttributeError, KeyError):
+            pass
+    return None
+
+
+async def _expand_with_yso(query: str, ctx: Context | None) -> str:
+    """Laajenna hakutermi YSO-ontologialla.
+
+    Palauttaa FTS5-hakulausekkeen tai tyhjän merkkijonon jos
+    laajennusta ei tehdä.
+    """
+    yso = _get_yso(ctx)
+    if not yso:
+        return ""
+    try:
+        terms = await yso.expand_query(query)
+        if len(terms) > 1:
+            return build_fts5_query(terms)
+    except Exception:
+        pass
+    return ""
+
+
 @mcp.tool()
-def search(
+async def search(
     query: str,
     limit: int = 10,
     offset: int = 0,
@@ -103,6 +132,9 @@ def search(
 ) -> str:
     """Hae suomalaisia avoimia datasettejä luonnollisella kielellä.
 
+    Hakua laajennetaan automaattisesti YSO-ontologian avulla:
+    esim. "liikenne" löytää myös tieliikenteen ja raideliikenteen datasetit.
+
     Args:
         query: Hakusanat (esim. "helsingin väestö", "ilmanlaatu", "joukkoliikenne")
         limit: Tulosten enimmäismäärä (oletus 10)
@@ -113,10 +145,15 @@ def search(
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
     """
     conn = _get_conn(ctx)
+
+    # YSO-hakulaajennus
+    expanded_query = await _expand_with_yso(query, ctx)
+
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
         access_level=access_level,
+        expanded_query=expanded_query,
     )
 
     if not results:
@@ -328,7 +365,7 @@ def probe_sizes(source: str = "all", ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
-def search_structured(
+async def search_structured(
     query: str,
     limit: int = 10,
     offset: int = 0,
@@ -341,6 +378,7 @@ def search_structured(
     """Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille.
 
     Palauttaa hakutulokset JSON-muodossa koneluettavaa jatkokäsittelyä varten.
+    Hakua laajennetaan YSO-ontologian avulla.
 
     Args:
         query: Hakusanat (esim. "väestö", "ilmanlaatu")
@@ -354,10 +392,12 @@ def search_structured(
     import json
 
     conn = _get_conn(ctx)
+    expanded_query = await _expand_with_yso(query, ctx)
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
         access_level=access_level,
+        expanded_query=expanded_query,
     )
 
     structured = []

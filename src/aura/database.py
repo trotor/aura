@@ -293,6 +293,7 @@ def search_datasets(
     fmt: str = "",
     organization: str = "",
     access_level: str = "",
+    expanded_query: str = "",
 ) -> list[dict[str, Any]]:
     """Hae datasettejä FTS5-täystekstihaulla ja suodattimilla.
 
@@ -330,8 +331,11 @@ def search_datasets(
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
+    # Käytä laajennettua hakua jos annettu (esim. YSO-laajennus)
+    fts_query = expanded_query if expanded_query else query
+
     # Parametrit: FTS match, enrichment FTS match, suodattimet, limit, offset
-    params: list[Any] = [query, query, *filter_params, limit, offset]
+    params: list[Any] = [fts_query, fts_query, *filter_params, limit, offset]
 
     rows = conn.execute(
         f"""

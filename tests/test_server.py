@@ -3,6 +3,8 @@
 import sqlite3
 from unittest.mock import patch
 
+import pytest
+
 from aura.database import init_db, upsert_dataset
 from aura.models import Dataset, Resource
 from aura.server import (
@@ -96,18 +98,20 @@ def _seed_db(conn: sqlite3.Connection) -> None:
 class TestSearch:
     """search()-työkalun testit."""
 
-    def test_search_finds_results(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_finds_results(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search("väestö")
+            result = await search("väestö")
         assert "Helsingin väestö" in result
 
-    def test_search_with_limit(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_with_limit(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search("helsinki", limit=1)
+            result = await search("helsinki", limit=1)
         assert "Helsingin" in result
 
 
@@ -179,32 +183,36 @@ class TestListSources:
 class TestSearchFilters:
     """search()-suodattimien testit."""
 
-    def test_search_filter_by_source(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_filter_by_source(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search("helsinki", source="avoindata.fi")
+            result = await search("helsinki", source="avoindata.fi")
         assert "Helsingin väestö" in result
 
-    def test_search_filter_by_source_excludes(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_filter_by_source_excludes(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search("joukkoliikenne", source="avoindata.fi")
+            result = await search("joukkoliikenne", source="avoindata.fi")
         assert "Ei tuloksia" in result
 
-    def test_search_filter_by_format(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_filter_by_format(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search("väestö", format="CSV")
+            result = await search("väestö", format="CSV")
         assert "Helsingin väestö" in result
 
-    def test_search_filter_by_organization(self) -> None:
+    @pytest.mark.asyncio
+    async def test_search_filter_by_organization(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search("joukkoliikenne", organization="HSL")
+            result = await search("joukkoliikenne", organization="HSL")
         assert "HSL" in result
         assert "joukkoliikenne" in result.lower()
 
@@ -212,25 +220,27 @@ class TestSearchFilters:
 class TestSearchStructured:
     """search_structured()-työkalun testit."""
 
-    def test_returns_json(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_json(self) -> None:
         import json
 
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search_structured("väestö")
+            result = await search_structured("väestö")
         data = json.loads(result)
         assert data["query"] == "väestö"
         assert data["count"] >= 1
         assert data["results"][0]["title"] == "Helsingin väestö"
 
-    def test_structured_with_filters(self) -> None:
+    @pytest.mark.asyncio
+    async def test_structured_with_filters(self) -> None:
         import json
 
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = search_structured("väestö", source="avoindata.fi")
+            result = await search_structured("väestö", source="avoindata.fi")
         data = json.loads(result)
         assert all(r["source"] == "avoindata.fi" for r in data["results"])
 
