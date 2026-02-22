@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from aura.constants import parse_json_list
 from aura.models import Dataset
 from aura.size_estimator import parse_file_size
 
@@ -123,11 +124,18 @@ def _backfill_file_size_bytes(conn: sqlite3.Connection) -> int:
     return updated
 
 
+_initialized_connections: dict[int, sqlite3.Connection] = {}
+
+
 def init_db(conn: sqlite3.Connection) -> None:
-    """Alusta tietokanta: aja kaikki migraatiot."""
+    """Alusta tietokanta: aja kaikki migraatiot (kerran per yhteys)."""
+    conn_id = id(conn)
+    if _initialized_connections.get(conn_id) is conn:
+        return
     applied = run_migrations(conn)
     if applied > 0:
         _backfill_file_size_bytes(conn)
+    _initialized_connections[conn_id] = conn
 
 
 def upsert_organization(
@@ -433,14 +441,7 @@ def find_related_datasets(
     if dataset is None:
         return []
 
-    keywords_raw = dataset.get("keywords_fi", "[]")
-    if isinstance(keywords_raw, str):
-        try:
-            keywords: list[str] = json.loads(keywords_raw)
-        except json.JSONDecodeError:
-            keywords = []
-    else:
-        keywords = keywords_raw
+    keywords = parse_json_list(dataset.get("keywords_fi", "[]"))
 
     org = dataset.get("organization_title", "")
     ds_id = dataset["id"]
