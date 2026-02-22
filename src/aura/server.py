@@ -26,6 +26,8 @@ from aura.database import (
     search_datasets,
 )
 from aura.quality import get_quality_scores
+from aura.tagger import format_suggestions
+from aura.tagger import suggest_tags as _suggest_tags
 from aura.yso import YsoClient, build_fts5_query
 from aura.search import (
     format_dataset_detail,
@@ -1019,6 +1021,7 @@ def enrich(
         "related_datasets", "quality_notes",
         "use_case", "access_instructions", "organization_context",
         "temporal_coverage", "update_frequency_actual",
+        "yso_concepts",
     }
     if field not in valid_fields:
         fields_list = ", ".join(sorted(valid_fields))
@@ -1067,6 +1070,7 @@ def batch_enrich(
         "related_datasets", "quality_notes",
         "use_case", "access_instructions", "organization_context",
         "temporal_coverage", "update_frequency_actual",
+        "yso_concepts",
     }
 
     results: list[str] = []
@@ -1103,6 +1107,56 @@ def batch_enrich(
         parts.append("Ei rikastuksia tallennettavaksi.")
 
     return "\n".join(parts)
+
+
+@mcp.tool()
+async def suggest_yso_tags(
+    dataset_id: str,
+    save: bool = False,
+    ctx: Context | None = None,
+) -> str:
+    """Ehdota YSO-ontologian mukaisia avainsanoja datasetille.
+
+    Analysoi datasetin otsikon, kuvauksen ja olemassaolevat avainsanat
+    ja etsii vastaavat YSO-käsitteet Finto API:sta.
+
+    Args:
+        dataset_id: Datasetin ID tai nimi
+        save: Jos True, tallenna ehdotukset yso_concepts-enrichmentiksi
+    """
+    conn = _get_conn(ctx)
+    yso = _get_yso(ctx)
+    if not yso:
+        yso = YsoClient()
+
+    dataset = get_dataset(conn, dataset_id)
+    if not dataset:
+        return f"Datasettiä '{dataset_id}' ei löytynyt."
+
+    suggestions = await _suggest_tags(dataset, yso)
+
+    if save and suggestions:
+        import json as _json
+
+        concepts_json = _json.dumps(
+            [s.to_dict() for s in suggestions], ensure_ascii=False,
+        )
+        add_enrichment(
+            conn,
+            dataset_id=dataset["id"],
+            field="yso_concepts",
+            value=concepts_json,
+            confidence="high",
+            source_type="ai_analysis",
+            source_detail="YSO auto-tagger",
+        )
+        conn.commit()
+        return (
+            format_suggestions(suggestions)
+            + f"\n\nTallennettu {len(suggestions)} YSO-käsitettä enrichmentiksi."
+        )
+
+    return format_suggestions(suggestions)
 
 
 @mcp.tool()
