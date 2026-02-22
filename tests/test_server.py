@@ -346,6 +346,19 @@ class TestEnrich:
             result = enrich("test-1", "use_case", "x", confidence="wrong")
         assert "Virheellinen luottamustaso" in result
 
+    def test_enrich_dataset_not_found(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = enrich("no-such-ds", "use_case", "x")
+        assert "ei löytynyt" in result
+
+    def test_enrich_value_too_long(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = enrich("test-1", "use_case", "x" * 10_001)
+        assert "merkkiä" in result
+
     def test_enrich_persists(self) -> None:
         conn = _memory_db()
         _seed_db(conn)

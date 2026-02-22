@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from fastmcp import Context
 
 import aura.server as _server
-from aura.database import add_enrichment, get_latest_enrichments
+from aura.database import add_enrichment, get_dataset, get_latest_enrichments
 from aura.server import mcp
 
 # Category-to-enrichment-field mapping for save_session_findings
@@ -149,6 +149,10 @@ def save_session_findings(ctx: Context | None = None) -> str:
 
         if already_exists:
             skipped.append(f"- {ds_id}/{field} (duplikaatti)")
+            continue
+
+        if not get_dataset(conn, ds_id):
+            skipped.append(f"- {ds_id}/{field} (datasetti ei löydy)")
             continue
 
         add_enrichment(

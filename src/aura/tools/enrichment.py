@@ -23,6 +23,8 @@ VALID_ENRICHMENT_FIELDS = {
     "yso_concepts",
 }
 
+MAX_ENRICHMENT_VALUE_LENGTH = 10_000
+
 
 @mcp.tool()
 def enrich(
@@ -70,6 +72,12 @@ def enrich(
     if confidence not in valid_confidence:
         return f"Virheellinen luottamustaso '{confidence}'."
 
+    if len(value) > MAX_ENRICHMENT_VALUE_LENGTH:
+        return f"Arvo saa olla korkeintaan {MAX_ENRICHMENT_VALUE_LENGTH} merkkiä."
+
+    if not get_dataset(conn, dataset_id):
+        return f"Datasettiä '{dataset_id}' ei löytynyt."
+
     enrichment_id = add_enrichment(
         conn, dataset_id, field, value,
         confidence=confidence,
@@ -116,6 +124,12 @@ def batch_enrich(
             continue
         if field not in VALID_ENRICHMENT_FIELDS:
             errors.append(f"#{i + 1}: tuntematon kenttä '{field}'")
+            continue
+        if len(value) > MAX_ENRICHMENT_VALUE_LENGTH:
+            errors.append(f"#{i + 1}: arvo liian pitkä ({len(value)} merkkiä)")
+            continue
+        if not get_dataset(conn, ds_id):
+            errors.append(f"#{i + 1}: datasettiä '{ds_id}' ei löytynyt")
             continue
 
         add_enrichment(
