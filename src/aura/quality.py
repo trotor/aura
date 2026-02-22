@@ -64,6 +64,7 @@ def calculate_timeliness(dataset: dict[str, Any]) -> tuple[float, dict[str, Any]
         mod_dt = datetime.fromisoformat(modified).replace(tzinfo=UTC)
         days_old = (datetime.now(tz=UTC) - mod_dt).days
     except (ValueError, TypeError):
+        logger.warning("[quality] Virheellinen metadata_modified: '%s'", modified)
         return 10.0, {"metadata_modified": modified, "parse_error": True}
 
     if days_old <= 30:

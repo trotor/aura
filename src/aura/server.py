@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -14,6 +15,8 @@ from aura.database import (
     init_db,
 )
 from aura.yso import YsoClient, build_fts5_query
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -101,7 +104,7 @@ async def _expand_with_yso(query: str, ctx: Context | None) -> str:
         if len(terms) > 1:
             return build_fts5_query(terms)
     except Exception:
-        pass
+        logger.warning("[yso] Hakulaajennus epäonnistui: '%s'", query, exc_info=True)
     return ""
 
 

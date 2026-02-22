@@ -133,7 +133,7 @@ class YsoClient:
                         terms.append(n.label)
 
             except (httpx.HTTPError, httpx.TimeoutException, KeyError):
-                logger.debug("[yso] API-virhe laajennettaessa '%s'", query)
+                logger.warning("[yso] API-virhe laajennettaessa '%s'", query, exc_info=True)
                 return terms
 
             # Tallenna välimuistiin
