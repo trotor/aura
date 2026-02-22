@@ -13,7 +13,6 @@ from aura.constants import MACHINE_READABLE_FORMATS
 from aura.database import (
     find_related_datasets,
     get_dataset,
-    get_enrichment_count,
     search_datasets,
 )
 from aura.search import format_dataset_summary
@@ -104,6 +103,9 @@ async def search_structured(
         expanded_query=expanded_query,
     )
 
+    ds_ids = [d.get("id", "") for d in results]
+    enrichment_counts = _batch_enrichment_counts(conn, ds_ids)
+
     structured = []
     for d in results:
         keywords_raw = d.get("keywords_fi", "[]")
@@ -129,7 +131,7 @@ async def search_structured(
             "num_resources": d.get("num_resources", 0),
             "estimated_size_bytes": d.get("estimated_size_bytes", 0),
             "access_level": d.get("access_level", "open"),
-            "enrichment_count": get_enrichment_count(conn, ds_id),
+            "enrichment_count": enrichment_counts.get(ds_id, 0),
         })
 
     return json.dumps(
