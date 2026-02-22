@@ -8,6 +8,7 @@ import pytest
 from aura.database import init_db, upsert_dataset
 from aura.models import Dataset, Resource
 from aura.server import (
+    _resolve_region,
     batch_enrich,
     compare,
     describe,
@@ -19,13 +20,16 @@ from aura.server import (
     list_organizations,
     list_sources,
     log_finding,
+    lookup_municipality,
     quality_gaps,
     quality_overview,
     quality_ranking,
     quality_report,
     recommend,
+    reference_status,
     save_session_findings,
     search,
+    search_by_region,
     search_structured,
     stats,
 )
@@ -560,3 +564,239 @@ class TestSaveSessionFindings:
             result = save_session_findings()
         assert "duplikaatti" in result.lower()
         srv._fallback_findings.clear()
+
+
+# --- Viitedatatyökalut ---
+
+
+def _seed_ref_data(conn: sqlite3.Connection) -> None:
+    """Populoi viiteaineistojen testitiedot."""
+    conn.execute(
+        "INSERT OR REPLACE INTO ref_metadata (name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
+        ("municipalities", 3, "20260101", "2026-01-01 00:00:00"),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO ref_metadata (name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
+        ("postal_codes", 3, "20260101", "2026-01-01 00:00:00"),
+    )
+    for code, name_fi, name_sv, region, ely, wa in [
+        ("091", "Helsinki", "Helsingfors", "Uusimaa", "Uusimaa", "Helsinki"),
+        ("049", "Espoo", "Esbo", "Uusimaa", "Uusimaa", "Länsi-Uusimaa"),
+        ("837", "Tampere", "Tammerfors", "Pirkanmaa", "Pirkanmaa", "Pirkanmaa"),
+    ]:
+        conn.execute(
+            "INSERT OR REPLACE INTO ref_municipalities "
+            "(code, name_fi, name_sv, region_code, region_name_fi, ely_code, ely_name_fi, wellbeing_area_code, wellbeing_area_name_fi) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (code, name_fi, name_sv, "01", region, "01", ely, "01", wa),
+        )
+    for postal_code, name_fi, name_sv, muni_code in [
+        ("00100", "Helsinki", "Helsingfors", "091"),
+        ("02100", "Espoo", "Esbo", "049"),
+        ("33100", "Tampere", "Tammerfors", "837"),
+    ]:
+        conn.execute(
+            "INSERT OR REPLACE INTO ref_postal_codes (code, name_fi, name_sv, municipality_code) VALUES (?, ?, ?, ?)",
+            (postal_code, name_fi, name_sv, muni_code),
+        )
+    conn.commit()
+
+
+class TestReferenceStatus:
+    """reference_status()-työkalun testit."""
+
+    def test_status_no_data(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = reference_status()
+        assert "ei ladattu" in result
+
+    def test_status_with_data(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = reference_status()
+        assert "3 tietuetta" in result
+        assert "2026-01-01" in result
+
+
+class TestLookupMunicipality:
+    """lookup_municipality()-työkalun testit."""
+
+    def test_lookup_not_populated(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("Helsinki")
+        assert "ei ole ladattu" in result
+
+    def test_lookup_by_name(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("Helsinki")
+        assert "Helsinki" in result
+        assert "091" in result
+        assert "Uusimaa" in result
+
+    def test_lookup_by_code(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("91")
+        assert "Helsinki" in result
+
+    def test_lookup_by_postal(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("33100")
+        assert "Tampere" in result
+        assert "33100" in result
+
+    def test_lookup_not_found(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("Gotham")
+        assert "ei löytynyt" in result
+
+    def test_lookup_partial_name(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("Esp")
+        assert "Espoo" in result
+
+    def test_lookup_unknown_postal(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = lookup_municipality("99999")
+        assert "ei löytynyt" in result
+
+
+class TestResolveRegion:
+    """_resolve_region()-apufunktion testit."""
+
+    def test_resolve_no_ref_data(self) -> None:
+        conn = _memory_db()
+        assert _resolve_region(conn, "Helsinki") == []
+
+    def test_resolve_postal(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        result = _resolve_region(conn, "00100")
+        assert result == ["Helsinki"]
+
+    def test_resolve_municipality_code(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        result = _resolve_region(conn, "91")
+        assert result == ["Helsinki"]
+
+    def test_resolve_region_name(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        result = _resolve_region(conn, "Uusimaa")
+        assert set(result) == {"Helsinki", "Espoo"}
+
+    def test_resolve_ely(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        result = _resolve_region(conn, "Pirkanmaa")
+        assert "Tampere" in result
+
+    def test_resolve_wellbeing_area(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        result = _resolve_region(conn, "Länsi-Uusimaa")
+        assert result == ["Espoo"]
+
+    def test_resolve_municipality_name(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        result = _resolve_region(conn, "Tampere")
+        assert "Tampere" in result
+
+    def test_resolve_unknown(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        assert _resolve_region(conn, "Atlantis") == []
+
+
+class TestSearchByRegion:
+    """search_by_region()-työkalun testit."""
+
+    @pytest.mark.asyncio
+    async def test_search_region_no_results(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_by_region("Helsinki")
+        assert "Ei datasettejä" in result
+
+    @pytest.mark.asyncio
+    async def test_search_region_with_coverage(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        # Lisää datasetti jolla geographical_coverage sisältää "Helsinki"
+        upsert_dataset(
+            conn,
+            Dataset(
+                id="geo-1",
+                name="hki-data",
+                title="Helsinki-data",
+                title_fi="Helsinki-data",
+                geographical_coverage=["Helsinki"],
+                source="test",
+                num_resources=0,
+            ),
+        )
+        conn.commit()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_by_region("Helsinki")
+        assert "Helsinki-data" in result
+
+    @pytest.mark.asyncio
+    async def test_search_region_with_query(self) -> None:
+        conn = _memory_db()
+        _seed_ref_data(conn)
+        upsert_dataset(
+            conn,
+            Dataset(
+                id="geo-2",
+                name="hki-vaesto",
+                title="Helsingin väestö alueella",
+                title_fi="Helsingin väestö alueella",
+                notes_fi="Väestötilastot",
+                geographical_coverage=["Helsinki"],
+                source="test",
+                num_resources=0,
+            ),
+        )
+        conn.commit()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_by_region("Helsinki", query="väestö")
+        assert "väestö" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_search_region_fallback_no_ref_data(self) -> None:
+        """Tuntematon alue käyttää nimeä sellaisenaan."""
+        conn = _memory_db()
+        upsert_dataset(
+            conn,
+            Dataset(
+                id="geo-3",
+                name="suomi-data",
+                title="Suomi-data",
+                title_fi="Suomi-data",
+                geographical_coverage=["Suomi"],
+                source="test",
+                num_resources=0,
+            ),
+        )
+        conn.commit()
+        # Ei ref-dataa → _resolve_region palauttaa [] → fallback "Suomi"-nimeen
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_by_region("Suomi")
+        assert "Suomi-data" in result
