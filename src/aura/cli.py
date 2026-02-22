@@ -135,6 +135,27 @@ def main() -> None:
         help="Näytä metatiedon puuteanalyysi",
     )
 
+    # populate
+    populate_parser = subparsers.add_parser(
+        "populate", help="Lataa viiteaineistot (kunnat, postinumerot ym.)"
+    )
+    populate_parser.add_argument(
+        "name", nargs="?", default="all",
+        help="Populaattorin nimi tai 'all' kaikille (oletus: all)",
+    )
+    populate_parser.add_argument(
+        "--list", action="store_true", dest="list_populators",
+        help="Listaa saatavilla olevat populaattorit",
+    )
+    populate_parser.add_argument(
+        "--status", action="store_true",
+        help="Näytä populaattoreiden tila",
+    )
+    populate_parser.add_argument(
+        "--force", action="store_true",
+        help="Pakota uudelleenlataus vaikka data on tuore",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -457,6 +478,51 @@ def main() -> None:
                     if len(title) > 60:
                         title = title[:57] + "..."
                     print(f"  {r['score']:5.1f}  {title}")
+
+    elif args.command == "populate":
+        from aura.populators import get_all_populators, get_populator
+
+        if args.list_populators:
+            for pname, pcls in get_all_populators().items():
+                print(f"  {pname:25s} {pcls.description}")
+            return
+
+        if args.status:
+            for pname, pcls in get_all_populators().items():
+                p = pcls()
+                if p.is_populated():
+                    row = p.conn.execute(
+                        "SELECT record_count, populated_at FROM ref_metadata WHERE name = ?",
+                        (pname,),
+                    ).fetchone()
+                    print(
+                        f"  {pname:25s} {row['record_count']} riviä "
+                        f"(päivitetty: {row['populated_at'][:16]})"
+                    )
+                else:
+                    print(f"  {pname:25s} ei populoitu")
+            return
+
+        if args.name == "all":
+            total = 0
+            for pname, pcls in get_all_populators().items():
+                p = pcls()
+                if not args.force and p.is_populated() and not p.needs_update():
+                    print(f"  {pname}: tuore, ohitetaan (käytä --force pakottaaksesi)")
+                    continue
+                print(f"Populoidaan: {pname}...")
+                count = asyncio.run(p.populate())
+                print(f"  {pname}: {count} riviä")
+                total += count
+            print(f"\nYhteensä: {total} riviä")
+        else:
+            pcls = get_populator(args.name)
+            p = pcls()
+            if not args.force and p.is_populated() and not p.needs_update():
+                print(f"{args.name}: tuore, ohitetaan (käytä --force pakottaaksesi)")
+                return
+            count = asyncio.run(p.populate())
+            print(f"Populoitu {count} riviä lähteestä {args.name}.")
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations
