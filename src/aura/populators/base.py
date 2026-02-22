@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from aura.constants import user_agent
 from aura.database import get_connection, run_migrations
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class BasePopulator(ABC):
         """Luo HTTP-asiakas yhteisillä asetuksilla."""
         return httpx.AsyncClient(
             timeout=timeout,
-            headers={"User-Agent": "Aura/0.2.0 (https://github.com/trotor/aura)"},
+            headers={"User-Agent": user_agent()},
         )
 
     async def _fetch(

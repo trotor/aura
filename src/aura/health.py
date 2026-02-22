@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from aura.constants import user_agent
+
 logger = logging.getLogger(__name__)
 
 # Asetukset
@@ -263,7 +265,7 @@ async def check_all_resources(
 
     async with httpx.AsyncClient(
         timeout=timeout,
-        headers={"User-Agent": "Aura/0.2.0 health-check"},
+        headers={"User-Agent": user_agent("health-check")},
     ) as client:
 
         async def _check_one(res: dict[str, str]) -> HealthResult:

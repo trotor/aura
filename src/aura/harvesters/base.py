@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from aura.constants import user_agent
 from aura.database import add_enrichment, get_connection, init_db
 from aura.models import Dataset
 
@@ -56,7 +57,7 @@ class BaseHarvester(ABC):
         """Luo HTTP-asiakas yhteisillä asetuksilla."""
         return httpx.AsyncClient(
             timeout=timeout,
-            headers={"User-Agent": "Aura/0.2.0 (https://github.com/trotor/aura)"},
+            headers={"User-Agent": user_agent()},
         )
 
     async def _fetch(
