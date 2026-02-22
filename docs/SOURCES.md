@@ -2,7 +2,7 @@
 
 Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 
-> Päivitetty: 2026-02-20
+> Päivitetty: 2026-02-22
 
 ## Yhteenveto
 
@@ -18,10 +18,17 @@ Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 | [Overture Maps](#overture-maps) | GeoParquet (S3) | 6 | 12 | ~215 GB |
 | [Metsäkeskus](#metsäkeskus) | WFS/WCS/ZIP | 43 | 85 | 1,2 TB |
 | [Traficom](#traficom) | OData v4 | 32 | 32 | 2,5 GB |
+| [Ruokavirasto](#ruokavirasto) | INSPIRE/GeoServer | 33 | 97 | — |
+| [MML](#mml-maanmittauslaitos) | WFS/WMS/WMTS | 7 | 16 | ~184 GB |
+| [Tilastokeskus geo](#tilastokeskus-paikkatiedot) | WFS/WMS | 9 | 18 | ~5 GB |
+| [Väylävirasto](#väylävirasto) | WFS/WMS/OGC API | 5 | 13 | ~9 GB |
+| [PaItuli (CSC)](#paituli-csc) | WMS/WFS | 5 | 9 | ~88 GB |
+| [LIPAS](#lipas) | WFS/WMS | 3 | 6 | ~1 GB |
+| [Kuntien paikkatiedot](#kuntien-paikkatiedot) | WFS/WMS | 6 | 10 | ~26 GB |
+| [STUK](#stuk-säteilyturvakeskus) | API | 2 | 2 | ~150 MB |
 | [GTK](#gtk) | ArcGIS WFS/WMS | 5 | 8 | 7 GB |
 | [Taustakartat](#taustakartat) | TMS | 4 | 4 | ~20 GB |
-| [Ruokavirasto](#ruokavirasto) | INSPIRE/GeoServer | 33 | 97 | — |
-| **Yhteensä** | | **~4 421** | **~10 280** | **~1,6 TB** |
+| **Yhteensä** | | **~5 660** | **~10 400** | **~1,9 TB** |
 
 ### Resurssityypit
 
@@ -341,6 +348,174 @@ Liityntäkatalogi.suomi.fi:ssä rekisteröidyt viranomaiskäytön rajapinnat (`a
 
 ---
 
+## MML (Maanmittauslaitos)
+
+**URL:** https://www.maanmittauslaitos.fi/rajapinnat
+**API:** WFS/WMS/WMTS/OGC API Features
+**Autentikointi:** Ilmainen API-avain (rekisteröityminen)
+**Datasettejä:** 7
+**Resursseja:** 16
+**Arvioitu koko:** ~184 GB
+
+Maanmittaulaitoksen avoimet paikkatietorajapinnat. Vaatii ilmaisen API-avaimen.
+
+### MML API-avaimen hankkiminen
+
+1. Mene osoitteeseen https://omatili.maanmittauslaitos.fi/
+2. Kirjaudu sisään (Suomi.fi-tunnistautuminen) tai luo tili
+3. Valitse "API-avaimet" → "Luo uusi avain"
+4. Valitse tuotteet: "Avoimet aineistot" (kaikki avoimet rajapinnat yhdellä avaimella)
+5. Kopioi API-avain — käytä URL-parametrina: `?api-key=AVAIN`
+
+| Aineisto | Resurssit | Arvioitu koko |
+|----------|-----------|---------------|
+| Maastotietokanta | WFS, WMS, OGC API | 10 GB |
+| Kiinteistöjaotus | WFS, WMS | 3 GB |
+| Paikannimet | WFS, WMS | 500 MB |
+| Peruskartta (rasteri) | WMTS | 20 GB |
+| Ortokuvat (ilmakuvat) | WMTS | 50 GB |
+| Korkeusmalli 2 m | WCS, WMS | 100 GB |
+| Hallinnolliset rajat | WFS, WMS | 50 MB |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/mml.py` — StaticHarvester. Kaikki datasetit merkitty `access_level="registration"`. API-avain on ilmainen mutta vaatii rekisteröitymisen.
+
+---
+
+## Tilastokeskus (paikkatiedot)
+
+**URL:** https://geo.stat.fi
+**API:** GeoServer WFS/WMS
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 9
+**Resursseja:** 18
+**Arvioitu koko:** ~5 GB
+
+Tilastokeskuksen paikkatietoaineistot GeoServer-palvelimelta. Väestö-, rakennus-, yritys- ja kuntapohjaiset ruutuaineistot.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/statfin_geo.py` — StaticHarvester. Jokaisesta aineistosta WFS- ja WMS-resurssi.
+
+---
+
+## Väylävirasto
+
+**URL:** https://vayla.fi/vaylista/aineistot/avoindata
+**API:** WFS/WMS/OGC API Features (`https://avoinapi.vaylapilvi.fi/vaylatiedot/`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 5
+**Resursseja:** 13
+**Arvioitu koko:** ~9 GB
+
+Tie-, rata- ja vesiväyläaineistot. 307 WMS-tasoa / 301 WFS-featuretyyppiä.
+
+| Aineisto | Resurssit | Arvioitu koko |
+|----------|-----------|---------------|
+| Tiestötiedot | WFS, WMS, OGC API | 5 GB |
+| Digiroad | WFS, WMS | 3 GB |
+| Ratatiedot | WFS, WMS | 500 MB |
+| Vesiväylätiedot | WFS, WMS | 200 MB |
+| Taitorakenteet | WFS, WMS | 100 MB |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/vayla.py` — StaticHarvester. Kaikki resurssit osoittavat `avoinapi.vaylapilvi.fi`-palvelimelle.
+
+---
+
+## PaItuli (CSC)
+
+**URL:** https://paituli.csc.fi
+**API:** GeoServer WMS/WFS (`https://paituli.csc.fi/geoserver/`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 5
+**Resursseja:** 9
+**Arvioitu koko:** ~88 GB
+
+CSC:n PaItuli-palvelu tarjoaa tutkimuksen ja opetuksen paikkatietoaineistoja. 628 WMS-tasoa.
+
+| Aineisto | Resurssit | Arvioitu koko |
+|----------|-----------|---------------|
+| LUKE metsävaratiedot | WMS, WFS | 50 GB |
+| MML historialliset karttasarjat | WMS | 30 GB |
+| Tilastokeskuksen ruutuaineistot | WMS, WFS | 5 GB |
+| CORINE maanpeiteaineisto | WMS, WFS | 2 GB |
+| DVV osoitetiedot | WMS, WFS | 1 GB |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/paituli.py` — StaticHarvester.
+
+---
+
+## LIPAS
+
+**URL:** https://www.jyu.fi/sport/fi/yhteistyo/lipas
+**API:** GeoServer WFS/WMS (`http://lipas.cc.jyu.fi/geoserver/lipas/`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 3
+**Resursseja:** 6
+**Arvioitu koko:** ~1 GB
+
+Jyväskylän yliopiston LIPAS-rekisteri sisältää Suomen julkiset liikuntapaikat ja virkistysalueet. 210 WMS/WFS-tasoa.
+
+| Aineisto | Resurssit |
+|----------|-----------|
+| Liikuntapaikat (kaikki) | WFS, WMS |
+| Ulkoilureitit | WFS, WMS |
+| Virkistysalueet | WFS, WMS |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/lipas.py` — StaticHarvester. Huom: palvelin käyttää HTTP:tä (ei HTTPS).
+
+---
+
+## Kuntien paikkatiedot
+
+**URL:** (eri kaupungit)
+**API:** WFS/WMS (GeoServer, Tekla OGC Web)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 6
+**Resursseja:** 10
+**Arvioitu koko:** ~26 GB
+
+Kuuden suurimman kaupungin avoimet paikkatietoaineistot.
+
+| Kaupunki | WMS-tasoja | Resurssit |
+|----------|-----------|-----------|
+| Helsinki | 461 | WFS, WMS |
+| Tampere | 173 | WFS, WMS |
+| Espoo | 130 | WFS, WMS |
+| Vantaa | 112 | WFS, WMS |
+| Turku | 68 | WMS |
+| Oulu | 28 | WMS |
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/kunnat.py` — StaticHarvester. Jokaiselle kaupungille oma datasetti ja organisaatio.
+
+---
+
+## STUK (Säteilyturvakeskus)
+
+**URL:** https://stuk.fi/avoin-data
+**API:** Sammio REST (`https://sammio.stuk.fi`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 2
+**Resursseja:** 2
+**Arvioitu koko:** ~150 MB
+
+STUK:n säteilyvalvonnan mittaustulokset. Ulkoisen säteilyn reaaliaikaiset mittaukset ~260 asemalta sekä ympäristönäytteiden radioaktiivisuusmittaukset.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/stuk.py` — StaticHarvester. Päivitystaajuus: reaaliaikainen.
+
+---
+
 ## Harvester-arkkitehtuuri
 
 Jokainen datalähde harvestoidaan omalla luokallaan joka perii `BaseHarvester`-pohjaluokan:
@@ -351,10 +526,12 @@ src/aura/harvesters/
 ├── base.py           # BaseHarvester-pohjaluokka
 ├── ckan.py           # CkanHarvester-kantaluokka
 ├── pxweb.py          # PxWebHarvester-kantaluokka
+├── static.py         # StaticHarvester-kantaluokka
 ├── avoindata.py      # avoindata.fi (CKAN)
 ├── hri.py            # HRI (CKAN)
 ├── syke.py           # SYKE (CKAN)
 ├── statfin.py        # Tilastokeskus (PxWeb)
+├── statfin_geo.py    # Tilastokeskus paikkatiedot (WFS/WMS)
 ├── luke.py           # LUKE (PxWeb)
 ├── digitraffic.py    # Digitraffic (OpenAPI)
 ├── fmi.py            # FMI (WFS)
@@ -363,7 +540,13 @@ src/aura/harvesters/
 ├── metsakeskus.py    # Metsäkeskus (WFS/WCS)
 ├── taustakartat.py   # Taustakartat (TMS)
 ├── overture.py       # Overture Maps (GeoParquet)
-└── ruokavirasto.py   # Ruokavirasto (INSPIRE/GeoServer)
+├── ruokavirasto.py   # Ruokavirasto (INSPIRE/GeoServer)
+├── mml.py            # MML (WFS/WMS/WMTS)
+├── vayla.py          # Väylävirasto (WFS/WMS/OGC API)
+├── stuk.py           # STUK (Sammio API)
+├── lipas.py          # LIPAS (WFS/WMS)
+├── paituli.py        # PaItuli/CSC (WMS/WFS)
+└── kunnat.py         # Kuntien paikkatiedot (WFS/WMS)
 ```
 
 ### Käyttö
