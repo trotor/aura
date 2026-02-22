@@ -54,22 +54,27 @@ mcp = FastMCP(
 )
 
 
+_module_conn: sqlite3.Connection | None = None
+
+
 def _get_conn(ctx: Context | None = None) -> sqlite3.Connection:
     """Hae tietokantayhteys lifespan-kontekstista tai luo uusi.
 
     Lifespan-yhteys on suositeltava (thread-safe, jaettu).
-    Fallback luo uuden yhteyden (CLI-käyttö, testit).
+    Fallback käyttää singleton-yhteyttä (CLI-käyttö, testit).
     """
+    global _module_conn
     if ctx is not None:
         try:
             conn: sqlite3.Connection = ctx.lifespan_context["db"]
             return conn
         except (AttributeError, KeyError):
             pass
-    # Fallback: luo uusi yhteys (esim. CLI, testit, vanha kutsupolku)
-    conn = get_connection(check_same_thread=False)
-    init_db(conn)
-    return conn
+    # Singleton-fallback: yksi jaettu yhteys (CLI, testit)
+    if _module_conn is None:
+        _module_conn = get_connection(check_same_thread=False)
+        init_db(_module_conn)
+    return _module_conn
 
 
 def _get_yso(ctx: Context | None) -> YsoClient | None:

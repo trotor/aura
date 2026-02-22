@@ -99,6 +99,25 @@ def _seed_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+class TestGetConn:
+    """_get_conn() singleton-fallback testit."""
+
+    def test_fallback_returns_singleton(self) -> None:
+        """Ilman kontekstia _get_conn palauttaa saman yhteyden (#86)."""
+        import aura.server as srv
+
+        old = srv._module_conn
+        srv._module_conn = None
+        try:
+            conn1 = srv._get_conn(None)
+            conn2 = srv._get_conn(None)
+            assert conn1 is conn2
+        finally:
+            if srv._module_conn is not None:
+                srv._module_conn.close()
+            srv._module_conn = old
+
+
 class TestSearch:
     """search()-työkalun testit."""
 
