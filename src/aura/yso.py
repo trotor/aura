@@ -141,22 +141,26 @@ class YsoClient:
             return terms
 
 
+_FTS5_OPERATORS = {"AND", "OR", "NOT", "NEAR"}
+
+
+def _fts5_escape_term(t: str) -> str:
+    """Escapoi yksittäinen termi FTS5-kyselyä varten."""
+    t = t.replace('"', '""')
+    needs_quote = " " in t or t.upper() in _FTS5_OPERATORS
+    return f'"{t}"' if needs_quote else t
+
+
 def build_fts5_query(terms: list[str]) -> str:
     """Rakenna FTS5-hakulauseke termilistasta.
 
     Yhdistää termit OR-operaattorilla ja käärii lainausmerkkeihin
-    moniosaisia termejä.
+    moniosaisia termejä. Escapoi lainausmerkit ja FTS5-operaattorit.
 
     >>> build_fts5_query(["liikenne", "tieliikenne", "kevyt liikenne"])
     'liikenne OR tieliikenne OR "kevyt liikenne"'
     """
-    if len(terms) <= 1:
-        return terms[0] if terms else ""
-
-    parts: list[str] = []
-    for t in terms:
-        if " " in t:
-            parts.append(f'"{t}"')
-        else:
-            parts.append(t)
-    return " OR ".join(parts)
+    if not terms:
+        return ""
+    parts = [_fts5_escape_term(t) for t in terms]
+    return " OR ".join(parts) if len(parts) > 1 else parts[0]

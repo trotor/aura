@@ -32,7 +32,19 @@ class TestBuildFts5Query:
         assert build_fts5_query([]) == ""
 
     def test_single_multi_word(self) -> None:
-        assert build_fts5_query(["kevyt liikenne"]) == "kevyt liikenne"
+        assert build_fts5_query(["kevyt liikenne"]) == '"kevyt liikenne"'
+
+    def test_quotes_escaped(self) -> None:
+        result = build_fts5_query(['termi "lainaus"'])
+        assert result == '"termi ""lainaus"""'
+
+    def test_fts5_operator_quoted(self) -> None:
+        result = build_fts5_query(["NOT", "liikenne"])
+        assert result == '"NOT" OR liikenne'
+
+    def test_operator_case_insensitive(self) -> None:
+        result = build_fts5_query(["and", "or"])
+        assert result == '"and" OR "or"'
 
 
 # --- YsoClient.search ---
