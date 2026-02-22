@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from fastmcp import Context
@@ -47,7 +46,7 @@ def reference_status(ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
-def populate_reference(
+async def populate_reference(
     source: str = "all",
     ctx: Context | None = None,
 ) -> str:
@@ -76,7 +75,7 @@ def populate_reference(
         cls = POPULATORS[name]
         populator = cls(conn=conn)
         try:
-            count = asyncio.run(populator.populate())
+            count = await populator.populate()
             results.append(f"- **{cls.description}**: {count} tietuetta ladattu")
         except Exception as e:
             results.append(f"- **{cls.description}**: virhe — {e}")

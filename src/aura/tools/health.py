@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from fastmcp import Context
 
 import aura.server as _server
@@ -11,7 +9,7 @@ from aura.server import mcp
 
 
 @mcp.tool()
-def health_check(
+async def health_check(
     source: str = "",
     limit: int = 50,
     stale_days: int = 7,
@@ -27,9 +25,9 @@ def health_check(
     from aura.health import check_all_resources as _check_all
 
     conn = _server._get_conn(ctx)
-    summary = asyncio.run(_check_all(
+    summary = await _check_all(
         conn, source=source, stale_days=stale_days, limit=limit,
-    ))
+    )
 
     if summary.total == 0:
         return "Ei tarkistettavia resursseja."

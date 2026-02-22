@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 
 from fastmcp import Context
@@ -90,7 +89,7 @@ def list_formats(limit: int = 20, ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
-def harvest(source: str = "all", ctx: Context | None = None) -> str:
+async def harvest(source: str = "all", ctx: Context | None = None) -> str:
     """Hae datasettien metatiedot lähteistä ja tallenna tietokantaan.
 
     Args:
@@ -104,7 +103,7 @@ def harvest(source: str = "all", ctx: Context | None = None) -> str:
         parts = []
         for name, cls in get_all_harvesters().items():
             harvester = cls(conn=conn)
-            count = asyncio.run(harvester.harvest())
+            count = await harvester.harvest()
             parts.append(f"- {name}: {count} datasettiä")
             total += count
         parts.insert(0, f"# Harvest valmis\n\nYhteensä {total} datasettiä:\n")
@@ -116,7 +115,7 @@ def harvest(source: str = "all", ctx: Context | None = None) -> str:
         return str(e)
 
     harvester = cls(conn=conn)
-    count = asyncio.run(harvester.harvest())
+    count = await harvester.harvest()
     return f"Haettu {count} datasettiä lähteestä {source}."
 
 
@@ -157,7 +156,7 @@ def list_sources(ctx: Context | None = None) -> str:
 
 
 @mcp.tool()
-def probe_sizes(source: str = "all", ctx: Context | None = None) -> str:
+async def probe_sizes(source: str = "all", ctx: Context | None = None) -> str:
     """Mittaa paikkatietoaineistojen koot otoskyselyillä (WFS/WCS).
 
     Args:
@@ -165,5 +164,5 @@ def probe_sizes(source: str = "all", ctx: Context | None = None) -> str:
     """
     from aura.spatial_probe import format_probe_report, probe_all
 
-    probe_results = asyncio.run(probe_all(source=source, timeout=180.0))
+    probe_results = await probe_all(source=source, timeout=180.0)
     return format_probe_report(probe_results)
