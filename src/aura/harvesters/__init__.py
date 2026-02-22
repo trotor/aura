@@ -17,6 +17,7 @@ from aura.harvesters.mml import MmlHarvester
 from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.paituli import PaituliHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
+from aura.harvesters.sanastot import SanastotHarvester
 from aura.harvesters.statfin import StatfinHarvester
 from aura.harvesters.statfin_geo import StatfinGeoHarvester
 
@@ -55,6 +56,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "paituli": PaituliHarvester,
     "kunnat": KunnatHarvester,
     "koodistot": KoodistotHarvester,
+    "sanastot": SanastotHarvester,
 }
 
 
