@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from fastmcp import Context
 
 import aura.server as _server
+from aura.constants import format_date
 from aura.database import get_stats
 from aura.search import format_stats
 from aura.server import mcp
@@ -144,7 +145,7 @@ def list_sources(ctx: Context | None = None) -> str:
         if last_harvest:
             harvest_dt = datetime.fromisoformat(last_harvest)
             days_old = (now - harvest_dt.replace(tzinfo=UTC)).days
-            status += f" (viimeksi: {last_harvest[:16]})"
+            status += f" (viimeksi: {format_date(last_harvest, include_time=True)})"
             if days_old > 7:
                 warning = f" ⚠ {days_old} pv vanha"
         elif count == 0:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastmcp import Context
 
 import aura.server as _server
+from aura.constants import format_date
 from aura.server import mcp
 
 
@@ -86,8 +87,8 @@ def health_report(source: str = "", ctx: Context | None = None) -> str:
         f"| Saatavilla | {avail} ({pct:.1f}%) |",
         f"| Ei saatavilla | {unavail} |",
         f"| Vasteaika ka. | {avg_ms:.0f} ms |",
-        f"| Vanhin tarkistus | {(summary.get('oldest_check') or '')[:16]} |",
-        f"| Uusin tarkistus | {(summary.get('newest_check') or '')[:16]} |",
+        f"| Vanhin tarkistus | {format_date(summary.get('oldest_check'), include_time=True)} |",
+        f"| Uusin tarkistus | {format_date(summary.get('newest_check'), include_time=True)} |",
     ]
 
     broken = get_unavailable_resources(conn, source=source, limit=15)

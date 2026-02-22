@@ -7,7 +7,7 @@ from typing import Any
 from fastmcp import Context
 
 import aura.server as _server
-from aura.constants import parse_json_list
+from aura.constants import format_date, parse_json_list
 from aura.database import (
     get_conflicting_enrichments,
     get_dataset,
@@ -101,7 +101,7 @@ def compare(dataset_ids: list[str], ctx: Context | None = None) -> str:
         source = d.get("source", "")
         license_t = d.get("license_title", "")
         num_res = d.get("num_resources", 0) or 0
-        modified = (d.get("metadata_modified") or "")[:10]
+        modified = format_date(d.get("metadata_modified"))
         size = d.get("estimated_size_bytes", 0) or 0
 
         keywords = parse_json_list(d.get("keywords_fi", "[]"))

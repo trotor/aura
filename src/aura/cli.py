@@ -9,6 +9,7 @@ import sys
 from datetime import UTC
 
 from aura import __version__
+from aura.constants import format_date
 
 
 def main() -> None:
@@ -252,7 +253,7 @@ def main() -> None:
             if last_harvest:
                 harvest_dt = datetime.fromisoformat(last_harvest)
                 days_old = (now - harvest_dt.replace(tzinfo=UTC)).days
-                status += f" (viimeksi: {last_harvest[:16]})"
+                status += f" (viimeksi: {format_date(last_harvest, include_time=True)})"
                 if days_old > 7:
                     warning = f" ⚠ {days_old} pv vanha"
             elif count == 0:
@@ -497,7 +498,7 @@ def main() -> None:
                     ).fetchone()
                     print(
                         f"  {pname:25s} {row['record_count']} riviä "
-                        f"(päivitetty: {row['populated_at'][:16]})"
+                        f"(päivitetty: {format_date(row['populated_at'], include_time=True)})"
                     )
                 else:
                     print(f"  {pname:25s} ei populoitu")

@@ -6,7 +6,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from aura.constants import parse_json_list
+from aura.constants import format_date, parse_json_list
 
 
 def format_dataset_summary(dataset: dict[str, Any]) -> str:
@@ -15,7 +15,7 @@ def format_dataset_summary(dataset: dict[str, Any]) -> str:
     org = dataset.get("organization_title", "")
     notes = dataset.get("notes_fi") or dataset.get("notes", "")
     license_title = dataset.get("license_title", "")
-    modified = dataset.get("metadata_modified", "")[:10]
+    modified = format_date(dataset.get("metadata_modified"))
 
     # Rajoita kuvaus
     if len(notes) > 300:
@@ -152,7 +152,7 @@ def format_conflicts(conflicts: list[dict[str, Any]]) -> str:
         for e in entries:
             value = _format_enrichment_value(field, e.get("value", ""))
             confidence = e.get("confidence", "medium")
-            created = (e.get("created_at") or "")[:10]
+            created = format_date(e.get("created_at"))
             parts.append(f"  - {value} ({confidence}, {created})")
 
     return "\n".join(parts)

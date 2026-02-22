@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context
 
 import aura.server as _server
+from aura.constants import format_date
 from aura.server import mcp
 
 
@@ -34,7 +35,7 @@ def reference_status(ctx: Context | None = None) -> str:
             lines.append(
                 f"- **{cls.description}** (`{name}`): "
                 f"{row['record_count']} tietuetta, "
-                f"päivitetty {row['populated_at'][:10]}"
+                f"päivitetty {format_date(row['populated_at'])}"
             )
         else:
             lines.append(
