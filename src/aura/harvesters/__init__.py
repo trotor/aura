@@ -13,6 +13,7 @@ from aura.harvesters.metsakeskus import MetsakeskusHarvester
 from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.statfin import StatfinHarvester
+from aura.harvesters.statfin_geo import StatfinGeoHarvester
 
 # noqa: F401 — StaticHarvester ei käytetä suoraan, mutta viedään osaksi API:a
 from aura.harvesters.static import StaticHarvester  # noqa: F401
@@ -28,6 +29,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "hri.fi": HriHarvester,
     "syke": SykeHarvester,
     "statfin": StatfinHarvester,
+    "statfin-geo": StatfinGeoHarvester,
     "luke": LukeHarvester,
     "digitraffic": DigitrafficHarvester,
     "fmi": FmiHarvester,
