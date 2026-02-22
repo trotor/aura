@@ -22,6 +22,8 @@ def _sample_dataset() -> Dataset:
         title_fi="Helsingin väestötiedot",
         title_en="Helsinki population data",
         notes_fi="Väestötilastot Helsingin kaupungilta",
+        organization_id="org-helsinki",
+        organization_name="helsinki",
         organization_title="Helsingin kaupunki",
         license_id="cc-by-4.0",
         license_title="CC BY 4.0",

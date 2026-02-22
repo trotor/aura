@@ -6,13 +6,23 @@ from unittest.mock import patch
 from aura.database import init_db, upsert_dataset
 from aura.models import Dataset, Resource
 from aura.server import (
+    batch_enrich,
     compare,
     describe,
+    enrich,
     find_related,
+    get_enrichments_tool,
+    list_findings,
     list_formats,
     list_organizations,
     list_sources,
+    log_finding,
+    quality_gaps,
+    quality_overview,
+    quality_ranking,
+    quality_report,
     recommend,
+    save_session_findings,
     search,
     search_structured,
     stats,
@@ -277,3 +287,266 @@ class TestFindRelated:
             result = find_related("test-1")
         assert "Samankaltaiset" in result
         assert "Espoon väestö" in result
+
+
+class TestEnrich:
+    """enrich()-työkalun testit."""
+
+    def test_enrich_valid(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = enrich("test-1", "use_case", "Tutkimus")
+        assert "tallennettu" in result.lower()
+        assert "test-1" in result
+
+    def test_enrich_invalid_field(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = enrich("test-1", "invalid_field", "value")
+        assert "Tuntematon kenttä" in result
+
+    def test_enrich_invalid_confidence(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = enrich("test-1", "use_case", "x", confidence="wrong")
+        assert "Virheellinen luottamustaso" in result
+
+    def test_enrich_persists(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            enrich("test-1", "use_case", "Analyysi", confidence="high")
+            result = get_enrichments_tool("test-1")
+        assert "Analyysi" in result
+
+
+class TestBatchEnrich:
+    """batch_enrich()-työkalun testit."""
+
+    def test_batch_enrich_multiple(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = batch_enrich([
+                {"dataset_id": "test-1", "field": "use_case", "value": "Tutkimus"},
+                {"dataset_id": "test-2", "field": "quality_notes", "value": "Hyvä"},
+            ])
+        assert "Tallennettu 2" in result
+
+    def test_batch_enrich_with_errors(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = batch_enrich([
+                {"dataset_id": "", "field": "use_case", "value": "x"},
+                {"dataset_id": "test-1", "field": "bad_field", "value": "x"},
+            ])
+        assert "Virheet" in result
+        assert "puuttuva" in result
+        assert "tuntematon" in result
+
+    def test_batch_enrich_empty(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = batch_enrich([])
+        assert "Ei rikastuksia" in result
+
+
+class TestGetEnrichmentsTool:
+    """get_enrichments_tool()-testit."""
+
+    def test_no_enrichments(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = get_enrichments_tool("test-1")
+        assert "Ei rikastuksia" in result
+
+    def test_with_enrichments(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            enrich("test-1", "use_case", "Kaupunkisuunnittelu")
+            result = get_enrichments_tool("test-1")
+        assert "Kaupunkisuunnittelu" in result
+
+
+class TestQualityReport:
+    """quality_report()-työkalun testit."""
+
+    def test_quality_report_found(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = quality_report("test-1")
+        assert "Laatuarvio" in result
+        assert "/100" in result
+
+    def test_quality_report_not_found(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = quality_report("ei-olemassa")
+        assert "ei löytynyt" in result
+
+
+class TestQualityOverview:
+    """quality_overview()-työkalun testit."""
+
+    def test_overview_no_scores(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = quality_overview()
+        assert "ei löytynyt" in result.lower() or "Ei" in result
+
+    def test_overview_with_scores(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        # Calculate quality first
+        with patch("aura.server._get_conn", return_value=conn):
+            quality_report("test-1")
+            quality_report("test-2")
+            result = quality_overview()
+        assert "Keskiarvo" in result
+        assert "Mediaani" in result
+
+
+class TestQualityRanking:
+    """quality_ranking()-työkalun testit."""
+
+    def test_ranking_invalid_dimension(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = quality_ranking(dimension="invalid")
+        assert "Tuntematon dimensio" in result
+
+    def test_ranking_with_data(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            quality_report("test-1")
+            result = quality_ranking(dimension="overall")
+        assert "/100" in result
+
+
+class TestQualityGaps:
+    """quality_gaps()-työkalun testit."""
+
+    def test_gaps_analysis(self) -> None:
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = quality_gaps()
+        assert "puutteet" in result.lower() or "Metatiedon" in result
+
+
+class TestCompareEdgeCases:
+    """compare()-reunatapausten testit."""
+
+    def test_compare_too_few(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = compare(["test-1"])
+        assert "vähintään 2" in result
+
+    def test_compare_too_many(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = compare(["a", "b", "c", "d", "e", "f"])
+        assert "korkeintaan 5" in result
+
+    def test_compare_not_found(self) -> None:
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = compare(["no-1", "no-2"])
+        assert "ei löytynyt" in result.lower()
+
+
+class TestLogFinding:
+    """log_finding()-työkalun testit."""
+
+    def test_log_finding_basic(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        with patch("aura.server._get_conn"):
+            result = log_finding("test-1", "Data on CSV-muodossa")
+        assert "kirjattu" in result.lower()
+        assert "1 session" in result
+        srv._fallback_findings.clear()
+
+    def test_log_finding_invalid_category(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        result = log_finding("test-1", "x", category="invalid")
+        assert "Tuntematon kategoria" in result
+        srv._fallback_findings.clear()
+
+    def test_log_finding_accumulates(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        log_finding("test-1", "Löydös 1")
+        result = log_finding("test-1", "Löydös 2")
+        assert "2 session" in result
+        srv._fallback_findings.clear()
+
+
+class TestListFindings:
+    """list_findings()-työkalun testit."""
+
+    def test_empty_findings(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        result = list_findings()
+        assert "Ei löydöksiä" in result
+
+    def test_list_findings_grouped(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        log_finding("ds-1", "Löydös A", category="quality")
+        log_finding("ds-2", "Löydös B", category="access")
+        result = list_findings()
+        assert "ds-1" in result
+        assert "ds-2" in result
+        assert "quality" in result
+        assert "access" in result
+        srv._fallback_findings.clear()
+
+
+class TestSaveSessionFindings:
+    """save_session_findings()-työkalun testit."""
+
+    def test_save_empty(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = save_session_findings()
+        assert "Ei löydöksiä" in result
+
+    def test_save_findings_to_enrichments(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        conn = _memory_db()
+        _seed_db(conn)
+        log_finding("test-1", "Datan laatu on hyvä", category="quality")
+        with patch("aura.server._get_conn", return_value=conn):
+            result = save_session_findings()
+        assert "Tallennettu 1" in result
+        assert "quality_notes" in result
+        # Findings should be cleared
+        assert len(srv._fallback_findings) == 0
+
+    def test_save_deduplicates(self) -> None:
+        import aura.server as srv
+        srv._fallback_findings.clear()
+        conn = _memory_db()
+        _seed_db(conn)
+        # Save once
+        log_finding("test-1", "Laatu OK", category="quality")
+        with patch("aura.server._get_conn", return_value=conn):
+            save_session_findings()
+        # Save same again
+        log_finding("test-1", "Laatu OK", category="quality")
+        with patch("aura.server._get_conn", return_value=conn):
+            result = save_session_findings()
+        assert "duplikaatti" in result.lower()
+        srv._fallback_findings.clear()
