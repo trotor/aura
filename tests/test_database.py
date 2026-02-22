@@ -2,7 +2,14 @@
 
 import sqlite3
 
-from aura.database import get_stats, init_db, run_migrations, search_datasets, upsert_dataset
+from aura.database import (
+    _split_sql,
+    get_stats,
+    init_db,
+    run_migrations,
+    search_datasets,
+    upsert_dataset,
+)
 from aura.models import Dataset, Resource
 
 
@@ -160,3 +167,32 @@ def test_resource_upsert_preserves_health():
     health_rows = conn.execute("SELECT resource_id FROM resource_health").fetchall()
     # r-1 health tietue säilyy (ei poistettu DELETE CASCADElla)
     assert any(r[0] == "r-1" for r in health_rows)
+
+
+class TestSplitSql:
+    """_split_sql()-apufunktion testit."""
+
+    def test_simple_statements(self) -> None:
+        sql = "CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);"
+        result = _split_sql(sql)
+        assert len(result) == 2
+        assert "CREATE TABLE a" in result[0]
+        assert "CREATE TABLE b" in result[1]
+
+    def test_trigger_block(self) -> None:
+        sql = (
+            "CREATE TRIGGER t AFTER INSERT ON x BEGIN\n"
+            "  INSERT INTO y VALUES (NEW.id);\n"
+            "END;\n"
+            "CREATE TABLE z (id INT);"
+        )
+        result = _split_sql(sql)
+        assert len(result) == 2
+        assert "TRIGGER" in result[0]
+        assert "INSERT INTO y" in result[0]
+        assert "CREATE TABLE z" in result[1]
+
+    def test_skips_comments_and_blanks(self) -> None:
+        sql = "-- comment\n\nCREATE TABLE a (id INT);\n"
+        result = _split_sql(sql)
+        assert len(result) == 1

@@ -52,56 +52,111 @@ def run_migrations(conn: sqlite3.Connection) -> int:
     Returns:
         Sovellettujen migraatioiden lukumäärä.
     """
-    # Luo seurantataulu
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            version INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            applied_at TEXT DEFAULT (datetime('now'))
-        );
-    """)
-
-    # Hae jo sovelletut versiot
-    applied = {
-        row[0]
-        for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
-    }
-
     # Etsi migraatiotiedostot
     if not MIGRATIONS_DIR.exists():
         return 0
 
     migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
-    applied_count = 0
+    if not migration_files:
+        return 0
 
-    for path in migration_files:
-        # Parsii version numeron tiedostonimestä: "001_initial_schema.sql" -> 1
-        try:
-            version = int(path.stem.split("_", 1)[0])
-        except (ValueError, IndexError):
-            logger.warning("[migrations] Ohitetaan tiedosto: %s", path.name)
-            continue
+    # Exclusive lock estää rinnakkaiset migraatiot
+    conn.execute("BEGIN EXCLUSIVE")
+    try:
+        # Luo seurantataulu (exclusive-transaktio estää kilpatilanteen)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "  version INTEGER PRIMARY KEY,"
+            "  name TEXT NOT NULL,"
+            "  applied_at TEXT DEFAULT (datetime('now'))"
+            ")"
+        )
 
-        if version in applied:
-            continue
+        # Hae jo sovelletut versiot
+        applied = {
+            row[0]
+            for row in conn.execute(
+                "SELECT version FROM schema_migrations"
+            ).fetchall()
+        }
 
-        # Suorita migraatio
-        logger.info("[migrations] Ajetaan: %s", path.name)
-        sql = path.read_text(encoding="utf-8")
-        try:
-            conn.executescript(sql)
+        applied_count = 0
+        for path in migration_files:
+            # Parsii version numeron tiedostonimestä: "001_initial_schema.sql" -> 1
+            try:
+                version = int(path.stem.split("_", 1)[0])
+            except (ValueError, IndexError):
+                logger.warning("[migrations] Ohitetaan tiedosto: %s", path.name)
+                continue
+
+            if version in applied:
+                continue
+
+            # Suorita migraatio lauseittain (executescript commitoisi implisiittisesti)
+            logger.info("[migrations] Ajetaan: %s", path.name)
+            sql = path.read_text(encoding="utf-8")
+            for statement in _split_sql(sql):
+                conn.execute(statement)
+
             conn.execute(
                 "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                 (version, path.stem),
             )
-            conn.commit()
             applied_count += 1
             logger.info("[migrations] Valmis: %s", path.name)
-        except Exception as e:
-            logger.error("[migrations] Virhe ajettaessa %s: %s", path.name, e)
-            raise
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
     return applied_count
+
+
+def _split_sql(sql: str) -> list[str]:
+    """Jaa SQL-skripti yksittäisiksi lauseiksi.
+
+    Käsittelee BEGIN...END-lohkot (triggerit) yhdeksi lauseeksi.
+    """
+    statements: list[str] = []
+    current: list[str] = []
+    in_block = False
+
+    for line in sql.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue
+
+        current.append(line)
+
+        # Tunnista BEGIN...END-lohkon alku (trigger)
+        upper = stripped.upper()
+        if upper.endswith("BEGIN") and not in_block:
+            in_block = True
+            continue
+
+        # Lohkon loppu: "END;" tai "END ;"
+        if in_block and upper.rstrip("; ").endswith("END"):
+            in_block = False
+            stmt = "\n".join(current).strip().rstrip(";")
+            if stmt:
+                statements.append(stmt)
+            current = []
+            continue
+
+        # Normaali lause päättyy puolipisteeseen (ei lohkon sisällä)
+        if not in_block and stripped.endswith(";"):
+            stmt = "\n".join(current).strip().rstrip(";")
+            if stmt:
+                statements.append(stmt)
+            current = []
+
+    # Viimeinen lause ilman puolipistettä
+    remaining = "\n".join(current).strip().rstrip(";")
+    if remaining:
+        statements.append(remaining)
+
+    return statements
 
 
 def _backfill_file_size_bytes(conn: sqlite3.Connection) -> int:
