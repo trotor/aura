@@ -847,3 +847,130 @@ class TestSearchByRegion:
         with patch("aura.server._get_conn", return_value=conn):
             result = await search_by_region("Suomi")
         assert "Suomi-data" in result
+
+
+class TestStructuralVerification:
+    """Rakenteelliset testit — verifioivat oikeat arvot, ei pelkkiä merkkijonoja."""
+
+    @pytest.mark.asyncio
+    async def test_structured_result_count(self) -> None:
+        """search_structured palauttaa oikean tulosmäärän."""
+        import json
+
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_structured("väestö")
+        data = json.loads(result)
+        assert data["count"] == 1
+        assert len(data["results"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_structured_result_fields(self) -> None:
+        """search_structured palauttaa kaikki odotetut kentät."""
+        import json
+
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_structured("väestö")
+        item = json.loads(result)["results"][0]
+        assert item["title"] == "Helsingin väestö"
+        assert item["source"] == "avoindata.fi"
+        assert item["organization"] == "Helsingin kaupunki"
+        assert item["name"] == "helsingin-vaesto"
+        assert item["num_resources"] == 1
+
+    @pytest.mark.asyncio
+    async def test_structured_source_filter_exclusive(self) -> None:
+        """Lähdesuodatin palauttaa vain oikean lähteen datasettejä."""
+        import json
+
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_structured(
+                "helsinki", source="hri.fi",
+            )
+        data = json.loads(result)
+        for r in data["results"]:
+            assert r["source"] == "hri.fi"
+
+    @pytest.mark.asyncio
+    async def test_structured_empty_results(self) -> None:
+        """Tyhjä tietokanta palauttaa 0 tulosta, ei virhettä."""
+        import json
+
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search_structured("nonexistent")
+        data = json.loads(result)
+        assert data["count"] == 0
+        assert data["results"] == []
+
+    def test_describe_contains_resource_details(self) -> None:
+        """describe() näyttää resurssien formaatit ja URL:t."""
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = describe("test-1")
+        assert "CSV" in result
+        assert "vaesto.csv" in result
+        assert "Helsingin kaupunki" in result
+        assert "cc-by-4.0" in result.lower() or "CC BY 4.0" in result
+
+    def test_describe_enrichment_gaps_shown(self) -> None:
+        """describe() näyttää puuttuvat enrichment-kentät."""
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = describe("test-1")
+        assert "Puuttuvat tiedot" in result
+
+    def test_compare_shows_all_datasets(self) -> None:
+        """compare() näyttää kaikkien datasettien tiedot."""
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = compare(["test-1", "test-2"])
+        assert "Helsingin väestö" in result
+        assert "Joukkoliikenteen reitit" in result
+        assert "avoindata.fi" in result
+        assert "hri.fi" in result
+        assert "2 kpl" in result
+
+    @pytest.mark.asyncio
+    async def test_search_no_results_message(self) -> None:
+        """Tyhjä hakutulos antaa selkeän viestin."""
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = await search("eioleolemasskaan")
+        assert "Ei tuloksia" in result
+
+    @pytest.mark.asyncio
+    async def test_recommend_empty_db(self) -> None:
+        """Tyhjä tietokanta antaa selkeän viestin."""
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._expand_with_yso", return_value=""):
+            result = await recommend("liikenne")
+        assert "Ei datasettejä" in result
+
+    def test_describe_by_name(self) -> None:
+        """describe() löytää datasetin nimellä (ei pelkkä id)."""
+        conn = _memory_db()
+        _seed_db(conn)
+        with patch("aura.server._get_conn", return_value=conn):
+            result = describe("helsingin-vaesto")
+        assert "Helsingin väestö" in result
+
+    def test_enrich_validates_dataset_exists(self) -> None:
+        """enrich() palauttaa virheen jos datasettiä ei ole."""
+        conn = _memory_db()
+        with patch("aura.server._get_conn", return_value=conn):
+            result = enrich(
+                dataset_id="ei-ole",
+                field="use_case",
+                value="testi",
+            )
+        assert "ei löytynyt" in result.lower()
