@@ -7,6 +7,7 @@ from aura.harvesters.base import BaseHarvester
 from aura.harvesters.digitraffic import DigitrafficHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
+from aura.harvesters.koodistot import KoodistotHarvester
 from aura.harvesters.hri import HriHarvester
 from aura.harvesters.kunnat import KunnatHarvester
 from aura.harvesters.lipas import LipasHarvester
@@ -53,6 +54,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "lipas": LipasHarvester,
     "paituli": PaituliHarvester,
     "kunnat": KunnatHarvester,
+    "koodistot": KoodistotHarvester,
 }
 
 
