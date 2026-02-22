@@ -2,9 +2,9 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-> **4 421+ datasettiä** · **10 280+ resurssia** · **200+ organisaatiota** · **~1,6 TB** avointa dataa
+> **5 690+ datasettiä** · **12 390+ resurssia** · **250+ organisaatiota** · **~1,6 TB** avointa dataa
 >
-> 13 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Overture Maps, GTK, Traficom, Metsäkeskus, Taustakartat, Ruokavirasto
+> 23 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Overture Maps, GTK, Traficom, Metsäkeskus, Taustakartat, Ruokavirasto, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -12,7 +12,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 13 avoimen datan lähteestä
+- **Aggregoi** metadatan 23 avoimen datan lähteestä
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
@@ -176,7 +176,8 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 | [GTK](https://www.gtk.fi) | ArcGIS WFS/WMS | 5 | 7 GB |
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | ~20 GB |
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
-| **Yhteensä** | | **~4 421** | **~1,6 TB** |
+| Kuntien paikkatiedot | WMS/WFS/ArcGIS | 36 | — |
+| **Yhteensä** | | **~5 690** | **~1,6 TB** |
 
 ## Osallistuminen
 
@@ -245,7 +246,7 @@ aura/
 │   ├── models.py           # Pydantic-tietomallit
 │   ├── search.py           # Hakutoiminnot ja muotoilu
 │   ├── cli.py              # Komentorivityökalu
-│   └── harvesters/         # Datalähteiden keräimet (13 kpl)
+│   └── harvesters/         # Datalähteiden keräimet (23 kpl)
 ├── data/
 │   ├── aura.db             # SQLite-tietokanta (osa repoa)
 │   └── boundaries/         # Rajausaineistot GeoPackage (gitignore)
@@ -269,12 +270,14 @@ Aura tallentaa jokaiselle datasetille `geographical_coverage`-kentän, joka kert
 
 | Tilasto | Arvo |
 |---------|------|
-| Datasettejä joilla aluetieto | ~1 166 / 3 774 (31%) |
+| Datasettejä joilla aluetieto | ~1 200+ / 5 690 |
 | Yleisimmät arvot | `Helsinki`, `Turku`, `Oulu`, `Espoo`, `Vantaa` |
+| Viitetaulut | 308 kuntaa, 3 784 postinumeroa |
 | Oletusarvo | `["Suomi"]` (kaikki harvestarit ellei tarkempaa tietoa) |
 
 Arvot tulevat eri lähteistä:
 - **avoindata.fi** — API palauttaa kaupunkien ja alueiden nimet
+- **Kuntien paikkatiedot** — 36 kuntaa omalla `geographical_coverage`-arvolla
 - **Staattiset harvestarit** — konfiguraatiossa (esim. Overture Maps → `["Maailma"]`)
 - **Muut** — oletusarvo `["Suomi"]`
 
@@ -319,18 +322,17 @@ MML:n OGC API Processes -tiedostopalvelu vaatii ilmaisen API-avaimen. Kapsi.fi-p
 2. Luo API-avain OmaTili-palvelussa
 3. Tallenna `.env`-tiedostoon: `MML_API_KEY=avaimesi`
 
-### Hakusuodatin (tulossa)
+### Hakusuodatin
 
-Tavoitteena on `region`-suodatin MCP-työkaluihin:
+`region`-suodatin MCP-työkaluissa:
 
 ```python
 search("joukkoliikenne", region="Helsinki")     # kaupunkitaso
 search("ympäristödata", region="Uusimaa")        # maakuntataso → laajentuu kuntiin
+search("palvelut", region="33100")               # postinumero → kunta
 ```
 
-Hierarkkinen haku: haettaessa maakunnalla palautetaan myös maakunnan kuntien aineistot.
-
-Katso kehityssuunnitelma: [#32](https://github.com/trotor/aura/issues/32)
+Hierarkkinen haku: haettaessa maakunnalla palautetaan myös maakunnan kuntien aineistot. Viitetaulut (308 kuntaa, 3 784 postinumeroa) mahdollistavat alueen tunnistuksen.
 
 ## Kehitys
 

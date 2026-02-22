@@ -33,24 +33,29 @@ class MunicipalityPopulator(BasePopulator):
             names_fi = await self._fetch_items(client, "kunta", version, "fi")
             names_sv = await self._fetch_items(client, "kunta", version, "sv")
 
-            # 3. Hae vastaavuustaulut
+            # 3. Hae vastaavuustaulut (osaa puuttua uusimmasta versiosta)
             region_map = await self._fetch_correspondence(
                 client, "kunta", "maakunta", version,
             )
-            region_names = await self._fetch_items(
-                client, "maakunta", version, "fi",
+            region_names = (
+                await self._fetch_items(client, "maakunta", version, "fi")
+                if region_map else {}
             )
 
             ely_map = await self._fetch_correspondence(
                 client, "kunta", "ely", version,
             )
-            ely_names = await self._fetch_items(client, "ely", version, "fi")
+            ely_names = (
+                await self._fetch_items(client, "ely", version, "fi")
+                if ely_map else {}
+            )
 
             hva_map = await self._fetch_correspondence(
                 client, "kunta", "hyvinvointialue", version,
             )
-            hva_names = await self._fetch_items(
-                client, "hyvinvointialue", version, "fi",
+            hva_names = (
+                await self._fetch_items(client, "hyvinvointialue", version, "fi")
+                if hva_map else {}
             )
 
         # 4. Yhdistä ja tallenna
@@ -156,15 +161,28 @@ class MunicipalityPopulator(BasePopulator):
 
         Tilastokeskuksen API palauttaa listan URL:eja muodossa:
         .../maps/{source_code}/{target_code}
+
+        Palauttaa tyhjän dictin jos vastaavuustaulua ei löydy (404).
         """
         source_id = f"{source_cls}_1_{version}"
         target_id = f"{target_cls}_1_{version}"
-        table_id = f"{source_id}#{target_id}"
+        # # on URL-fragmentin erotin — enkoodataan %23
+        table_id = f"{source_id}%23{target_id}"
         url = f"{API_BASE}/correspondenceTables/{table_id}/maps"
 
-        resp = await self._fetch(
-            client, url, params={"format": "json"},
-        )
+        try:
+            resp = await self._fetch(
+                client, url, params={"format": "json"},
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                logger.warning(
+                    "[%s] Vastaavuustaulu %s -> %s ei löytynyt versiolle %s",
+                    self.name, source_cls, target_cls, version,
+                )
+                return {}
+            raise
+
         urls: list[str] = resp.json()
 
         result: dict[str, str] = {}

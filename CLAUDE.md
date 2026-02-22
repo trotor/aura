@@ -42,6 +42,7 @@ BaseHarvester (base.py)
 │   └── LukeHarvester (luke.py)
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
 │   ├── GtkHarvester (gtk.py)
+│   ├── KunnatHarvester (kunnat.py) — 36 kunnan WMS/WFS/ArcGIS
 │   ├── MetsakeskusHarvester (metsakeskus.py)
 │   ├── TaustakartatHarvester (taustakartat.py)
 │   ├── RuokavirastoHarvester (ruokavirasto.py)
