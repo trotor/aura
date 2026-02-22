@@ -750,6 +750,25 @@ class TestResolveRegion:
         assert _resolve_region(conn, "Atlantis") == []
 
 
+class TestBuildRegionQuery:
+    """_build_region_query()-apufunktion testit."""
+
+    def test_without_fts(self) -> None:
+        from aura.tools.search import _build_region_query
+        sql, params = _build_region_query(["Helsinki", "Espoo"], None, 10)
+        assert "LIKE ?" in sql
+        assert sql.count("LIKE ?") == 2
+        assert params == ["%Helsinki%", "%Espoo%", 10]
+        assert "MATCH" not in sql
+
+    def test_with_fts(self) -> None:
+        from aura.tools.search import _build_region_query
+        sql, params = _build_region_query(["Tampere"], "liikenne", 5)
+        assert "MATCH ?" in sql
+        assert "LIKE ?" in sql
+        assert params == ["liikenne", "%Tampere%", "liikenne", 5]
+
+
 class TestSearchByRegion:
     """search_by_region()-työkalun testit."""
 

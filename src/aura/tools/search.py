@@ -291,55 +291,13 @@ async def search_by_region(
         # Fallback: käytä region-nimeä sellaisenaan geographical_coverage-haussa
         municipality_names = [region]
 
-    # Hae datasetit joiden geographical_coverage sisältää kuntanimiä
-    coverage_conditions = " OR ".join(
-        "d.geographical_coverage LIKE ?" for _ in municipality_names
-    )
-    coverage_params = [f"%{name}%" for name in municipality_names]
-
-    fts_join = ""
-    fts_condition = ""
-    fts_params: list[Any] = []
-
+    fts_query: str | None = None
     if query:
         expanded_query = await _server._expand_with_yso(query, ctx)
         fts_query = expanded_query if expanded_query else query
-        fts_join = """
-            LEFT JOIN (
-                SELECT rowid, rank FROM datasets_fts WHERE datasets_fts MATCH ?
-            ) fts ON d.rowid = fts.rowid
-        """
-        fts_condition = (
-            "AND (fts.rowid IS NOT NULL OR d.id IN "
-            "(SELECT DISTINCT dataset_id FROM enrichments_fts "
-            "WHERE enrichments_fts MATCH ?))"
-        )
-        fts_params = [fts_query, fts_query]
 
-    if query:
-        sql = f"""
-            SELECT d.*, COALESCE(fts.rank, 0) as rank
-            FROM datasets d
-            {fts_join}
-            WHERE ({coverage_conditions})
-            {fts_condition}
-            ORDER BY rank
-            LIMIT ?
-        """
-        params: list[Any] = [*fts_params, *coverage_params, limit]
-    else:
-        sql = f"""
-            SELECT d.*
-            FROM datasets d
-            WHERE ({coverage_conditions})
-            LIMIT ?
-        """
-        params = [*coverage_params, limit]
-
-    try:
-        rows = conn.execute(sql, params).fetchall()
-    except Exception:
-        rows = []
+    sql, params = _build_region_query(municipality_names, fts_query, limit)
+    rows = conn.execute(sql, params).fetchall()
 
     if not rows:
         msg = f"Ei datasettejä alueelle '{region}'"
@@ -360,6 +318,45 @@ async def search_by_region(
 
 
 # --- Apufunktiot ---
+
+
+def _build_region_query(
+    municipality_names: list[str],
+    fts_query: str | None,
+    limit: int,
+) -> tuple[str, list[Any]]:
+    """Rakenna aluehaun SQL-kysely parametreineen."""
+    coverage_conditions = " OR ".join(
+        "d.geographical_coverage LIKE ?" for _ in municipality_names
+    )
+    coverage_params = [f"%{name}%" for name in municipality_names]
+
+    if fts_query:
+        sql = """
+            SELECT d.*, COALESCE(fts.rank, 0) as rank
+            FROM datasets d
+            LEFT JOIN (
+                SELECT rowid, rank FROM datasets_fts
+                WHERE datasets_fts MATCH ?
+            ) fts ON d.rowid = fts.rowid
+            WHERE (""" + coverage_conditions + """)
+            AND (fts.rowid IS NOT NULL OR d.id IN
+                (SELECT DISTINCT dataset_id FROM enrichments_fts
+                 WHERE enrichments_fts MATCH ?))
+            ORDER BY rank
+            LIMIT ?
+        """
+        params: list[Any] = [fts_query, *coverage_params, fts_query, limit]
+    else:
+        sql = """
+            SELECT d.*
+            FROM datasets d
+            WHERE (""" + coverage_conditions + """)
+            LIMIT ?
+        """
+        params = [*coverage_params, limit]
+
+    return sql, params
 
 
 def _batch_enrichment_counts(
