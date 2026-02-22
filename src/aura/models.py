@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from aura.size_estimator import estimate_dataset_size
+from aura.size_estimator import estimate_dataset_size, parse_file_size
 
 
 class Resource(BaseModel):
@@ -22,6 +22,7 @@ class Resource(BaseModel):
     format: str = ""
     url: str = ""
     file_size: str = ""
+    file_size_bytes: int = 0
     last_modified: str | None = None
 
 
@@ -89,6 +90,7 @@ class Dataset(BaseModel):
         for r in data.get("resources", []):
             name_tr = r.get("name_translated", {}) or {}
             desc_tr = r.get("description_translated", {}) or {}
+            raw_size = r.get("file_size", "") or ""
             resources.append(
                 Resource(
                     id=r.get("id", ""),
@@ -100,7 +102,8 @@ class Dataset(BaseModel):
                     description_en=desc_tr.get("en", ""),
                     format=r.get("format", ""),
                     url=r.get("url", ""),
-                    file_size=r.get("file_size", "") or "",
+                    file_size=raw_size,
+                    file_size_bytes=parse_file_size(raw_size),
                     last_modified=r.get("last_modified"),
                 )
             )

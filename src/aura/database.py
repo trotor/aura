@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aura.models import Dataset
+from aura.size_estimator import parse_file_size
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +103,75 @@ def run_migrations(conn: sqlite3.Connection) -> int:
     return applied_count
 
 
+def _backfill_file_size_bytes(conn: sqlite3.Connection) -> int:
+    """Backfill file_size_bytes for resources with non-numeric file_size."""
+    rows = conn.execute(
+        "SELECT id, file_size FROM resources WHERE file_size != '' AND file_size_bytes = 0"
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        size_bytes = parse_file_size(row["file_size"])
+        if size_bytes > 0:
+            conn.execute(
+                "UPDATE resources SET file_size_bytes = ? WHERE id = ?",
+                (size_bytes, row["id"]),
+            )
+            updated += 1
+    if updated:
+        conn.commit()
+        logger.info("[backfill] Päivitetty %d resurssin file_size_bytes", updated)
+    return updated
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     """Alusta tietokanta: aja kaikki migraatiot."""
-    run_migrations(conn)
+    applied = run_migrations(conn)
+    if applied > 0:
+        _backfill_file_size_bytes(conn)
+
+
+def upsert_organization(
+    conn: sqlite3.Connection,
+    org_id: str,
+    name: str = "",
+    title: str = "",
+    title_fi: str = "",
+    title_en: str = "",
+    description: str = "",
+    image_url: str = "",
+    homepage: str = "",
+) -> None:
+    """Lisää tai päivitä organisaatio tietokantaan."""
+    if not org_id:
+        return
+    # Use abbreviation 'o' for organizations to keep lines short
+    conn.execute(
+        """
+        INSERT INTO organizations (
+            id, name, title, title_fi, title_en,
+            description, image_url, homepage
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            name = CASE WHEN excluded.name != ''
+                THEN excluded.name ELSE organizations.name END,
+            title = CASE WHEN excluded.title != ''
+                THEN excluded.title ELSE organizations.title END,
+            title_fi = CASE WHEN excluded.title_fi != ''
+                THEN excluded.title_fi ELSE organizations.title_fi END,
+            title_en = CASE WHEN excluded.title_en != ''
+                THEN excluded.title_en ELSE organizations.title_en END,
+            description = CASE WHEN excluded.description != ''
+                THEN excluded.description ELSE organizations.description END,
+            image_url = CASE WHEN excluded.image_url != ''
+                THEN excluded.image_url ELSE organizations.image_url END,
+            homepage = CASE WHEN excluded.homepage != ''
+                THEN excluded.homepage ELSE organizations.homepage END
+        """,
+        (
+            org_id, name, title, title_fi, title_en,
+            description, image_url, homepage,
+        ),
+    )
 
 
 def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
@@ -123,6 +190,15 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
 
 
 def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
+    # Upsert organization if present
+    if dataset.organization_id:
+        upsert_organization(
+            conn,
+            org_id=dataset.organization_id,
+            name=dataset.organization_name,
+            title=dataset.organization_title,
+        )
+
     num_resources = len(dataset.resources)
     conn.execute(
         """
@@ -197,13 +273,13 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
             INSERT INTO resources (
                 id, dataset_id, name, name_fi, name_en,
                 description, description_fi, description_en,
-                format, url, file_size, last_modified
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                format, url, file_size, file_size_bytes, last_modified
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 r.id, dataset.id, r.name, r.name_fi, r.name_en,
                 r.description, r.description_fi, r.description_en,
-                r.format, r.url, r.file_size, r.last_modified,
+                r.format, r.url, r.file_size, r.file_size_bytes, r.last_modified,
             ),
         )
 
@@ -386,7 +462,7 @@ def find_related_datasets(
 def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     """Palauta tilastot tietokannasta."""
     total = conn.execute("SELECT COUNT(*) FROM datasets").fetchone()[0]
-    orgs = conn.execute("SELECT COUNT(DISTINCT organization_name) FROM datasets").fetchone()[0]
+    orgs = conn.execute("SELECT COUNT(*) FROM organizations").fetchone()[0]
     formats = conn.execute("SELECT COUNT(DISTINCT format) FROM resources").fetchone()[0]
 
     top_orgs = conn.execute(
@@ -418,6 +494,39 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "top_organizations": [dict(r) for r in top_orgs],
         "top_formats": [dict(r) for r in top_formats],
     }
+
+
+# --- Organizations ---
+
+
+def get_organization(
+    conn: sqlite3.Connection, org_id: str
+) -> dict[str, Any] | None:
+    """Hae organisaatio ID:llä tai nimellä."""
+    row = conn.execute(
+        "SELECT * FROM organizations WHERE id = ? OR name = ?",
+        (org_id, org_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_organizations(
+    conn: sqlite3.Connection,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Listaa organisaatiot datasettien lukumäärän mukaan."""
+    rows = conn.execute(
+        """
+        SELECT o.*, COUNT(d.id) as dataset_count
+        FROM organizations o
+        LEFT JOIN datasets d ON d.organization_id = o.id
+        GROUP BY o.id
+        ORDER BY dataset_count DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # --- Enrichments ---
