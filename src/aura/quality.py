@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -257,24 +258,21 @@ def score_all_datasets(conn: sqlite3.Connection, source: str = "") -> int:
     else:
         rows = conn.execute("SELECT * FROM datasets").fetchall()
 
+    # Hae kaikki resurssit ja enrichment-luvut kerralla (vältetään N+1)
+    resources_by_ds: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in conn.execute("SELECT * FROM resources").fetchall():
+        resources_by_ds[r["dataset_id"]].append(dict(r))
+
+    enr_counts: dict[str, int] = dict(conn.execute(
+        "SELECT dataset_id, COUNT(DISTINCT field) FROM enrichments GROUP BY dataset_id"
+    ).fetchall())
+
     count = 0
     for row in rows:
         dataset = dict(row)
         ds_id = dataset["id"]
-
-        # Resurssit
-        resources = [
-            dict(r) for r in conn.execute(
-                "SELECT * FROM resources WHERE dataset_id = ?", (ds_id,)
-            ).fetchall()
-        ]
-
-        # Enrichment-lukumäärä
-        enr_row = conn.execute(
-            "SELECT COUNT(DISTINCT field) FROM enrichments WHERE dataset_id = ?",
-            (ds_id,),
-        ).fetchone()
-        enrichment_count = enr_row[0] if enr_row else 0
+        resources = resources_by_ds.get(ds_id, [])
+        enrichment_count = enr_counts.get(ds_id, 0)
 
         scores = calculate_quality(dataset, resources, enrichment_count)
         save_quality_scores(conn, ds_id, scores)
