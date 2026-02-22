@@ -6,6 +6,8 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from aura.constants import parse_json_list
+
 
 def format_dataset_summary(dataset: dict[str, Any]) -> str:
     """Muotoile datasetin yhteenveto luettavaan muotoon."""
@@ -19,14 +21,7 @@ def format_dataset_summary(dataset: dict[str, Any]) -> str:
     if len(notes) > 300:
         notes = notes[:297] + "..."
 
-    keywords_raw = dataset.get("keywords_fi", "[]")
-    if isinstance(keywords_raw, str):
-        try:
-            keywords = json.loads(keywords_raw)
-        except json.JSONDecodeError:
-            keywords = []
-    else:
-        keywords = keywords_raw
+    keywords = parse_json_list(dataset.get("keywords_fi", "[]"))
 
     access_level = dataset.get("access_level", "open")
     lock = "\U0001f512 " if access_level == "restricted" else ""
@@ -188,14 +183,7 @@ def format_dataset_detail(
             url = r.get("url", "")
             summary += f"- **{name}** ({fmt}): {url}\n"
 
-    geo_raw = dataset.get("geographical_coverage", "[]")
-    if isinstance(geo_raw, str):
-        try:
-            geo = json.loads(geo_raw)
-        except json.JSONDecodeError:
-            geo = []
-    else:
-        geo = geo_raw
+    geo = parse_json_list(dataset.get("geographical_coverage", "[]"))
 
     if geo:
         summary += f"\n**Maantieteellinen kattavuus:** {', '.join(geo)}"

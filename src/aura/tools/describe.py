@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context
 
 import aura.server as _server
+from aura.constants import parse_json_list
 from aura.database import (
     get_conflicting_enrichments,
     get_dataset,
@@ -86,8 +87,6 @@ def compare(dataset_ids: list[str], ctx: Context | None = None) -> str:
     if len(dataset_ids) > 5:
         return "Vertaile korkeintaan 5 datasettiä kerrallaan."
 
-    import json
-
     conn = _server._get_conn(ctx)
     datasets = get_datasets_by_ids(conn, dataset_ids)
 
@@ -105,14 +104,7 @@ def compare(dataset_ids: list[str], ctx: Context | None = None) -> str:
         modified = (d.get("metadata_modified") or "")[:10]
         size = d.get("estimated_size_bytes", 0) or 0
 
-        keywords_raw = d.get("keywords_fi", "[]")
-        if isinstance(keywords_raw, str):
-            try:
-                keywords = json.loads(keywords_raw)
-            except json.JSONDecodeError:
-                keywords = []
-        else:
-            keywords = keywords_raw
+        keywords = parse_json_list(d.get("keywords_fi", "[]"))
 
         # Resurssiformaatit
         formats = sorted({r.get("format", "") for r in d.get("resources", []) if r.get("format")})

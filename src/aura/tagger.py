@@ -6,13 +6,13 @@ YSO-käsitteitä enrichmenteiksi.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass
 from typing import Any
 
-from aura.yso import YsoClient, YsoConcept
+from aura.constants import parse_json_list
+from aura.yso import YsoClient
 
 logger = logging.getLogger(__name__)
 
@@ -83,14 +83,7 @@ async def suggest_tags(
     suggestions: list[TagSuggestion] = []
 
     # 1. Avainsanat → YSO-haku
-    keywords_raw = dataset.get("keywords_fi", "[]")
-    if isinstance(keywords_raw, str):
-        try:
-            keywords = json.loads(keywords_raw)
-        except (json.JSONDecodeError, TypeError):
-            keywords = []
-    else:
-        keywords = keywords_raw
+    keywords = parse_json_list(dataset.get("keywords_fi", "[]"))
 
     for kw in keywords:
         if not kw or len(kw) < MIN_TOKEN_LENGTH:

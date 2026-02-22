@@ -15,7 +15,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
-from aura.constants import MACHINE_READABLE_FORMATS
+from aura.constants import MACHINE_READABLE_FORMATS, parse_json_list
 
 logger = logging.getLogger(__name__)
 
@@ -437,13 +437,4 @@ def suggest_improvements(
 
 def _keyword_count(dataset: dict[str, Any]) -> int:
     """Palauta avainsanojen lukumäärä (JSON-string tai lista)."""
-    raw = dataset.get("keywords_fi", "[]")
-    if isinstance(raw, list):
-        return len(raw)
-    if isinstance(raw, str):
-        try:
-            parsed = json.loads(raw)
-            return len(parsed) if isinstance(parsed, list) else 0
-        except (json.JSONDecodeError, TypeError):
-            return 0
-    return 0
+    return len(parse_json_list(dataset.get("keywords_fi", "[]")))

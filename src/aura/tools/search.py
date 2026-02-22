@@ -9,7 +9,7 @@ from typing import Any
 from fastmcp import Context
 
 import aura.server as _server
-from aura.constants import MACHINE_READABLE_FORMATS
+from aura.constants import MACHINE_READABLE_FORMATS, parse_json_list
 from aura.database import (
     find_related_datasets,
     get_dataset,
@@ -108,14 +108,7 @@ async def search_structured(
 
     structured = []
     for d in results:
-        keywords_raw = d.get("keywords_fi", "[]")
-        if isinstance(keywords_raw, str):
-            try:
-                keywords = json.loads(keywords_raw)
-            except json.JSONDecodeError:
-                keywords = []
-        else:
-            keywords = keywords_raw
+        keywords = parse_json_list(d.get("keywords_fi", "[]"))
 
         ds_id = d.get("id", "")
         structured.append({
