@@ -61,3 +61,25 @@ def test_dataset_from_ckan_full():
     assert len(dataset.resources) == 1
     assert dataset.resources[0].format == "CSV"
     assert dataset.keywords_fi == ["väestö", "helsinki"]
+
+
+def test_dataset_from_ckan_normalizes_geo_coverage():
+    """from_ckan() normalisoi geographical_coverage arvot title-caseen."""
+    raw = {
+        "id": "geo-test",
+        "name": "geo-test",
+        "geographical_coverage": ["turku", "HELSINKI", "varsinais-suomi"],
+    }
+    dataset = Dataset.from_ckan(raw)
+    assert dataset.geographical_coverage == ["Turku", "Helsinki", "Varsinais-Suomi"]
+
+
+def test_dataset_from_ckan_strips_empty_geo_coverage():
+    """from_ckan() poistaa tyhjät geographical_coverage arvot."""
+    raw = {
+        "id": "geo-empty",
+        "name": "geo-empty",
+        "geographical_coverage": ["Helsinki", "", "  "],
+    }
+    dataset = Dataset.from_ckan(raw)
+    assert dataset.geographical_coverage == ["Helsinki"]

@@ -128,7 +128,11 @@ class Dataset(BaseModel):
             metadata_modified=data.get("metadata_modified", ""),
             keywords_fi=keywords.get("fi", []),
             keywords_en=keywords.get("en", []),
-            geographical_coverage=data.get("geographical_coverage", []) or [],
+            geographical_coverage=[
+                v.strip().title()
+                for v in (data.get("geographical_coverage", []) or [])
+                if v.strip()
+            ],
             update_frequency=update_freq,
             collection_type=data.get("collection_type", ""),
             num_resources=data.get("num_resources", 0),

@@ -28,6 +28,7 @@ async def search(
     format: str = "",
     organization: str = "",
     access_level: str = "",
+    region: str = "",
     ctx: Context | None = None,
 ) -> str:
     """Hae suomalaisia avoimia datasettejä luonnollisella kielellä.
@@ -43,17 +44,24 @@ async def search(
         format: Suodata formaatin mukaan (esim. "CSV", "JSON", "GeoJSON")
         organization: Suodata organisaation mukaan (osa nimestä riittää)
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
+        region: Suodata alueellisesti (kunnan nimi, maakunta tai postinumero)
     """
     conn = _server._get_conn(ctx)
 
     # YSO-hakulaajennus
     expanded_query = await _server._expand_with_yso(query, ctx)
 
+    # Aluerajaus
+    region_names: list[str] | None = None
+    if region.strip():
+        region_names = _resolve_region(conn, region.strip()) or [region.strip()]
+
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
         access_level=access_level,
         expanded_query=expanded_query,
+        region_names=region_names,
     )
 
     if not results:
@@ -76,6 +84,7 @@ async def search_structured(
     format: str = "",
     organization: str = "",
     access_level: str = "",
+    region: str = "",
     ctx: Context | None = None,
 ) -> str:
     """Hae datasettejä ja palauta rakenteellinen JSON tekoälyagenteille.
@@ -91,16 +100,24 @@ async def search_structured(
         format: Suodata formaatin mukaan (esim. "CSV")
         organization: Suodata organisaation mukaan
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
+        region: Suodata alueellisesti (kunnan nimi, maakunta tai postinumero)
     """
     import json
 
     conn = _server._get_conn(ctx)
     expanded_query = await _server._expand_with_yso(query, ctx)
+
+    # Aluerajaus
+    region_names: list[str] | None = None
+    if region.strip():
+        region_names = _resolve_region(conn, region.strip()) or [region.strip()]
+
     results = search_datasets(
         conn, query, limit=limit, offset=offset,
         source=source, fmt=format, organization=organization,
         access_level=access_level,
         expanded_query=expanded_query,
+        region_names=region_names,
     )
 
     ds_ids = [d.get("id", "") for d in results]

@@ -252,7 +252,17 @@ def upsert_dataset(conn: sqlite3.Connection, dataset: Dataset) -> None:
         raise
 
 
+def _normalize_geo_coverage(values: list[str]) -> list[str]:
+    """Normalisoi geographical_coverage-arvot title-caseen."""
+    return [v.strip().title() for v in values if v.strip()]
+
+
 def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
+    # Normalisoi geographical_coverage ennen tallennusta
+    dataset = dataset.model_copy(
+        update={"geographical_coverage": _normalize_geo_coverage(dataset.geographical_coverage)}
+    )
+
     # Upsert organization if present
     if dataset.organization_id:
         upsert_organization(
@@ -380,6 +390,7 @@ def search_datasets(
     organization: str = "",
     access_level: str = "",
     expanded_query: str = "",
+    region_names: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Hae datasettejä FTS5-täystekstihaulla ja suodattimilla.
 
@@ -414,6 +425,12 @@ def search_datasets(
             "d.id IN (SELECT dataset_id FROM resources WHERE format = ? COLLATE NOCASE)"
         )
         filter_params.append(fmt)
+    if region_names:
+        coverage_conditions = " OR ".join(
+            "d.geographical_coverage LIKE ?" for _ in region_names
+        )
+        filter_conditions.append(f"({coverage_conditions})")
+        filter_params.extend(f"%{name}%" for name in region_names)
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
