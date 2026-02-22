@@ -9,6 +9,7 @@ import pytest
 from aura.database import init_db, upsert_dataset
 from aura.health import (
     HealthResult,
+    TokenBucket,
     check_all_resources,
     check_resource,
     get_dataset_health,
@@ -53,6 +54,34 @@ def _sample_dataset(conn: sqlite3.Connection) -> None:
     )
     upsert_dataset(conn, ds)
     conn.commit()
+
+
+class TestTokenBucket:
+    """TokenBucket rate limiterin testit."""
+
+    @pytest.mark.asyncio
+    async def test_first_acquire_instant(self):
+        """Ensimmäiset tokenin kulutukset onnistuvat välittömästi."""
+        bucket = TokenBucket(rate=5.0)
+        import time
+        start = time.monotonic()
+        for _ in range(5):
+            await bucket.acquire()
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.1  # 5 tokenia heti saatavilla
+
+    @pytest.mark.asyncio
+    async def test_rate_limiting_kicks_in(self):
+        """Tokenien loppuessa joudutaan odottamaan."""
+        bucket = TokenBucket(rate=10.0)
+        # Kuluta kaikki
+        for _ in range(10):
+            await bucket.acquire()
+        import time
+        start = time.monotonic()
+        await bucket.acquire()  # pitää odottaa refill
+        elapsed = time.monotonic() - start
+        assert elapsed >= 0.05  # odotti ainakin vähän
 
 
 class TestHealthResult:

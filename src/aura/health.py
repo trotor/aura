@@ -18,11 +18,34 @@ logger = logging.getLogger(__name__)
 # Asetukset
 DEFAULT_TIMEOUT = 15.0  # sekuntia per pyyntö
 DEFAULT_MAX_CONCURRENT = 10  # samanaikaisia pyyntöjä
-DEFAULT_RATE_LIMIT = 5  # pyyntöä/sekunti per domain
+DEFAULT_RATE_PER_SECOND = 5  # pyyntöä/sekunti per domain
 DEFAULT_STALE_DAYS = 7  # tarkista uudelleen N päivän jälkeen
 
 # URL-patternit joille HEAD ei yleensä toimi
 SKIP_HEAD_PATTERNS = ("wfs", "wms", "wcs", "ows", "geoserver")
+
+
+class TokenBucket:
+    """Token bucket -pohjainen rate limiter (pyyntöjä/sekunti)."""
+
+    def __init__(self, rate: float) -> None:
+        self._rate = rate
+        self._tokens = rate
+        self._last = time.monotonic()
+
+    def _refill(self) -> None:
+        now = time.monotonic()
+        self._tokens = min(self._rate, self._tokens + self._rate * (now - self._last))
+        self._last = now
+
+    async def acquire(self) -> None:
+        """Odota kunnes token on saatavilla."""
+        while True:
+            self._refill()
+            if self._tokens >= 1.0:
+                self._tokens -= 1.0
+                return
+            await asyncio.sleep(1.0 / self._rate)
 
 
 @dataclass
@@ -230,9 +253,11 @@ async def check_all_resources(
 
     summary = HealthSummary(total=len(resources))
 
-    # Rate limiter per domain
-    domain_locks: dict[str, asyncio.Semaphore] = defaultdict(
-        lambda: asyncio.Semaphore(DEFAULT_RATE_LIMIT)
+    # Rate limiter: token bucket per domain
+    from urllib.parse import urlparse
+
+    domain_buckets: dict[str, TokenBucket] = defaultdict(
+        lambda: TokenBucket(DEFAULT_RATE_PER_SECOND)
     )
     semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -243,19 +268,14 @@ async def check_all_resources(
 
         async def _check_one(res: dict[str, str]) -> HealthResult:
             async with semaphore:
-                # Rate limit per domain
-                from urllib.parse import urlparse
                 domain = urlparse(res["url"]).netloc
-                async with domain_locks[domain]:
-                    result = await check_resource(
-                        client,
-                        res["resource_id"],
-                        res["dataset_id"],
-                        res["url"],
-                    )
-                    # Pieni tauko rate limitingiä varten
-                    await asyncio.sleep(0.2)
-                    return result
+                await domain_buckets[domain].acquire()
+                return await check_resource(
+                    client,
+                    res["resource_id"],
+                    res["dataset_id"],
+                    res["url"],
+                )
 
         tasks = [_check_one(r) for r in resources]
         results = await asyncio.gather(*tasks, return_exceptions=True)
