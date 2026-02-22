@@ -135,7 +135,7 @@ async def search_structured(
 
 
 @mcp.tool()
-def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
+async def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
     """Suosittele parhaita datasettejä aiheesta.
 
     Etsii datasettejä ja järjestää ne relevanssin, tuoreuden ja resurssimäärän mukaan.
@@ -145,8 +145,9 @@ def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> str:
         limit: Suositusten enimmäismäärä (oletus 5)
     """
     conn = _server._get_conn(ctx)
+    expanded_query = await _server._expand_with_yso(topic, ctx)
     # Hae enemmän tuloksia kuin limit, jotta voidaan järjestää uudelleen
-    results = search_datasets(conn, topic, limit=limit * 3)
+    results = search_datasets(conn, topic, limit=limit * 3, expanded_query=expanded_query)
 
     if not results:
         return f"Ei datasettejä aiheesta '{topic}'. Kokeile eri hakusanoja."

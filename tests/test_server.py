@@ -272,11 +272,13 @@ class TestSearchStructured:
 class TestRecommend:
     """recommend()-työkalun testit."""
 
-    def test_recommend_finds_results(self) -> None:
+    @pytest.mark.asyncio
+    async def test_recommend_finds_results(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = recommend("väestö")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._expand_with_yso", return_value=""):
+            result = await recommend("väestö")
         assert "Suositellut" in result
         assert "Helsingin väestö" in result
 
