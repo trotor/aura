@@ -28,15 +28,23 @@ _fallback_findings: list[dict[str, str]] = []
 
 
 def _get_findings(ctx: Context | None) -> list[dict[str, str]]:
-    """Hae session-tason findings-lista lifespan-kontekstista."""
+    """Hae session-tason findings-lista lifespan-kontekstista.
+
+    MCP-kontekstilla palauttaa session oman listan.
+    Ilman kontekstia palauttaa module-level fallbackin (testit).
+    """
     if ctx is not None:
         try:
             findings: list[dict[str, str]] = ctx.lifespan_context["findings"]
             return findings
         except (AttributeError, KeyError):
             pass
-    # Fallback: module-level list (CLI, testit)
     return _fallback_findings
+
+
+def reset_findings() -> None:
+    """Tyhjennä fallback-findings. Käytetään testeissä."""
+    _fallback_findings.clear()
 
 
 @mcp.tool()

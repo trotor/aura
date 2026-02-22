@@ -141,6 +141,7 @@ from aura.tools.research import (  # noqa: E402, F401
     _fallback_findings,
     list_findings,
     log_finding,
+    reset_findings,
     save_session_findings,
 )
 from aura.tools.search import (  # noqa: E402, F401

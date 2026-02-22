@@ -27,6 +27,7 @@ from aura.server import (
     quality_report,
     recommend,
     reference_status,
+    reset_findings,
     save_session_findings,
     search,
     search_by_region,
@@ -498,42 +499,37 @@ class TestLogFinding:
     """log_finding()-työkalun testit."""
 
     def test_log_finding_basic(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         with patch("aura.server._get_conn"):
             result = log_finding("test-1", "Data on CSV-muodossa")
         assert "kirjattu" in result.lower()
         assert "1 session" in result
-        srv._fallback_findings.clear()
+        reset_findings()
 
     def test_log_finding_invalid_category(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         result = log_finding("test-1", "x", category="invalid")
         assert "Tuntematon kategoria" in result
-        srv._fallback_findings.clear()
+        reset_findings()
 
     def test_log_finding_accumulates(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         log_finding("test-1", "Löydös 1")
         result = log_finding("test-1", "Löydös 2")
         assert "2 session" in result
-        srv._fallback_findings.clear()
+        reset_findings()
 
 
 class TestListFindings:
     """list_findings()-työkalun testit."""
 
     def test_empty_findings(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         result = list_findings()
         assert "Ei löydöksiä" in result
 
     def test_list_findings_grouped(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         log_finding("ds-1", "Löydös A", category="quality")
         log_finding("ds-2", "Löydös B", category="access")
         result = list_findings()
@@ -541,23 +537,21 @@ class TestListFindings:
         assert "ds-2" in result
         assert "quality" in result
         assert "access" in result
-        srv._fallback_findings.clear()
+        reset_findings()
 
 
 class TestSaveSessionFindings:
     """save_session_findings()-työkalun testit."""
 
     def test_save_empty(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         conn = _memory_db()
         with patch("aura.server._get_conn", return_value=conn):
             result = save_session_findings()
         assert "Ei löydöksiä" in result
 
     def test_save_findings_to_enrichments(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         conn = _memory_db()
         _seed_db(conn)
         log_finding("test-1", "Datan laatu on hyvä", category="quality")
@@ -566,11 +560,11 @@ class TestSaveSessionFindings:
         assert "Tallennettu 1" in result
         assert "quality_notes" in result
         # Findings should be cleared
-        assert len(srv._fallback_findings) == 0
+        from aura.server import _fallback_findings
+        assert len(_fallback_findings) == 0
 
     def test_save_deduplicates(self) -> None:
-        import aura.server as srv
-        srv._fallback_findings.clear()
+        reset_findings()
         conn = _memory_db()
         _seed_db(conn)
         # Save once
@@ -582,7 +576,7 @@ class TestSaveSessionFindings:
         with patch("aura.server._get_conn", return_value=conn):
             result = save_session_findings()
         assert "duplikaatti" in result.lower()
-        srv._fallback_findings.clear()
+        reset_findings()
 
 
 # --- Viitedatatyökalut ---
