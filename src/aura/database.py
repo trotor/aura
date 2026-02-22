@@ -265,8 +265,21 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
         ),
     )
 
-    # Upsert resurssit
-    conn.execute("DELETE FROM resources WHERE dataset_id = ?", (dataset.id,))
+    # Upsert resurssit: päivitä olemassaolevat, poista vain poistetut
+    new_ids = {r.id for r in dataset.resources}
+    existing = conn.execute(
+        "SELECT id FROM resources WHERE dataset_id = ?", (dataset.id,)
+    ).fetchall()
+    existing_ids = {row[0] for row in existing}
+
+    removed = existing_ids - new_ids
+    if removed:
+        placeholders = ",".join("?" for _ in removed)
+        conn.execute(
+            f"DELETE FROM resources WHERE id IN ({placeholders})",
+            list(removed),
+        )
+
     for r in dataset.resources:
         conn.execute(
             """
@@ -275,6 +288,16 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
                 description, description_fi, description_en,
                 format, url, file_size, file_size_bytes, last_modified
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name, name_fi=excluded.name_fi,
+                name_en=excluded.name_en,
+                description=excluded.description,
+                description_fi=excluded.description_fi,
+                description_en=excluded.description_en,
+                format=excluded.format, url=excluded.url,
+                file_size=excluded.file_size,
+                file_size_bytes=excluded.file_size_bytes,
+                last_modified=excluded.last_modified
             """,
             (
                 r.id, dataset.id, r.name, r.name_fi, r.name_en,

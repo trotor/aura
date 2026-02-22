@@ -99,3 +99,64 @@ def test_migrations_idempotent():
     conn = _memory_db()
     count = run_migrations(conn)
     assert count == 0
+
+
+def test_resource_upsert_preserves_health():
+    """Resurssien UPSERT säilyttää resource_health-tietueet (#85)."""
+    conn = _memory_db()
+
+    # Datasetti kahdella resurssilla
+    ds = Dataset(
+        id="ds-health",
+        name="health-test",
+        title="Health test",
+        organization_id="org-1",
+        organization_name="org",
+        organization_title="Org",
+        license_id="cc-by-4.0",
+        num_resources=2,
+        resources=[
+            Resource(id="r-1", name="a.csv", format="CSV", url="https://example.com/a"),
+            Resource(id="r-2", name="b.csv", format="CSV", url="https://example.com/b"),
+        ],
+    )
+    upsert_dataset(conn, ds)
+    conn.commit()
+
+    # Simuloi health-tarkistukset molemmille resursseille
+    conn.execute(
+        "INSERT INTO resource_health (resource_id, dataset_id, url, is_available, checked_at) "
+        "VALUES (?, ?, ?, ?, datetime('now'))",
+        ("r-1", "ds-health", "https://example.com/a", True),
+    )
+    conn.execute(
+        "INSERT INTO resource_health (resource_id, dataset_id, url, is_available, checked_at) "
+        "VALUES (?, ?, ?, ?, datetime('now'))",
+        ("r-2", "ds-health", "https://example.com/b", True),
+    )
+    conn.commit()
+
+    # Upsert uudelleen samoilla resursseilla → health säilyy
+    ds.resources[0].name = "a_updated.csv"
+    upsert_dataset(conn, ds)
+    conn.commit()
+
+    health_rows = conn.execute("SELECT resource_id FROM resource_health ORDER BY resource_id").fetchall()
+    assert [r[0] for r in health_rows] == ["r-1", "r-2"]
+
+    # Resurssin nimi päivittyi
+    res = conn.execute("SELECT name FROM resources WHERE id = 'r-1'").fetchone()
+    assert res[0] == "a_updated.csv"
+
+    # Upsert jossa r-2 poistettu → vain r-2 poistetaan, r-1 health säilyy
+    ds.resources = [ds.resources[0]]
+    ds.num_resources = 1
+    upsert_dataset(conn, ds)
+    conn.commit()
+
+    remaining = conn.execute("SELECT id FROM resources WHERE dataset_id = 'ds-health'").fetchall()
+    assert [r[0] for r in remaining] == ["r-1"]
+
+    health_rows = conn.execute("SELECT resource_id FROM resource_health").fetchall()
+    # r-1 health tietue säilyy (ei poistettu DELETE CASCADElla)
+    assert any(r[0] == "r-1" for r in health_rows)
