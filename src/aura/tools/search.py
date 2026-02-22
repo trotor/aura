@@ -9,6 +9,7 @@ from typing import Any
 from fastmcp import Context
 
 import aura.server as _server
+from aura.constants import MACHINE_READABLE_FORMATS
 from aura.database import (
     find_related_datasets,
     get_dataset,
@@ -17,11 +18,6 @@ from aura.database import (
 )
 from aura.search import format_dataset_summary
 from aura.server import mcp
-
-MACHINE_READABLE_FORMATS = {
-    "CSV", "JSON", "GeoJSON", "WFS", "WMS", "OData", "XML", "API",
-    "Parquet", "GeoParquet", "GPKG", "SQLite", "WCS",
-}
 
 
 @mcp.tool()

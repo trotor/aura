@@ -15,6 +15,8 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
+from aura.constants import MACHINE_READABLE_FORMATS
+
 logger = logging.getLogger(__name__)
 
 DIMENSION_WEIGHTS = {
@@ -22,11 +24,6 @@ DIMENSION_WEIGHTS = {
     "timeliness": 0.30,
     "accessibility": 0.25,
     "documentation": 0.20,
-}
-
-MACHINE_READABLE_FORMATS = {
-    "CSV", "JSON", "GeoJSON", "WFS", "WMS", "WCS", "OData",
-    "XML", "API", "Parquet", "GeoParquet", "GPKG", "SQLite",
 }
 
 
