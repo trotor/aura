@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from aura.populators.base import BasePopulator
 from aura.populators.municipalities import MunicipalityPopulator
+from aura.populators.postal_codes import PostalCodePopulator
 
 # Rekisteri kaikista populaattoreista
 POPULATORS: dict[str, type[BasePopulator]] = {
     "municipalities": MunicipalityPopulator,
+    "postal_codes": PostalCodePopulator,
 }
 
 
