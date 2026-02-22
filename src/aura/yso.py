@@ -6,10 +6,10 @@ API: https://api.finto.fi/rest/v1/
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 import httpx
 
@@ -44,6 +44,7 @@ class YsoClient:
     def __init__(self, cache_ttl: int = CACHE_TTL) -> None:
         self._cache: dict[str, _CacheEntry] = {}
         self._cache_ttl = cache_ttl
+        self._locks: dict[str, asyncio.Lock] = {}
 
     async def search(
         self,
@@ -106,35 +107,38 @@ class YsoClient:
             Lista termeistä: [alkuperäinen, alakäsite1, alakäsite2, ...]
             Jos YSO-osumaa ei löydy, palauttaa [query].
         """
-        # Tarkista välimuisti
         cache_key = f"{query}:{lang}"
-        cached = self._cache.get(cache_key)
-        if cached and (time.time() - cached.timestamp) < self._cache_ttl:
-            return cached.terms
+        if cache_key not in self._locks:
+            self._locks[cache_key] = asyncio.Lock()
+        async with self._locks[cache_key]:
+            # Tarkista välimuisti
+            cached = self._cache.get(cache_key)
+            if cached and (time.time() - cached.timestamp) < self._cache_ttl:
+                return cached.terms
 
-        terms = [query]
-        try:
-            concepts = await self.search(query, lang=lang, max_hits=1)
-            if not concepts:
+            terms = [query]
+            try:
+                concepts = await self.search(query, lang=lang, max_hits=1)
+                if not concepts:
+                    return terms
+
+                best = concepts[0]
+                # Varmista tarkka osuma (prefLabel vastaa hakua)
+                if best.label.lower() != query.lower():
+                    return terms
+
+                narrower = await self.get_narrower(best.uri, lang=lang)
+                for n in narrower[:MAX_NARROWER]:
+                    if n.label and n.label.lower() != query.lower():
+                        terms.append(n.label)
+
+            except (httpx.HTTPError, httpx.TimeoutException, KeyError):
+                logger.debug("[yso] API-virhe laajennettaessa '%s'", query)
                 return terms
 
-            best = concepts[0]
-            # Varmista tarkka osuma (prefLabel vastaa hakua)
-            if best.label.lower() != query.lower():
-                return terms
-
-            narrower = await self.get_narrower(best.uri, lang=lang)
-            for n in narrower[:MAX_NARROWER]:
-                if n.label and n.label.lower() != query.lower():
-                    terms.append(n.label)
-
-        except (httpx.HTTPError, httpx.TimeoutException, KeyError):
-            logger.debug("[yso] API-virhe laajennettaessa '%s'", query)
+            # Tallenna välimuistiin
+            self._cache[cache_key] = _CacheEntry(terms=terms, timestamp=time.time())
             return terms
-
-        # Tallenna välimuistiin
-        self._cache[cache_key] = _CacheEntry(terms=terms, timestamp=time.time())
-        return terms
 
 
 def build_fts5_query(terms: list[str]) -> str:

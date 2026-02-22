@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -270,3 +271,37 @@ class TestExpandQuery:
         terms = await client.expand_query("liikenne")
         assert terms.count("liikenne") == 1
         assert "tieliikenne" in terms
+
+    @pytest.mark.asyncio
+    async def test_concurrent_expand_no_duplicate_api_calls(self) -> None:
+        """Kaksi samanaikaista kutsua samalla avaimella → API kutsutaan vain kerran."""
+        client = YsoClient()
+        search_count = 0
+        search_event = asyncio.Event()
+
+        async def mock_search(query: str, lang: str = "fi", max_hits: int = 5):  # noqa: ANN001, ARG001
+            nonlocal search_count
+            search_count += 1
+            # Simuloi verkkoviive jotta toinen kutsu ehtii jonoon
+            await asyncio.sleep(0.05)
+            search_event.set()
+            from aura.yso import YsoConcept
+            return [YsoConcept(uri="http://yso/p3466", label="liikenne")]
+
+        async def mock_narrower(uri: str, lang: str = "fi"):  # noqa: ANN001, ARG001
+            from aura.yso import YsoConcept
+            return [
+                YsoConcept(uri="http://yso/p6120", label="tieliikenne"),
+            ]
+
+        client.search = mock_search  # type: ignore[assignment]
+        client.get_narrower = mock_narrower  # type: ignore[assignment]
+
+        results = await asyncio.gather(
+            client.expand_query("liikenne"),
+            client.expand_query("liikenne"),
+        )
+
+        assert search_count == 1
+        assert results[0] == results[1]
+        assert "tieliikenne" in results[0]
