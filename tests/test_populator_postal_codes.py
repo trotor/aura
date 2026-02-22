@@ -3,6 +3,7 @@
 import sqlite3
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from aura.database import run_migrations
@@ -190,3 +191,98 @@ class TestTitlecase:
 
     def test_already_titlecase(self) -> None:
         assert _titlecase("Helsinki") == "Helsinki"
+
+
+class TestPostalCodeErrors:
+    """Virhetilanne-testit."""
+
+    @pytest.mark.asyncio
+    async def test_api_http_error_propagates(self) -> None:
+        """HTTP 500 -virhe nousee ylöspäin."""
+        p = PostalCodePopulator(conn=_memory_db())
+        client = AsyncMock()
+
+        resp = MagicMock()
+        resp.status_code = 500
+        resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Server Error", request=MagicMock(), response=resp,
+        )
+        client.get = AsyncMock(return_value=resp)
+
+        with patch.object(p, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(
+                return_value=client,
+            )
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            with pytest.raises(httpx.HTTPStatusError):
+                await p.populate()
+
+    @pytest.mark.asyncio
+    async def test_malformed_pcf_lines_skipped(self) -> None:
+        """Virheelliset PCF-rivit ohitetaan, validit parsitaan."""
+        conn = _memory_db()
+        p = PostalCodePopulator(conn=conn)
+        client = AsyncMock()
+
+        # Sekoitus validia ja epävalidia dataa
+        bad_pcf = (
+            "this is not a valid PCF line at all\n"
+            "short\n"
+            + SAMPLE_PCF_LINES.split("\n")[0] + "\n"  # Vain Helsinki
+        )
+
+        async def mock_get(url: str, **kwargs: object) -> MagicMock:
+            if url.endswith(".dat"):
+                return _make_mock_response(bad_pcf, is_binary=True)
+            return _make_mock_response(SAMPLE_DIR_HTML)
+
+        client.get = mock_get
+
+        with patch.object(p, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(
+                return_value=client,
+            )
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            count = await p.populate()
+
+        assert count == 1  # Vain Helsinki parsittiin
+
+    @pytest.mark.asyncio
+    async def test_empty_pcf_file(self) -> None:
+        """Tyhjä PCF-tiedosto → 0 tietuetta."""
+        conn = _memory_db()
+        p = PostalCodePopulator(conn=conn)
+        client = AsyncMock()
+
+        async def mock_get(url: str, **kwargs: object) -> MagicMock:
+            if url.endswith(".dat"):
+                return _make_mock_response("", is_binary=True)
+            return _make_mock_response(SAMPLE_DIR_HTML)
+
+        client.get = mock_get
+
+        with patch.object(p, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(
+                return_value=client,
+            )
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            count = await p.populate()
+
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_network_error_propagates(self) -> None:
+        """Verkkovirhe nousee ylöspäin."""
+        p = PostalCodePopulator(conn=_memory_db())
+        client = AsyncMock()
+        client.get = AsyncMock(
+            side_effect=httpx.ConnectError("Connection refused"),
+        )
+
+        with patch.object(p, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(
+                return_value=client,
+            )
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            with pytest.raises(httpx.ConnectError):
+                await p.populate()
