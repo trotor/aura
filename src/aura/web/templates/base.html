@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fi" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Aura{% endblock %} — Avoin data</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="container-fluid">
+        <ul>
+            <li><a href="/" class="nav-brand"><strong>Aura</strong></a></li>
+        </ul>
+        <ul>
+            <li><a href="/">Etusivu</a></li>
+            <li><a href="/search">Haku</a></li>
+            <li><a href="/map">Kartta</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="container">
+        <hr>
+        <p><small>Aura — Suomalaisen avoimen datan selain | <a href="https://github.com/trotor/aura/issues" target="_blank" rel="noopener">Raportoi ongelma</a></small></p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

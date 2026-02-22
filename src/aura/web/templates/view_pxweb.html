@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource_name }} — PxWeb{% endblock %}
+
+{% block head %}
+<style>
+    .viewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .viewer-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+    }
+    .viewer-status {
+        font-size: 0.85rem;
+        color: var(--pico-muted-color);
+    }
+    .variable-card {
+        margin-bottom: 0.5rem;
+    }
+    .variable-card header {
+        padding: 0.5rem 1rem;
+    }
+    .variable-card header h4 {
+        margin: 0;
+        font-size: 1rem;
+    }
+    .variable-values {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        padding: 0.5rem 1rem;
+    }
+    .variable-values kbd {
+        font-size: 0.75rem;
+    }
+    .value-count {
+        font-size: 0.8rem;
+        color: var(--pico-muted-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="viewer-header">
+    <div>
+        <h2>{{ resource_name }}</h2>
+        <p class="viewer-status">
+            <a href="/dataset/{{ dataset_id }}">{{ dataset_title }}</a>
+            &mdash; <span class="badge">PxWeb</span>
+        </p>
+    </div>
+    <a href="/dataset/{{ dataset_id }}" role="button" class="outline secondary small">&larr; Takaisin</a>
+</div>
+
+<div id="loading" aria-busy="true">Ladataan muuttujatietoja...</div>
+<div id="error" class="error" hidden></div>
+<div id="pxweb-content" hidden>
+    <article>
+        <header><h3 id="table-title"></h3></header>
+        <div id="variables-container"></div>
+    </article>
+    <p>
+        <a id="pxweb-link" href="{{ url }}" target="_blank" rel="noopener">Avaa PxWeb-taulukko &rarr;</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const url = "{{ url }}";
+
+    async function loadPxWeb() {
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            document.getElementById("loading").hidden = true;
+            renderPxWeb(data);
+        } catch(e) {
+            document.getElementById("loading").hidden = true;
+            const errEl = document.getElementById("error");
+            errEl.textContent = "Virhe ladattaessa: " + e.message;
+            errEl.hidden = false;
+        }
+    }
+
+    function renderPxWeb(data) {
+        const content = document.getElementById("pxweb-content");
+        content.hidden = false;
+
+        document.getElementById("table-title").textContent = data.title || "PxWeb-taulukko";
+
+        const container = document.getElementById("variables-container");
+        const variables = data.variables || [];
+
+        if (!variables.length) {
+            container.innerHTML = "<p>Ei muuttujatietoja.</p>";
+            return;
+        }
+
+        variables.forEach(v => {
+            const card = document.createElement("article");
+            card.className = "variable-card";
+
+            const header = document.createElement("header");
+            const h4 = document.createElement("h4");
+            h4.textContent = v.text || v.code || "Muuttuja";
+            const count = document.createElement("span");
+            count.className = "value-count";
+            count.textContent = ` (${(v.values || v.valueTexts || []).length} arvoa)`;
+            h4.appendChild(count);
+            header.appendChild(h4);
+            card.appendChild(header);
+
+            const valuesDiv = document.createElement("div");
+            valuesDiv.className = "variable-values";
+            const texts = v.valueTexts || v.values || [];
+            const maxShow = 50;
+            texts.slice(0, maxShow).forEach(t => {
+                const kbd = document.createElement("kbd");
+                kbd.textContent = t;
+                valuesDiv.appendChild(kbd);
+            });
+            if (texts.length > maxShow) {
+                const more = document.createElement("span");
+                more.className = "value-count";
+                more.textContent = `... ja ${texts.length - maxShow} muuta`;
+                valuesDiv.appendChild(more);
+            }
+            card.appendChild(valuesDiv);
+            container.appendChild(card);
+        });
+    }
+
+    loadPxWeb();
+})();
+</script>
+{% endblock %}

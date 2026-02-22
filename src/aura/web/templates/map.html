@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Kartta{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1>Datasettien alueellinen jakauma</h1>
+
+<div class="grid map-layout">
+    <div id="map" class="map-container"></div>
+    <aside id="map-sidebar">
+        <article>
+            <header><h3 id="sidebar-title">Valitse kunta kartalta</h3></header>
+            <div id="sidebar-content">
+                <p>Klikkaa kuntaa nÃ¤hdÃ¤ksesi sen datasetit.</p>
+            </div>
+        </article>
+    </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/map.js"></script>
+{% endblock %}

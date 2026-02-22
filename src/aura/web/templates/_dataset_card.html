@@ -1,0 +1,44 @@
+<article class="dataset-card">
+    <header>
+        <a href="/dataset/{{ dataset.id }}">
+            <strong>{{ dataset.title_fi or dataset.title or dataset.name }}</strong>
+        </a>
+        <small class="dataset-meta">
+            <span class="badge">{{ dataset.source }}</span>
+            {% if dataset.organization_title %}
+            <span>{{ dataset.organization_title }}</span>
+            {% endif %}
+        </small>
+    </header>
+    {% set desc = dataset.notes_fi or dataset.notes or "" %}
+    {% if desc %}
+    <p class="dataset-desc">{{ desc[:200] }}{% if desc|length > 200 %}...{% endif %}</p>
+    {% endif %}
+    {% if resources_by_dataset is defined %}
+    {% set res_list = resources_by_dataset.get(dataset.id, []) %}
+    {% if res_list %}
+    <div class="card-resources">
+        {% for r in res_list[:4] %}
+        {% set fmt_upper = r.format.upper() if r.format else "" %}
+        <span class="badge">{{ r.format or "?" }}</span>
+        {% if fmt_upper in ("WMS", "WFS", "GEOJSON", "CSV", "JSON", "API", "PXWEB", "PX") %}
+        <a href="/view/{{ r.id }}" class="card-view-link">Avaa</a>
+        {% endif %}
+        {% endfor %}
+        {% if res_list|length > 4 %}
+        <small>+{{ res_list|length - 4 }}</small>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+    <footer>
+        <small>
+            {% if dataset.num_resources %}{{ dataset.num_resources }} resurssia{% endif %}
+            {% if dataset.metadata_modified %} | {{ dataset.metadata_modified | format_date }}{% endif %}
+            {% set keywords = dataset.keywords_fi | parse_json_list %}
+            {% if keywords %}
+            | {% for kw in keywords[:5] %}<kbd>{{ kw }}</kbd> {% endfor %}
+            {% endif %}
+        </small>
+    </footer>
+</article>

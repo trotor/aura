@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource_name }} — Kartta{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+    .viewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .viewer-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+    }
+    #viewer-map {
+        height: calc(100vh - 220px);
+        min-height: 400px;
+        border-radius: 0.5rem;
+        z-index: 1;
+    }
+    .viewer-controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        padding: 0.5rem 0;
+    }
+    .viewer-controls select {
+        margin: 0;
+        max-width: 300px;
+    }
+    .viewer-status {
+        font-size: 0.85rem;
+        color: var(--pico-muted-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="viewer-header">
+    <div>
+        <h2>{{ resource_name }}</h2>
+        <p class="viewer-status">
+            <a href="/dataset/{{ dataset_id }}">{{ dataset_title }}</a>
+            &mdash; <span class="badge">{{ fmt }}</span>
+        </p>
+    </div>
+    <a href="/dataset/{{ dataset_id }}" role="button" class="outline secondary small">&larr; Takaisin</a>
+</div>
+
+{% if viewer_type == "info" %}
+<article>
+    <p><strong>{{ fmt }}-palvelu:</strong> <a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></p>
+</article>
+{% else %}
+<div class="viewer-controls" id="viewer-controls">
+    {% if viewer_type in ("wms", "wfs") %}
+    <label for="layer-select">Taso:</label>
+    <select id="layer-select" disabled>
+        <option>Ladataan tasoja...</option>
+    </select>
+    {% endif %}
+    <span id="viewer-status" class="viewer-status"></span>
+</div>
+<div id="viewer-map"></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if viewer_type != "info" %}
+<script src="/static/js/viewer.js"></script>
+<script>
+    initViewer({
+        type: "{{ viewer_type }}",
+        url: "{{ url }}",
+        resourceId: "{{ resource.id }}"
+    });
+</script>
+{% endif %}
+{% endblock %}

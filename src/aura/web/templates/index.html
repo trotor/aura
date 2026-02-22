@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Etusivu{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Aura</h1>
+    <p>Suomalaisen avoimen datan selain</p>
+</hgroup>
+
+<div class="grid">
+    <article>
+        <header>Datasetit</header>
+        <p class="stat-number">{{ stats.total_datasets }}</p>
+    </article>
+    <article>
+        <header>Organisaatiot</header>
+        <p class="stat-number">{{ stats.total_organizations }}</p>
+    </article>
+    <article>
+        <header>Formaatit</header>
+        <p class="stat-number">{{ stats.total_formats }}</p>
+    </article>
+</div>
+
+<div class="grid">
+    <article>
+        <header><h3>Suurimmat julkaisijat</h3></header>
+        {% for org in stats.top_organizations %}
+        <div class="bar-row">
+            <span class="bar-label">{{ org.organization_title }}</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width: {{ (org.count / stats.top_organizations[0].count * 100) | int }}%"></div>
+            </div>
+            <span class="bar-value">{{ org.count }}</span>
+        </div>
+        {% endfor %}
+    </article>
+
+    <article>
+        <header><h3>Yleisimmat formaatit</h3></header>
+        {% for fmt in stats.top_formats %}
+        <div class="bar-row">
+            <span class="bar-label">{{ fmt.format }}</span>
+            <div class="bar-track">
+                <div class="bar-fill" style="width: {{ (fmt.count / stats.top_formats[0].count * 100) | int }}%"></div>
+            </div>
+            <span class="bar-value">{{ fmt.count }}</span>
+        </div>
+        {% endfor %}
+    </article>
+</div>
+
+<article>
+    <header><h3>Datalateet</h3></header>
+    <div class="overflow-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>Lahde</th>
+                    <th>Datasetteja</th>
+                    <th>Viimeksi paivitetty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sources %}
+                <tr>
+                    <td>{{ s.source }}</td>
+                    <td>{{ s.count }}</td>
+                    <td>{{ s.last_harvest | format_date_time }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</article>
+
+<p><a href="/search" role="button">Selaa datasetteja</a></p>
+{% endblock %}

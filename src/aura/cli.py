@@ -157,6 +157,26 @@ def main() -> None:
         help="Pakota uudelleenlataus vaikka data on tuore",
     )
 
+    # web
+    web_parser = subparsers.add_parser("web", help="Käynnistä paikallinen web-palvelin")
+    web_parser.add_argument(
+        "--port", type=int, default=8080,
+        help="Portti (oletus: 8080)",
+    )
+    web_parser.add_argument(
+        "--host", default="127.0.0.1",
+        help="Osoite (oletus: 127.0.0.1)",
+    )
+
+    # build-site
+    build_site_parser = subparsers.add_parser(
+        "build-site", help="Generoi staattinen GitHub Pages -sivu"
+    )
+    build_site_parser.add_argument(
+        "--output", "-o", default="docs/site",
+        help="Tuloshakemisto (oletus: docs/site)",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -524,6 +544,20 @@ def main() -> None:
                 return
             count = asyncio.run(p.populate())
             print(f"Populoitu {count} riviä lähteestä {args.name}.")
+
+    elif args.command == "web":
+        import uvicorn
+
+        from aura.web.app import create_app
+
+        app = create_app()
+        print(f"Aura web: http://{args.host}:{args.port}")
+        uvicorn.run(app, host=args.host, port=args.port)
+
+    elif args.command == "build-site":
+        from aura.web.build import build_static_site
+
+        build_static_site(output_dir=args.output)
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations

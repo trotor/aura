@@ -1,0 +1,15 @@
+{% for dataset in results %}
+{% include "_dataset_card.html" %}
+{% else %}
+<p>Ei tuloksia.</p>
+{% endfor %}
+
+{% if has_next %}
+<button hx-get="/search/results?q={{ q }}&source={{ source }}&fmt={{ fmt }}&organization={{ organization }}&page={{ page + 1 }}"
+        hx-target="#results"
+        hx-swap="innerHTML"
+        hx-indicator="#search-spinner"
+        class="outline">
+    Lisaa tuloksia
+</button>
+{% endif %}

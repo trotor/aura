@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}{{ resource_name }} — Taulukko{% endblock %}
+
+{% block head %}
+<style>
+    .viewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .viewer-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+    }
+    .viewer-status {
+        font-size: 0.85rem;
+        color: var(--pico-muted-color);
+    }
+    .viewer-table-wrap {
+        overflow-x: auto;
+        max-height: calc(100vh - 250px);
+        overflow-y: auto;
+    }
+    .viewer-table {
+        font-size: 0.85rem;
+        width: 100%;
+    }
+    .viewer-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .viewer-table th {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .viewer-table th:hover {
+        text-decoration: underline;
+    }
+    .viewer-table td {
+        max-width: 20rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .sort-arrow {
+        margin-left: 0.25rem;
+        opacity: 0.5;
+    }
+    .sort-arrow.active {
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="viewer-header">
+    <div>
+        <h2>{{ resource_name }}</h2>
+        <p class="viewer-status">
+            <a href="/dataset/{{ dataset_id }}">{{ dataset_title }}</a>
+            &mdash; <span class="badge">{{ fmt }}</span>
+            &mdash; <span id="row-count"></span>
+        </p>
+    </div>
+    <a href="/dataset/{{ dataset_id }}" role="button" class="outline secondary small">&larr; Takaisin</a>
+</div>
+
+<div id="loading" aria-busy="true">Ladataan dataa...</div>
+<div id="error" class="error" hidden></div>
+
+<div class="viewer-table-wrap" id="table-wrap" hidden>
+    <table class="viewer-table" id="data-table">
+        <thead><tr id="table-head"></tr></thead>
+        <tbody id="table-body"></tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const resourceId = "{{ resource.id }}";
+    const fmt = "{{ fmt }}";
+
+    async function loadData() {
+        try {
+            const resp = await fetch(`/api/preview/${resourceId}?max_rows=100`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            document.getElementById("loading").hidden = true;
+            renderData(data);
+        } catch(e) {
+            document.getElementById("loading").hidden = true;
+            const errEl = document.getElementById("error");
+            errEl.textContent = "Virhe ladattaessa: " + e.message;
+            errEl.hidden = false;
+        }
+    }
+
+    function renderData(data) {
+        if (data.type === "error") {
+            const errEl = document.getElementById("error");
+            errEl.textContent = data.message;
+            errEl.hidden = false;
+            return;
+        }
+        if (data.type === "empty") {
+            const errEl = document.getElementById("error");
+            errEl.textContent = data.message;
+            errEl.hidden = false;
+            return;
+        }
+
+        let headers, rows;
+
+        if (data.type === "csv" && data.headers) {
+            headers = data.headers;
+            rows = data.rows.map(r => {
+                const obj = {};
+                headers.forEach((h, i) => obj[h] = r[i] || "");
+                return obj;
+            });
+        } else if (data.type === "table" && data.rows && data.rows.length) {
+            headers = Object.keys(data.rows[0]);
+            rows = data.rows;
+        } else if (data.type === "json" && data.data) {
+            // Näytä raaka JSON
+            document.getElementById("table-wrap").hidden = false;
+            document.getElementById("table-wrap").innerHTML =
+                '<pre style="font-size:0.85rem;max-height:70vh;overflow:auto">' +
+                esc(JSON.stringify(data.data, null, 2)) + '</pre>';
+            return;
+        } else if (data.type === "text" && data.content) {
+            // Virheellinen JSON — näytä raakadata
+            document.getElementById("table-wrap").hidden = false;
+            document.getElementById("table-wrap").innerHTML =
+                '<pre style="font-size:0.85rem;max-height:70vh;overflow:auto">' +
+                esc(data.content) + '</pre>';
+            document.getElementById("row-count").textContent = "Virheellinen JSON — näytetään raakadata";
+            return;
+        } else {
+            document.getElementById("error").textContent = "Esikatselua ei saatavilla.";
+            document.getElementById("error").hidden = false;
+            return;
+        }
+
+        document.getElementById("row-count").textContent =
+            rows.length + " rivi" + (rows.length !== 1 ? "ä" : "") +
+            (data.total ? ` / ${data.total} yhteensä` : "");
+
+        buildTable(headers, rows);
+    }
+
+    let currentSort = { col: null, asc: true };
+
+    function buildTable(headers, rows) {
+        const thead = document.getElementById("table-head");
+        const tbody = document.getElementById("table-body");
+
+        thead.innerHTML = "";
+        headers.forEach(h => {
+            const th = document.createElement("th");
+            th.textContent = h;
+            th.addEventListener("click", () => sortTable(h, headers, rows));
+            thead.appendChild(th);
+        });
+
+        fillBody(tbody, headers, rows);
+        document.getElementById("table-wrap").hidden = false;
+    }
+
+    function fillBody(tbody, headers, rows) {
+        tbody.innerHTML = "";
+        rows.forEach(row => {
+            const tr = document.createElement("tr");
+            headers.forEach(h => {
+                const td = document.createElement("td");
+                td.textContent = String(row[h] ?? "");
+                td.title = String(row[h] ?? "");
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function sortTable(col, headers, rows) {
+        if (currentSort.col === col) {
+            currentSort.asc = !currentSort.asc;
+        } else {
+            currentSort.col = col;
+            currentSort.asc = true;
+        }
+        rows.sort((a, b) => {
+            const va = String(a[col] ?? "");
+            const vb = String(b[col] ?? "");
+            const na = Number(va), nb = Number(vb);
+            if (!isNaN(na) && !isNaN(nb)) return currentSort.asc ? na - nb : nb - na;
+            return currentSort.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+        fillBody(document.getElementById("table-body"), headers, rows);
+    }
+
+    function esc(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    loadData();
+})();
+</script>
+{% endblock %}

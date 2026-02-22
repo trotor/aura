@@ -1,0 +1,174 @@
+/* Aura — minimaalinen oma CSS */
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    text-align: center;
+    margin: 0;
+}
+
+/* Palkkikaavio */
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.bar-label {
+    min-width: 10rem;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-track {
+    flex: 1;
+    height: 1.2rem;
+    background: var(--pico-secondary-background);
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    background: var(--pico-primary);
+    border-radius: 0.25rem;
+    transition: width 0.3s ease;
+}
+
+.bar-value {
+    min-width: 3rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Dataset-kortti */
+.dataset-card {
+    margin-bottom: 0.5rem;
+}
+
+.dataset-card header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.dataset-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.dataset-desc {
+    font-size: 0.9rem;
+    color: var(--pico-muted-color);
+}
+
+/* Kortin resurssit */
+.card-resources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+    margin: 0.25rem 0;
+}
+
+.card-view-link {
+    font-size: 0.75rem;
+    margin-right: 0.5rem;
+}
+
+/* Badge */
+.badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.75rem;
+    background: var(--pico-primary);
+    color: var(--pico-primary-inverse);
+    border-radius: 0.25rem;
+    font-weight: 600;
+}
+
+/* Nav */
+.nav-brand {
+    text-decoration: none;
+}
+
+/* Esikatselu-taulukko */
+.preview-table {
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+}
+
+.preview-table td, .preview-table th {
+    padding: 0.25rem 0.5rem;
+    max-width: 15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* HTMX indicator */
+.htmx-indicator {
+    display: none;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    display: block;
+}
+
+/* Kartta */
+.map-layout {
+    grid-template-columns: 2fr 1fr;
+}
+
+.map-container {
+    height: 600px;
+    border-radius: 0.5rem;
+    z-index: 1;
+}
+
+#map-sidebar {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Overflow */
+.overflow-auto {
+    overflow-x: auto;
+}
+
+/* Small button variant */
+button.small, .small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* Error */
+.error {
+    color: var(--pico-del-color);
+}
+
+/* Katselija-napit resurssitaulukossa */
+a.outline.small[role="button"] {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    text-decoration: none;
+    display: inline-block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .bar-label {
+        min-width: 6rem;
+    }
+    .map-layout {
+        grid-template-columns: 1fr;
+    }
+    .map-container {
+        height: 400px;
+    }
+}

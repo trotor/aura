@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aura — Suomalainen avoin data</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        .stat-number { font-size: 2.5rem; font-weight: bold; text-align: center; margin: 0; }
+        .bar-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
+        .bar-label { min-width: 10rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bar-track { flex: 1; height: 1.2rem; background: var(--pico-secondary-background); border-radius: 0.25rem; overflow: hidden; }
+        .bar-fill { height: 100%; background: var(--pico-primary); border-radius: 0.25rem; }
+        .bar-value { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
+        .badge { display: inline-block; padding: 0.1rem 0.4rem; font-size: 0.75rem; background: var(--pico-primary-background); color: var(--pico-primary); border-radius: 0.25rem; font-weight: 600; }
+        .dataset-item { padding: 0.5rem 0; border-bottom: 1px solid var(--pico-muted-border-color); }
+        .dataset-item:last-child { border-bottom: none; }
+        #dataset-list { max-height: 60vh; overflow-y: auto; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <hgroup>
+            <h1>Aura</h1>
+            <p>Suomalaisen avoimen datan selain — {{ total_datasets }} datasettia</p>
+        </hgroup>
+
+        <div class="grid">
+            <article>
+                <header>Datasetit</header>
+                <p class="stat-number">{{ stats.total_datasets }}</p>
+            </article>
+            <article>
+                <header>Organisaatiot</header>
+                <p class="stat-number">{{ stats.total_organizations }}</p>
+            </article>
+            <article>
+                <header>Formaatit</header>
+                <p class="stat-number">{{ stats.total_formats }}</p>
+            </article>
+        </div>
+
+        <div class="grid">
+            <article>
+                <header><h3>Suurimmat julkaisijat</h3></header>
+                {% for org in stats.top_organizations %}
+                <div class="bar-row">
+                    <span class="bar-label">{{ org.organization_title }}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (org.count / stats.top_organizations[0].count * 100) | int }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ org.count }}</span>
+                </div>
+                {% endfor %}
+            </article>
+
+            <article>
+                <header><h3>Yleisimmat formaatit</h3></header>
+                {% for fmt in stats.top_formats %}
+                <div class="bar-row">
+                    <span class="bar-label">{{ fmt.format }}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (fmt.count / stats.top_formats[0].count * 100) | int }}%"></div>
+                    </div>
+                    <span class="bar-value">{{ fmt.count }}</span>
+                </div>
+                {% endfor %}
+            </article>
+        </div>
+
+        <article>
+            <header><h3>Datalateet</h3></header>
+            <table>
+                <thead>
+                    <tr><th>Lahde</th><th>Datasetteja</th><th>Viimeksi</th></tr>
+                </thead>
+                <tbody>
+                    {% for s in sources %}
+                    <tr>
+                        <td>{{ s.source }}</td>
+                        <td>{{ s.count }}</td>
+                        <td>{{ s.last_harvest | format_date }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </article>
+
+        <article>
+            <header>
+                <h3>Datasetit</h3>
+                <input type="search" id="search-input" placeholder="Hae datasetteja...">
+            </header>
+            <div id="dataset-list"></div>
+            <p id="result-count"></p>
+        </article>
+
+        <footer>
+            <hr>
+            <p><small>Aura — Suomalaisen avoimen datan selain. <a href="https://github.com/trotor/aura">GitHub</a></small></p>
+        </footer>
+    </main>
+
+    <script>
+    (function() {
+        var allData = [];
+        var listEl = document.getElementById("dataset-list");
+        var countEl = document.getElementById("result-count");
+        var searchInput = document.getElementById("search-input");
+
+        fetch("data.json")
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allData = data;
+                render(data.slice(0, 50));
+                countEl.textContent = data.length + " datasettia";
+            });
+
+        searchInput.addEventListener("input", function() {
+            var q = this.value.toLowerCase().trim();
+            if (!q) {
+                render(allData.slice(0, 50));
+                countEl.textContent = allData.length + " datasettia";
+                return;
+            }
+            var filtered = allData.filter(function(d) {
+                return d.t.toLowerCase().indexOf(q) !== -1 ||
+                       d.o.toLowerCase().indexOf(q) !== -1 ||
+                       d.k.toLowerCase().indexOf(q) !== -1 ||
+                       d.n.toLowerCase().indexOf(q) !== -1;
+            });
+            render(filtered.slice(0, 50));
+            countEl.textContent = filtered.length + " tulosta";
+        });
+
+        function render(items) {
+            var html = "";
+            items.forEach(function(d) {
+                html += '<div class="dataset-item">';
+                html += '<strong>' + esc(d.t) + '</strong>';
+                html += ' <span class="badge">' + esc(d.s) + '</span>';
+                if (d.o) html += ' <small>' + esc(d.o) + '</small>';
+                if (d.n) html += '<br><small>' + esc(d.n) + '</small>';
+                html += '</div>';
+            });
+            listEl.innerHTML = html || "<p>Ei tuloksia.</p>";
+        }
+
+        function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+    })();
+    </script>
+</body>
+</html>

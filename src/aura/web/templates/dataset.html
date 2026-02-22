@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset.title_fi or dataset.title or dataset.name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>{{ dataset.title_fi or dataset.title or dataset.name }}</h1>
+    <p>
+        <span class="badge">{{ dataset.source }}</span>
+        {% if dataset.organization_title %}
+        <span>{{ dataset.organization_title }}</span>
+        {% endif %}
+    </p>
+</hgroup>
+
+{% set desc = dataset.notes_fi or dataset.notes or "" %}
+{% if desc %}
+<article>
+    <p>{{ desc }}</p>
+</article>
+{% endif %}
+
+{% if enrichments.get("description_extended") %}
+<article>
+    <header><h3>Laajennettu kuvaus</h3></header>
+    <p>{{ enrichments.description_extended }}</p>
+</article>
+{% endif %}
+
+<div class="grid">
+    <article>
+        <header><h3>Metatiedot</h3></header>
+        <table>
+            {% if dataset.license_title %}
+            <tr><td><strong>Lisenssi</strong></td><td>{{ dataset.license_title }}</td></tr>
+            {% endif %}
+            {% if dataset.update_frequency %}
+            <tr><td><strong>Paivitystiheys</strong></td><td>{{ dataset.update_frequency }}</td></tr>
+            {% endif %}
+            {% if dataset.metadata_created %}
+            <tr><td><strong>Luotu</strong></td><td>{{ dataset.metadata_created | format_date }}</td></tr>
+            {% endif %}
+            {% if dataset.metadata_modified %}
+            <tr><td><strong>Muokattu</strong></td><td>{{ dataset.metadata_modified | format_date }}</td></tr>
+            {% endif %}
+            {% if dataset.collection_type %}
+            <tr><td><strong>Tyyppi</strong></td><td>{{ dataset.collection_type }}</td></tr>
+            {% endif %}
+            {% if dataset.access_level %}
+            <tr><td><strong>Saatavuus</strong></td><td>{{ dataset.access_level }}</td></tr>
+            {% endif %}
+        </table>
+    </article>
+
+    <article>
+        <header><h3>Avainsanat ja alueet</h3></header>
+        {% set keywords = dataset.keywords_fi | parse_json_list %}
+        {% if keywords %}
+        <p>
+            {% for kw in keywords %}<kbd>{{ kw }}</kbd> {% endfor %}
+        </p>
+        {% endif %}
+        {% set geo = dataset.geographical_coverage | parse_json_list %}
+        {% if geo %}
+        <p><strong>Alue:</strong> {{ geo | join(", ") }}</p>
+        {% endif %}
+    </article>
+</div>
+
+{% if resources %}
+<article>
+    <header><h3>Resurssit ({{ resources | length }})</h3></header>
+    <div class="overflow-auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nimi</th>
+                    <th>Formaatti</th>
+                    <th>Koko</th>
+                    <th>Esikatselu</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in resources %}
+                <tr>
+                    <td>
+                        {% if r.url %}
+                        <a href="{{ r.url }}" target="_blank" rel="noopener">
+                            {{ r.name_fi or r.name or r.url[:60] }}
+                        </a>
+                        {% else %}
+                        {{ r.name_fi or r.name or "Nimetön" }}
+                        {% endif %}
+                    </td>
+                    <td><span class="badge">{{ r.format }}</span></td>
+                    <td>{{ r.file_size or "-" }}</td>
+                    <td>
+                        {% set fmt_upper = r.format.upper() if r.format else "" %}
+                        {% if fmt_upper in ("JSON", "CSV", "GEOJSON", "API") %}
+                        <button class="outline secondary small"
+                                hx-get="/api/preview/{{ r.id }}"
+                                hx-target="#preview-{{ r.id }}"
+                                hx-indicator="#preview-spinner-{{ r.id }}">
+                            Esikatsele
+                        </button>
+                        <span id="preview-spinner-{{ r.id }}" class="htmx-indicator" aria-busy="true"></span>
+                        {% endif %}
+                        {% if fmt_upper in ("WMS", "WFS", "GEOJSON", "CSV", "JSON", "API", "PXWEB", "PX") %}
+                        <a href="/view/{{ r.id }}" class="outline small" role="button">Avaa</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if fmt_upper in ("JSON", "CSV", "GEOJSON", "API") %}
+                <tr>
+                    <td colspan="4" id="preview-{{ r.id }}"></td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</article>
+{% endif %}
+
+{% if enrichments %}
+<article>
+    <header><h3>Rikastukset</h3></header>
+    <table>
+        {% for field, value in enrichments.items() %}
+        <tr>
+            <td><strong>{{ field }}</strong></td>
+            <td>{{ value }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</article>
+{% endif %}
+
+<p><a href="/search">&larr; Takaisin hakuun</a></p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Esikatselu-vastauksen renderöinti
+document.body.addEventListener("htmx:afterSwap", function(evt) {
+    if (!evt.detail.target.id.startsWith("preview-")) return;
+    try {
+        const data = JSON.parse(evt.detail.target.textContent);
+        evt.detail.target.innerHTML = renderPreview(data);
+    } catch(e) {
+        // Ei JSON — jätä sellaisenaan
+    }
+});
+
+function renderPreview(data) {
+    if (data.type === "error") return `<p class="error">${data.message}</p>`;
+    if (data.type === "empty") return `<p>${data.message}</p>`;
+    if (data.type === "link") return `<a href="${data.url}" target="_blank">${data.format} resurssi</a>`;
+    if (data.type === "ogc") return `<p>${data.message}</p>`;
+
+    if (data.type === "csv" && data.headers) {
+        let html = '<table class="preview-table"><thead><tr>';
+        data.headers.forEach(h => html += `<th>${esc(h)}</th>`);
+        html += '</tr></thead><tbody>';
+        data.rows.forEach(row => {
+            html += '<tr>';
+            row.forEach(cell => html += `<td>${esc(cell)}</td>`);
+            html += '</tr>';
+        });
+        return html + '</tbody></table>';
+    }
+
+    if (data.type === "table" && data.rows && data.rows.length) {
+        const keys = Object.keys(data.rows[0]);
+        let html = '<table class="preview-table"><thead><tr>';
+        keys.forEach(k => html += `<th>${esc(k)}</th>`);
+        html += '</tr></thead><tbody>';
+        data.rows.forEach(row => {
+            html += '<tr>';
+            keys.forEach(k => html += `<td>${esc(String(row[k] ?? ""))}</td>`);
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        if (data.total) html += `<small>${data.total} tietuetta yhteensä</small>`;
+        return html;
+    }
+
+    if (data.type === "json") return `<pre>${esc(JSON.stringify(data.data, null, 2).slice(0, 2000))}</pre>`;
+    if (data.type === "text") return `<pre style="font-size:0.8rem;max-height:20rem;overflow:auto">${esc(data.content)}</pre>`;
+    return '<p>Esikatselua ei saatavilla.</p>';
+}
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+</script>
+{% endblock %}

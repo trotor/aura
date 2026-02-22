@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Haku{% endblock %}
+
+{% block content %}
+<h1>Hae datasetteja</h1>
+
+<form id="search-form"
+      hx-get="/search/results"
+      hx-target="#results"
+      hx-trigger="submit"
+      hx-push-url="/search"
+      hx-indicator="#search-spinner">
+    <div class="grid">
+        <input type="search" name="q" id="search-q" placeholder="Hakusanat..." aria-label="Hakusanat"
+               value="{{ q or '' }}">
+        <button type="submit">Hae</button>
+    </div>
+
+    <details{% if source or fmt or organization %} open{% endif %}>
+        <summary>Suodattimet</summary>
+        <div class="grid">
+            <label>
+                Lahde
+                <select name="source" id="search-source">
+                    <option value="">Kaikki</option>
+                    {% for s in sources %}
+                    <option value="{{ s }}"{% if s == source %} selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Formaatti
+                <select name="fmt" id="search-fmt">
+                    <option value="">Kaikki</option>
+                    {% for f in formats %}
+                    <option value="{{ f }}"{% if f == fmt %} selected{% endif %}>{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Organisaatio
+                <select name="organization" id="search-org">
+                    <option value="">Kaikki</option>
+                    {% for o in organizations %}
+                    <option value="{{ o }}"{% if o == organization %} selected{% endif %}>{{ o }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </details>
+</form>
+
+<div id="search-spinner" class="htmx-indicator">
+    <p aria-busy="true">Haetaan...</p>
+</div>
+
+<div id="results"
+     hx-get="/search/results?q={{ q or '' }}&source={{ source or '' }}&fmt={{ fmt or '' }}&organization={{ organization or '' }}"
+     hx-trigger="load"
+     hx-indicator="#search-spinner">
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Päivitä selaimen URL hakuparametreilla
+document.body.addEventListener("htmx:afterOnLoad", function(evt) {
+    if (evt.detail.target.id !== "results") return;
+    const form = document.getElementById("search-form");
+    const params = new URLSearchParams(new FormData(form));
+    // Poista tyhjät parametrit
+    for (const [k, v] of [...params.entries()]) {
+        if (!v) params.delete(k);
+    }
+    const qs = params.toString();
+    const url = "/search" + (qs ? "?" + qs : "");
+    history.replaceState(null, "", url);
+});
+</script>
+{% endblock %}
