@@ -24,9 +24,11 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Hallitse tietokantayhteyttä serverin elinkaaren ajan."""
     conn = get_connection(check_same_thread=False)
     init_db(conn)
+    yso = YsoClient()
     try:
-        yield {"db": conn, "findings": [], "yso": YsoClient()}
+        yield {"db": conn, "findings": [], "yso": yso}
     finally:
+        await yso.close()
         conn.close()
 
 

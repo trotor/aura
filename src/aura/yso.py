@@ -45,6 +45,19 @@ class YsoClient:
         self._cache: dict[str, _CacheEntry] = {}
         self._cache_ttl = cache_ttl
         self._locks: dict[str, asyncio.Lock] = {}
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Palauta jaettu HTTP-asiakas (luo tarvittaessa)."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=10.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Sulje jaettu HTTP-asiakas."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     async def search(
         self,
@@ -53,13 +66,13 @@ class YsoClient:
         max_hits: int = 5,
     ) -> list[YsoConcept]:
         """Hae YSO-käsitteitä hakutermillä."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{API_BASE}/{VOCAB}/search",
-                params={"query": f"{query}*", "lang": lang, "maxhits": max_hits},
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = self._get_client()
+        resp = await client.get(
+            f"{API_BASE}/{VOCAB}/search",
+            params={"query": f"{query}*", "lang": lang, "maxhits": max_hits},
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
         results = data.get("results", [])
         return [
@@ -78,13 +91,13 @@ class YsoClient:
         lang: str = "fi",
     ) -> list[YsoConcept]:
         """Hae käsitteen suppeammat alakäsitteet."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{API_BASE}/{VOCAB}/narrower",
-                params={"uri": uri, "lang": lang},
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = self._get_client()
+        resp = await client.get(
+            f"{API_BASE}/{VOCAB}/narrower",
+            params={"uri": uri, "lang": lang},
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
         narrower = data.get("narrower", [])
         return [
