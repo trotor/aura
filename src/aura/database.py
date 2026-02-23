@@ -810,6 +810,51 @@ def get_stale_enrichments(
     return [dict(r) for r in rows]
 
 
+def get_datasets_without_enrichment(
+    conn: sqlite3.Connection,
+    field: str,
+    source: str = "",
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Hae datasetit joilta puuttuu tietty enrichment.
+
+    Args:
+        field: Enrichment-kenttä (esim. "yso_concepts").
+        source: Rajaa lähteeseen (tyhjä = kaikki).
+        limit: Tulosten enimmäismäärä.
+
+    Returns:
+        Lista datasettejä joilla ei ole kyseistä enrichmentiä.
+    """
+    conditions = ["d.id NOT IN (SELECT dataset_id FROM enrichments WHERE field = ?)"]
+    params: list[Any] = [field]
+
+    # Myös name-kentällä tallennetut enrichmentit (slug-pohjainen id)
+    conditions.append(
+        "d.name NOT IN (SELECT dataset_id FROM enrichments WHERE field = ?)"
+    )
+    params.append(field)
+
+    if source:
+        conditions.append("d.source = ?")
+        params.append(source)
+
+    where = " AND ".join(conditions)
+    params.append(limit)
+
+    rows = conn.execute(
+        f"""
+        SELECT d.*
+        FROM datasets d
+        WHERE {where}
+        ORDER BY d.metadata_modified DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def prune_enrichments(
     conn: sqlite3.Connection,
     older_than_days: int = 365,

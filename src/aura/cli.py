@@ -177,6 +177,27 @@ def main() -> None:
         help="Tuloshakemisto (oletus: docs/site)",
     )
 
+    # auto-tag
+    auto_tag_parser = subparsers.add_parser(
+        "auto-tag", help="Tagita datasetit automaattisesti YSO-käsitteillä"
+    )
+    auto_tag_parser.add_argument(
+        "--source", default="",
+        help="Rajaa lähteeseen (esim. avoindata.fi)",
+    )
+    auto_tag_parser.add_argument(
+        "--limit", type=int, default=100,
+        help="Käsiteltävien datasettien enimmäismäärä (oletus: 100)",
+    )
+    auto_tag_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Näytä mitä tagitettaisiin, mutta älä tallenna",
+    )
+    auto_tag_parser.add_argument(
+        "--delay", type=float, default=0.2,
+        help="Viive sekunteina datasettien välissä (oletus: 0.2)",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -559,6 +580,14 @@ def main() -> None:
 
         build_static_site(output_dir=args.output)
 
+    elif args.command == "auto-tag":
+        asyncio.run(_auto_tag(
+            source=args.source,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            delay=args.delay,
+        ))
+
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations
 
@@ -571,6 +600,97 @@ def main() -> None:
 
     else:
         parser.print_help()
+
+
+async def _auto_tag(
+    source: str = "",
+    limit: int = 100,
+    dry_run: bool = False,
+    delay: float = 0.2,
+) -> None:
+    """Tagita datasetit automaattisesti YSO-käsitteillä."""
+    from aura.database import (
+        add_enrichment,
+        get_connection,
+        get_datasets_without_enrichment,
+        init_db,
+    )
+    from aura.tagger import suggest_tags
+    from aura.yso import YsoClient
+
+    conn = get_connection()
+    init_db(conn)
+
+    datasets = get_datasets_without_enrichment(
+        conn, field="yso_concepts", source=source, limit=limit,
+    )
+
+    if not datasets:
+        print("Kaikki datasetit on jo tagitettu.")
+        return
+
+    print(f"Tagitettavia datasettejä: {len(datasets)}")
+    if dry_run:
+        print("(dry-run: ei tallenneta)\n")
+
+    yso = YsoClient()
+    tagged = 0
+    skipped = 0
+    errors = 0
+
+    try:
+        for i, ds in enumerate(datasets, 1):
+            title = ds.get("title_fi") or ds.get("title") or ds.get("name", "")
+            ds_id = ds["id"]
+
+            try:
+                suggestions = await suggest_tags(ds, yso, max_tags=10)
+            except Exception as e:
+                errors += 1
+                print(f"  VIRHE: {title[:60]} — {e}")
+                continue
+
+            if not suggestions:
+                skipped += 1
+                if i % 10 == 0 or i == len(datasets):
+                    print(f"  [{i}/{len(datasets)}] Edistyminen...")
+                continue
+
+            labels = [s.label for s in suggestions]
+
+            tagged += 1
+            if dry_run:
+                print(f"  {title[:60]}")
+                print(f"    → {', '.join(labels)}")
+            else:
+                import json
+
+                concepts_json = json.dumps(
+                    [s.to_dict() for s in suggestions], ensure_ascii=False,
+                )
+                add_enrichment(
+                    conn,
+                    dataset_id=ds_id,
+                    field="yso_concepts",
+                    value=concepts_json,
+                    confidence="high",
+                    source_type="ai_analysis",
+                    source_detail="YSO auto-tagger (CLI)",
+                )
+
+            if i % 10 == 0 or i == len(datasets):
+                print(f"  [{i}/{len(datasets)}] Edistyminen...")
+
+            if delay > 0 and i < len(datasets):
+                await asyncio.sleep(delay)
+
+    finally:
+        await yso.close()
+
+    if dry_run:
+        print(f"\nDry-run valmis. Tagitettaisiin {tagged} datasettiä ({skipped} ohitettu).")
+    else:
+        print(f"\nTagitettu {tagged} datasettiä, virheitä {errors}.")
 
 
 def _gap_pct(n: int, total: int) -> str:
