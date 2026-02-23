@@ -1,0 +1,21 @@
+{
+  "domain": "agriculture",
+  "description": "Maatalous, metsätalous ja luonnonvarat",
+  "mappings": {
+    "maatalous": ["peltolohko", "viljely", "maatila", "sato", "lannoitus"],
+    "peltolohko": ["maatalous", "kasvulohko", "peltomaa"],
+    "metsätalous": ["metsävarat", "puusto", "hakkuu", "metsänhoito"],
+    "metsä": ["metsävarat", "puusto", "metsätalous"],
+    "puusto": ["metsävarat", "metsätalous", "puulaji"],
+    "kalatalous": ["kalastus", "kalankasvatus", "saalis"],
+    "eläintuotanto": ["kotieläin", "nauta", "sika", "siipikarja"],
+    "luomu": ["luomutuotanto", "luomuviljely"],
+    "elintarvike": ["ruoka", "elintarviketurvallisuus", "elintarvikeketju"],
+    "kasvinsuojelu": ["torjunta-aine", "kasvintuhooja"],
+    "maaperätieto": ["maalaji", "maaperä", "multavuus"],
+    "riista": ["metsästys", "riistaeläin", "saalis"],
+    "porotalous": ["poro", "poronhoito", "poronhoitoalue"],
+    "turkistarhaus": ["turkistuotanto", "turkiseläin"],
+    "luonnonvara": ["metsävarat", "vesivarat", "mineraali"]
+  }
+}

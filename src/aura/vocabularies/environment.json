@@ -1,0 +1,21 @@
+{
+  "domain": "environment",
+  "description": "Ympäristö, ilmanlaatu, vesistöt ja luonnonsuojelu",
+  "mappings": {
+    "ilmanlaatu": ["ilmansaasteet", "hiukkaset", "pienhiukkaset", "typpidioksidi", "otsoni"],
+    "päästö": ["ilmansaasteet", "kasvihuonekaasu", "hiilidioksidi"],
+    "vesistö": ["järvi", "joki", "pohjavesi", "merialue"],
+    "veden laatu": ["vesistö", "vedenlaatu", "ravinnekuormitus"],
+    "luonnonsuojelu": ["suojelualue", "Natura", "lajiensuojelu", "uhanalainen"],
+    "ilmastonmuutos": ["kasvihuonekaasu", "hiilijalanjälki", "sopeutuminen"],
+    "jäte": ["jätehuolto", "kierrätys", "kaatopaikka", "ongelmajäte"],
+    "melu": ["melusaaste", "liikennemelu", "melukartta"],
+    "ympäristölupa": ["ympäristönsuojelu", "päästöraja"],
+    "biodiversiteetti": ["luonnon monimuotoisuus", "eliölajit", "elinympäristö"],
+    "maaperä": ["maaperätieto", "pilaantunut maa", "maalaji"],
+    "hydrologia": ["vesistö", "valuma-alue", "virtaama", "vedenkorkeus"],
+    "sää": ["lämpötila", "sademäärä", "tuuli", "säähavainto"],
+    "ilmasto": ["lämpötila", "sademäärä", "ilmastonmuutos"],
+    "luonto": ["biodiversiteetti", "luontotyyppi", "kasvillisuus"]
+  }
+}

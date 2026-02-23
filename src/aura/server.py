@@ -110,6 +110,36 @@ async def _expand_with_yso(query: str, ctx: Context | None) -> str:
     return ""
 
 
+async def _expand_query(query: str, ctx: Context | None) -> str:
+    """Laajenna hakutermi sanastoilla ja YSO-ontologialla.
+
+    Yhdistää paikallisen sanastolaajennuksen (instant, ei API-kutsuja)
+    ja YSO-laajennuksen. Palauttaa FTS5-hakulausekkeen.
+    """
+    from aura.vocabularies import expand_with_vocabularies
+
+    all_terms = [query]
+
+    # 1. Sanastolaajennus (instant)
+    vocab_terms = expand_with_vocabularies(query)
+    all_terms.extend(vocab_terms)
+
+    # 2. YSO-laajennus (API-kutsu)
+    yso = _get_yso(ctx)
+    if yso:
+        try:
+            yso_terms = await yso.expand_query(query)
+            for term in yso_terms:
+                if term.lower() not in {t.lower() for t in all_terms}:
+                    all_terms.append(term)
+        except Exception:
+            logger.warning("[yso] Hakulaajennus epäonnistui: '%s'", query, exc_info=True)
+
+    if len(all_terms) > 1:
+        return build_fts5_query(all_terms)
+    return ""
+
+
 # Rekisteröi kaikki @mcp.tool()-funktiot alimoduuleista
 import aura.tools  # noqa: E402, F401
 

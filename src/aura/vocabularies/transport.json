@@ -1,0 +1,21 @@
+{
+  "domain": "transport",
+  "description": "Liikenne, joukkoliikenne ja tieverkko",
+  "mappings": {
+    "liikenne": ["tieliikenne", "raideliikenne", "meriliikenne", "lentoliikenne"],
+    "joukkoliikenne": ["bussi", "raitiovaunu", "metro", "juna", "lähijuna"],
+    "tieverkko": ["tiestö", "maantie", "katuverkko", "valtatie"],
+    "rautatie": ["raideliikenne", "junaliikenne", "rataverkko"],
+    "satama": ["meriliikenne", "laivaliikenne", "satamaliikenne"],
+    "lentokenttä": ["lentoliikenne", "lentoasema"],
+    "pyöräily": ["kevyt liikenne", "pyörätie", "pyöräilyverkko"],
+    "jalankulku": ["kevyt liikenne", "jalkakäytävä"],
+    "pysäköinti": ["autopaikka", "pysäköintialue"],
+    "liikenneturvallisuus": ["onnettomuus", "liikenneonnettomuus"],
+    "liikennemäärä": ["liikennevirta", "liikennesuorite"],
+    "nopeus": ["nopeusrajoitus", "liikennenopeus"],
+    "silta": ["taitorakenne", "tunneli"],
+    "väylä": ["vesiväylä", "merikartta", "väyläverkko"],
+    "ajoneuvo": ["auto", "rekisteri", "ensirekisteröinti"]
+  }
+}

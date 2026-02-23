@@ -280,7 +280,7 @@ class TestRecommend:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._expand_with_yso", return_value=""):
+             patch("aura.server._expand_query", return_value=""):
             result = await recommend("väestö")
         assert "Suositellut" in result
         assert "Helsingin väestö" in result
@@ -959,7 +959,7 @@ class TestStructuralVerification:
         """Tyhjä tietokanta antaa selkeän viestin."""
         conn = _memory_db()
         with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._expand_with_yso", return_value=""):
+             patch("aura.server._expand_query", return_value=""):
             result = await recommend("liikenne")
         assert "Ei datasettejä" in result
 

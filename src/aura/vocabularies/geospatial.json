@@ -1,0 +1,16 @@
+{
+  "domain": "geospatial",
+  "description": "Paikkatietoaineistot, koordinaatistot ja rajapinnat",
+  "mappings": {
+    "paikkatietoaineisto": ["paikkatietopalvelu", "GIS", "kartta-aineisto"],
+    "koordinaatisto": ["EPSG", "ETRS-TM35FIN", "WGS84"],
+    "WFS": ["rajapinta", "OGC", "paikkatietopalvelu"],
+    "WMS": ["karttapalvelu", "OGC", "taustakartta"],
+    "WCS": ["peittopalvelu", "OGC", "rasteridata"],
+    "kartta": ["kartta-aineisto", "taustakartta", "teemakartta"],
+    "ortokuva": ["ilmakuva", "satelliittikuva"],
+    "korkeusmalli": ["maastomalli", "DEM", "korkeusdata"],
+    "maastotietokanta": ["maastokartta", "topografia"],
+    "kiinteistö": ["kiinteistörekisteri", "tontti", "kiinteistöraja"]
+  }
+}

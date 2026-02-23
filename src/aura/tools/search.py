@@ -35,6 +35,7 @@ async def search(
 
     Hakua laajennetaan automaattisesti YSO-ontologian avulla:
     esim. "liikenne" löytää myös tieliikenteen ja raideliikenteen datasetit.
+    Lisäksi domain-sanastot laajentavat hakua ilman API-kutsuja.
 
     Args:
         query: Hakusanat (esim. "helsingin väestö", "ilmanlaatu", "joukkoliikenne")
@@ -49,7 +50,7 @@ async def search(
     conn = _server._get_conn(ctx)
 
     # YSO-hakulaajennus
-    expanded_query = await _server._expand_with_yso(query, ctx)
+    expanded_query = await _server._expand_query(query, ctx)
 
     # Aluerajaus
     region_names: list[str] | None = None
@@ -105,7 +106,7 @@ async def search_structured(
     import json
 
     conn = _server._get_conn(ctx)
-    expanded_query = await _server._expand_with_yso(query, ctx)
+    expanded_query = await _server._expand_query(query, ctx)
 
     # Aluerajaus
     region_names: list[str] | None = None
@@ -162,7 +163,7 @@ async def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> s
         limit: Suositusten enimmäismäärä (oletus 5)
     """
     conn = _server._get_conn(ctx)
-    expanded_query = await _server._expand_with_yso(topic, ctx)
+    expanded_query = await _server._expand_query(topic, ctx)
     # Hae enemmän tuloksia kuin limit, jotta voidaan järjestää uudelleen
     results = search_datasets(conn, topic, limit=limit * 3, expanded_query=expanded_query)
 
@@ -304,7 +305,7 @@ async def search_by_region(
 
     fts_query: str | None = None
     if query:
-        expanded_query = await _server._expand_with_yso(query, ctx)
+        expanded_query = await _server._expand_query(query, ctx)
         fts_query = expanded_query if expanded_query else query
 
     sql, params = _build_region_query(municipality_names, fts_query, limit)
