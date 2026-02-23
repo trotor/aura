@@ -37,7 +37,7 @@ _ENRICHMENT_PRIORITIES = [
 
 
 @mcp.tool()
-def describe(dataset_id: str, ctx: Context | None = None) -> str:
+async def describe(dataset_id: str, ctx: Context | None = None) -> str:
     """Kuvaa yksittäinen datasetti yksityiskohtaisesti.
 
     Args:
@@ -68,6 +68,9 @@ def describe(dataset_id: str, ctx: Context | None = None) -> str:
 
     # Resurssien saatavuus
     result += _format_health_section(conn, ds_id)
+
+    # YSO-käsite-ehdotukset kun yso_concepts puuttuu
+    result += await _format_yso_suggestions(dataset, enrichments, ctx)
 
     # Enrichment-kehotus: puuttuvat kentät
     result += _format_enrichment_gaps(ds_id, enrichments)
@@ -167,6 +170,45 @@ def _format_health_section(conn: Any, dataset_id: str) -> str:
         parts.append(f"- [{icon}] {url}{ms}{err}")
 
     return "\n".join(parts)
+
+
+async def _format_yso_suggestions(
+    dataset: dict[str, Any],
+    enrichments: list[dict[str, Any]],
+    ctx: Context | None,
+) -> str:
+    """Ehdota YSO-käsitteitä jos yso_concepts puuttuu enrichmenteistä."""
+    existing_fields = {e.get("field", "") for e in enrichments}
+    if "yso_concepts" in existing_fields:
+        return ""
+
+    try:
+        from aura.tagger import suggest_tags
+        from aura.yso import YsoClient
+
+        yso = _server._get_yso(ctx)
+        if not yso:
+            yso = YsoClient()
+
+        suggestions = await suggest_tags(dataset, yso, max_tags=5)
+        if not suggestions:
+            return ""
+
+        labels = [f"**{s.label}**" for s in suggestions]
+        ds_id = dataset.get("id", dataset.get("name", ""))
+        parts = ["\n\n### YSO-ehdotukset\n"]
+        parts.append(f"Ehdotetut käsitteet: {', '.join(labels)}")
+        parts.append(
+            f'\nTallenna: suggest_yso_tags(dataset_id="{ds_id}", save=True)'
+        )
+        return "\n".join(parts)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).debug(
+            "[yso] YSO-ehdotukset epäonnistuivat", exc_info=True,
+        )
+        return ""
 
 
 def _format_enrichment_gaps(

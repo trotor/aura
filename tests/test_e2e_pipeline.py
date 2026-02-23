@@ -166,18 +166,21 @@ class TestHarvestToSearch:
 class TestSearchToDescribe:
     """Haettu datasetti kuvailtavissa describe()-työkalulla."""
 
-    def test_describe_shows_harvested_data(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_shows_harvested_data(self) -> None:
         conn = _create_db()
         _harvest_mock_datasets(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe("helsingin-vaestotilasto")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe("helsingin-vaestotilasto")
         assert "Helsingin väestötilasto" in result
         assert "Helsingin kaupunki" in result
         assert "CSV" in result
         assert "JSON" in result
         assert "vaesto_2025.csv" in result
 
-    def test_describe_after_search(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_after_search(self) -> None:
         """Haku palauttaa nimen jolla describe() löytää datasetin."""
         conn = _create_db()
         _harvest_mock_datasets(conn)
@@ -185,8 +188,9 @@ class TestSearchToDescribe:
         assert len(results) >= 1
         name = results[0]["name"]
 
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe(name)
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe(name)
         assert "HSL" in result
         assert "joukkoliikenne" in result.lower()
 
@@ -194,16 +198,18 @@ class TestSearchToDescribe:
 class TestEnrichmentPipeline:
     """Enrichmentit näkyvät describe()-tuloksissa."""
 
-    def test_enrich_visible_in_describe(self) -> None:
+    @pytest.mark.asyncio
+    async def test_enrich_visible_in_describe(self) -> None:
         conn = _create_db()
         _harvest_mock_datasets(conn)
-        with patch("aura.server._get_conn", return_value=conn):
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
             enrich(
                 dataset_id="helsingin-vaestotilasto",
                 field="use_case",
                 value="Väestöanalyysi ja kaupunkisuunnittelu",
             )
-            result = describe("helsingin-vaestotilasto")
+            result = await describe("helsingin-vaestotilasto")
         assert "Väestöanalyysi" in result
 
     def test_enrich_retrievable(self) -> None:
@@ -221,10 +227,12 @@ class TestEnrichmentPipeline:
         assert "Käyttöohjeet" in result
         assert "Lataa CSV" in result
 
-    def test_multiple_enrichments(self) -> None:
+    @pytest.mark.asyncio
+    async def test_multiple_enrichments(self) -> None:
         conn = _create_db()
         _harvest_mock_datasets(conn)
-        with patch("aura.server._get_conn", return_value=conn):
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
             enrich(
                 dataset_id="helsingin-vaestotilasto",
                 field="use_case",
@@ -235,7 +243,7 @@ class TestEnrichmentPipeline:
                 field="temporal_coverage",
                 value="2000-2025",
             )
-            result = describe("helsingin-vaestotilasto")
+            result = await describe("helsingin-vaestotilasto")
         assert "Väestöanalyysi" in result
         assert "2000-2025" in result
 
@@ -249,12 +257,14 @@ class TestQualityPipeline:
         count = score_all_datasets(conn)
         assert count == 3
 
-    def test_quality_in_describe(self) -> None:
+    @pytest.mark.asyncio
+    async def test_quality_in_describe(self) -> None:
         conn = _create_db()
         _harvest_mock_datasets(conn)
         score_all_datasets(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe("helsingin-vaestotilasto")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe("helsingin-vaestotilasto")
         assert "Laatuarvio" in result
 
     def test_enrichment_improves_quality(self) -> None:

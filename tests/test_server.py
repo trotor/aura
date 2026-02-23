@@ -142,18 +142,21 @@ class TestSearch:
 class TestDescribe:
     """describe()-työkalun testit."""
 
-    def test_describe_found(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_found(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe("test-1")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe("test-1")
         assert "Helsingin väestö" in result
         assert "vaesto.csv" in result
 
-    def test_describe_not_found(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_not_found(self) -> None:
         conn = _memory_db()
         with patch("aura.server._get_conn", return_value=conn):
-            result = describe("ei-olemassa")
+            result = await describe("ei-olemassa")
         assert "ei löytynyt" in result
 
 
@@ -908,23 +911,27 @@ class TestStructuralVerification:
         assert data["count"] == 0
         assert data["results"] == []
 
-    def test_describe_contains_resource_details(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_contains_resource_details(self) -> None:
         """describe() näyttää resurssien formaatit ja URL:t."""
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe("test-1")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe("test-1")
         assert "CSV" in result
         assert "vaesto.csv" in result
         assert "Helsingin kaupunki" in result
         assert "cc-by-4.0" in result.lower() or "CC BY 4.0" in result
 
-    def test_describe_enrichment_gaps_shown(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_enrichment_gaps_shown(self) -> None:
         """describe() näyttää puuttuvat enrichment-kentät."""
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe("test-1")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe("test-1")
         assert "Puuttuvat tiedot" in result
 
     def test_compare_shows_all_datasets(self) -> None:
@@ -956,12 +963,14 @@ class TestStructuralVerification:
             result = await recommend("liikenne")
         assert "Ei datasettejä" in result
 
-    def test_describe_by_name(self) -> None:
+    @pytest.mark.asyncio
+    async def test_describe_by_name(self) -> None:
         """describe() löytää datasetin nimellä (ei pelkkä id)."""
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn):
-            result = describe("helsingin-vaesto")
+        with patch("aura.server._get_conn", return_value=conn), \
+             patch("aura.server._get_yso", return_value=None):
+            result = await describe("helsingin-vaesto")
         assert "Helsingin väestö" in result
 
     def test_enrich_validates_dataset_exists(self) -> None:
