@@ -1,0 +1,16 @@
+{
+  "domain": "demographics",
+  "description": "Väestö, väestörakenne, muuttoliike ja ikääntyminen",
+  "mappings": {
+    "väestö": ["väestörakenne", "ikärakenne", "väestöennuste", "asukasluku", "väkiluku"],
+    "väestöennuste": ["väestökehitys", "muuttoliike", "syntyvyys", "väestöprojektio"],
+    "ikärakenne": ["väestörakenne", "ikäryhmät", "huoltosuhde"],
+    "muuttoliike": ["tulomuutto", "lähtömuutto", "maahanmuutto", "nettomuutto"],
+    "syntyvyys": ["syntyneet", "hedelmällisyys", "väestönkasvu"],
+    "kuolleisuus": ["kuolleet", "elinajanodote", "väestönmuutos"],
+    "ikääntyminen": ["vanhusväestö", "huoltosuhde", "eläkeikäiset"],
+    "maahanmuutto": ["siirtolaisuus", "vieraskielinen väestö", "ulkomaalaiset"],
+    "asukasluku": ["väkiluku", "väestömäärä", "asukkaat"],
+    "väkiluku": ["asukasluku", "väestö", "väestömäärä"]
+  }
+}

@@ -115,25 +115,47 @@ async def _expand_query(query: str, ctx: Context | None) -> str:
 
     Yhdistää paikallisen sanastolaajennuksen (instant, ei API-kutsuja)
     ja YSO-laajennuksen. Palauttaa FTS5-hakulausekkeen.
+
+    Monisanaiset haut pilkotaan tokeneiksi ja jokainen laajennetaan
+    erikseen. Termit yhdistetään OR-operaattorilla, joten riittää
+    että yksi sana osuu.
     """
     from aura.vocabularies import expand_with_vocabularies
 
-    all_terms = [query]
+    tokens = query.split()
+    all_terms: list[str] = []
+    seen: set[str] = set()
 
-    # 1. Sanastolaajennus (instant)
-    vocab_terms = expand_with_vocabularies(query)
-    all_terms.extend(vocab_terms)
+    def _add(term: str) -> None:
+        key = term.lower()
+        if key not in seen:
+            seen.add(key)
+            all_terms.append(term)
 
-    # 2. YSO-laajennus (API-kutsu)
+    # Lisää kaikki yksittäiset sanat
+    for token in tokens:
+        _add(token)
+
+    # 1. Sanastolaajennus (instant) — token-kohtaisesti
+    for token in tokens:
+        for term in expand_with_vocabularies(token):
+            _add(term)
+
+    # Kokeile myös koko hakua sanastoavaimeena (esim. "kevyt liikenne")
+    if len(tokens) > 1:
+        for term in expand_with_vocabularies(query):
+            _add(term)
+
+    # 2. YSO-laajennus (API-kutsu) — token-kohtaisesti (max 3)
     yso = _get_yso(ctx)
     if yso:
-        try:
-            yso_terms = await yso.expand_query(query)
-            for term in yso_terms:
-                if term.lower() not in {t.lower() for t in all_terms}:
-                    all_terms.append(term)
-        except Exception:
-            logger.warning("[yso] Hakulaajennus epäonnistui: '%s'", query, exc_info=True)
+        for token in tokens[:3]:
+            try:
+                yso_terms = await yso.expand_query(token)
+                for term in yso_terms:
+                    _add(term)
+            except Exception:
+                logger.warning("[yso] Hakulaajennus epäonnistui: '%s'", token, exc_info=True)
 
     if len(all_terms) > 1:
         return build_fts5_query(all_terms)

@@ -1,0 +1,17 @@
+{
+  "domain": "urban_planning",
+  "description": "Maankäyttö, kaavoitus, rakentaminen ja yhdyskuntarakenne",
+  "mappings": {
+    "kaavoitus": ["asemakaava", "yleiskaava", "maankäyttö", "osayleiskaava"],
+    "asemakaava": ["kaavamuutos", "rakennusoikeus", "tonttijako"],
+    "yleiskaava": ["maankäyttö", "osayleiskaava", "maakuntakaava"],
+    "maankäyttö": ["kaavoitus", "rakentaminen", "tonttimaa"],
+    "rakennuslupa": ["rakentaminen", "rakennusvalvonta", "toimenpidelupa"],
+    "asuminen": ["asuinalue", "asuntotuotanto", "vuokra-asunnot", "asuinrakennukset"],
+    "tontti": ["kiinteistö", "rakennuspaikka", "tonttitarjonta"],
+    "infra": ["infrastruktuuri", "kunnallistekniikka", "kadut", "vesihuolto"],
+    "vesihuolto": ["vesijohto", "viemäröinti", "jätevesi", "vesilaitos"],
+    "katu": ["katuverkko", "katujen kunnossapito", "liikenneväylä"],
+    "rakentaminen": ["rakennuslupa", "asuntotuotanto", "uudisrakentaminen"]
+  }
+}

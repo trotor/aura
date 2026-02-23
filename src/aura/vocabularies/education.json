@@ -1,0 +1,17 @@
+{
+  "domain": "education",
+  "description": "Koulutus, perusopetus, varhaiskasvatus ja oppilaitokset",
+  "mappings": {
+    "koulu": ["peruskoulu", "perusopetus", "kouluverkko", "oppilaaksiottoalue"],
+    "koulutus": ["perusopetus", "ammatillinen koulutus", "lukiokoulutus", "korkeakoulutus"],
+    "varhaiskasvatus": ["päivähoito", "päiväkoti", "perhepäivähoito", "esiopetus"],
+    "päivähoito": ["varhaiskasvatus", "päiväkoti", "perhepäivähoito", "kotihoidontuki"],
+    "perusopetus": ["peruskoulu", "alakoulu", "yläkoulu", "oppivelvollisuus"],
+    "lukio": ["lukiokoulutus", "ylioppilastutkinto", "toisen asteen koulutus"],
+    "ammattikoulu": ["ammatillinen koulutus", "ammattiopisto", "toisen asteen koulutus"],
+    "oppilas": ["oppilasmäärä", "oppilasennuste", "koulukuljetus"],
+    "opiskelija": ["opiskelijamäärä", "opintotuki", "korkeakouluopiskelija"],
+    "kouluverkko": ["koulujen sijainti", "lähikoulu", "oppilaaksiottoalue"],
+    "päiväkoti": ["varhaiskasvatus", "päivähoito", "hoitopaikka"]
+  }
+}

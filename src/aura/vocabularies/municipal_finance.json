@@ -1,0 +1,17 @@
+{
+  "domain": "municipal_finance",
+  "description": "Kuntatalous, budjetti, verotus ja julkiset hankinnat",
+  "mappings": {
+    "budjetti": ["talousarvio", "kuntatalous", "tilinpäätös", "määrärahat"],
+    "talousarvio": ["budjetti", "määrärahat", "kuntatalous", "käyttötalous"],
+    "kuntatalous": ["talousarvio", "tilinpäätös", "verotuotto", "valtionosuudet"],
+    "investointi": ["pääomamenot", "infrastruktuuri", "rakentaminen", "hankinnat"],
+    "verotus": ["kunnallisvero", "kiinteistövero", "yhteisövero", "verotuotto"],
+    "verotuotto": ["verotulot", "kunnallisvero", "verokertymä"],
+    "tilinpäätös": ["talousarvio", "tulos", "tase", "toimintakate"],
+    "valtionosuudet": ["kuntarahoitus", "peruspalvelujen valtionosuus"],
+    "hankinta": ["julkinen hankinta", "kilpailutus", "tarjouskilpailu"],
+    "talous": ["kuntatalous", "valtiontalous", "julkinen talous"],
+    "määrärahat": ["talousarvio", "budjetti", "menoarvio"]
+  }
+}

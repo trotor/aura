@@ -1,0 +1,18 @@
+{
+  "domain": "health_social",
+  "description": "Sote, terveydenhuolto, sosiaalipalvelut ja hyvinvointi",
+  "mappings": {
+    "sote": ["sosiaalihuolto", "terveydenhuolto", "terveyspalvelut", "sosiaalipalvelut"],
+    "terveydenhuolto": ["terveyskeskus", "sairaanhoito", "perusterveydenhuolto", "erikoissairaanhoito"],
+    "hyvinvointialue": ["sosiaali- ja terveyspalvelut", "pelastuslaitos", "sote-uudistus"],
+    "terveys": ["terveyspalvelut", "terveydenhuolto", "sairaanhoito", "kansanterveys"],
+    "sairaala": ["erikoissairaanhoito", "sairaanhoito", "terveydenhuolto"],
+    "sosiaalipalvelut": ["lastensuojelu", "toimeentulotuki", "vammaispalvelut", "vanhuspalvelut"],
+    "vanhuspalvelut": ["kotihoito", "palveluasuminen", "ikäihmisten palvelut"],
+    "mielenterveys": ["mielenterveyspalvelut", "psykiatria", "päihdepalvelut"],
+    "lastensuojelu": ["sijaishuolto", "perhepalvelut", "sosiaalihuolto"],
+    "hyvinvointi": ["terveys", "sosiaalipalvelut", "elämänlaatu"],
+    "terveyskeskus": ["perusterveydenhuolto", "terveysasema", "vastaanotto"],
+    "päihdepalvelut": ["mielenterveys", "päihdehuolto", "kuntoutus"]
+  }
+}
