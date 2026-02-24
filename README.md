@@ -2,9 +2,9 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-> **5 690+ datasettiä** · **12 390+ resurssia** · **250+ organisaatiota** · **~1,6 TB** avointa dataa
+> **5 800+ datasettiä** · **12 900+ resurssia** · **250+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 23 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Ilmatieteen laitos, Overture Maps, GTK, Traficom, Metsäkeskus, Taustakartat, Ruokavirasto, Kuntien paikkatiedot (36 kuntaa) ym.
+> 27 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -12,7 +12,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 23 avoimen datan lähteestä
+- **Aggregoi** metadatan 27 avoimen datan lähteestä
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
@@ -141,14 +141,19 @@ aura import-enrichments contributions/*.json
 
 | Työkalu | Kuvaus |
 |---------|--------|
-| `search` | Hae datasettejä luonnollisella kielellä (suodattimet: lähde, formaatti, organisaatio, saatavuus) |
+| `search` | Hae datasettejä luonnollisella kielellä (suodattimet: lähde, formaatti, organisaatio, saatavuus, alue) |
 | `search_structured` | Hae datasettejä ja palauta JSON tekoälyagenteille |
 | `describe` | Kuvaa datasetti yksityiskohtaisesti (sis. rikastukset) |
+| `query_data` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
 | `recommend` | Suosittele parhaita datasettejä aiheesta |
 | `compare` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related` | Etsi samankaltaiset datasetit |
+| `area_profile` | Alueprofiili: datasetit, laatu, puutteet |
+| `compare_municipalities` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
 | `enrich` | Rikasta datasetin tietoja (avainsanat, kuvaukset, laatuhuomiot) |
 | `get_enrichments_tool` | Näytä datasetin rikastukset |
+| `quality_report` | Datasetin laatupisteet dimensioittain |
+| `quality_ranking` | Parhaiten pisteytetyt datasetit |
 | `stats` | Näytä tilastot tietokannasta |
 | `list_organizations` | Listaa datan julkaisijat |
 | `list_formats` | Listaa saatavilla olevat dataformaatit |
@@ -163,21 +168,34 @@ Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
 
 | Lähde | Tyyppi | Datasettejä | Arvioitu koko |
 |-------|--------|-------------|---------------|
-| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 943 | 114 GB |
-| [SYKE](https://ckan.ymparisto.fi) | CKAN API | ~615 | ~50 GB |
+| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 737 | 102 GB |
+| [Tilastokeskus](https://stat.fi) | PxWeb API | 1 524 | 7,1 GB |
+| [LUKE](https://statdb.luke.fi) | PxWeb API | 662 | 3,1 GB |
+| [SYKE](https://ckan.ymparisto.fi) | CKAN API | 615 | 18 GB |
 | [HRI (hri.fi)](https://hri.fi) | CKAN API | 549 | 39 GB |
-| [LUKE](https://statdb.luke.fi) | PxWeb API | 495 | 2,3 GB |
-| [Tilastokeskus](https://stat.fi) | PxWeb API | 374 | 1,7 GB |
 | [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1,5 GB |
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
-| [Overture Maps](https://overturemaps.org) | GeoParquet (S3) | 6 | ~215 GB |
+| [LUKE avoin tutkimusdata](https://opendata.luke.fi) | CKAN | 124 | 2,1 GB |
+| [LUKE paikkatietopalvelu](https://kartta.luke.fi) | WMS/WFS | 10 | 70 GB |
+| [Tilastokeskus paikkatieto](https://geo.stat.fi) | WMS/WFS | 9 | 1,5 GB |
+| [THL Sotkanet](https://sotkanet.fi) | REST API | ~3 500 | — |
+| [Valtiokonttori](https://avoindata.tutkihallintoa.fi) | REST API | 48 | — |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
-| [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
-| [GTK](https://www.gtk.fi) | ArcGIS WFS/WMS | 5 | 7 GB |
-| [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | ~20 GB |
+| Kuntien paikkatiedot (36 kuntaa) | WMS/WFS/ArcGIS | 36 | 57 GB |
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
-| Kuntien paikkatiedot | WMS/WFS/ArcGIS | 36 | — |
-| **Yhteensä** | | **~5 690** | **~1,6 TB** |
+| [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
+| [Vaalirahoitusvalvonta](https://www.vaalirahoitusvalvonta.fi) | CSV | 27 | — |
+| [MML](https://www.maanmittauslaitos.fi) | WMS/WFS/OGC API | 7 | 184 GB |
+| [Overture Maps](https://overturemaps.org) | GeoParquet (S3) | 6 | 215 GB |
+| [Väylävirasto](https://vayla.fi) | WMS/WFS/OGC API | 5 | 8,8 GB |
+| [GTK](https://www.gtk.fi) | ArcGIS WFS/WMS | 5 | 7 GB |
+| [PaItuli (CSC)](https://paituli.csc.fi) | WMS/WFS | 5 | 88 GB |
+| [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | 19 GB |
+| [LIPAS](https://www.jyu.fi/sport/fi/yhteistyo/lipas) | WMS/WFS | 3 | 1 GB |
+| [STUK](https://stuk.fi) | WMS/REST | 2 | — |
+| [Suomi.fi-koodistot](https://koodistot.suomi.fi) | REST API | — | — |
+| [Suomi.fi-sanastot](https://sanastot.suomi.fi) | REST API | — | — |
+| **Yhteensä** | | **~9 300+** | **~2 TB** |
 
 ## Osallistuminen
 
@@ -246,7 +264,7 @@ aura/
 │   ├── models.py           # Pydantic-tietomallit
 │   ├── search.py           # Hakutoiminnot ja muotoilu
 │   ├── cli.py              # Komentorivityökalu
-│   └── harvesters/         # Datalähteiden keräimet (23 kpl)
+│   └── harvesters/         # Datalähteiden keräimet (27 kpl)
 ├── data/
 │   ├── aura.db             # SQLite-tietokanta (osa repoa)
 │   └── boundaries/         # Rajausaineistot GeoPackage (gitignore)
@@ -270,7 +288,7 @@ Aura tallentaa jokaiselle datasetille `geographical_coverage`-kentän, joka kert
 
 | Tilasto | Arvo |
 |---------|------|
-| Datasettejä joilla aluetieto | ~1 200+ / 5 690 |
+| Datasettejä joilla aluetieto | ~1 200+ / 5 824 |
 | Yleisimmät arvot | `Helsinki`, `Turku`, `Oulu`, `Espoo`, `Vantaa` |
 | Viitetaulut | 308 kuntaa, 3 784 postinumeroa |
 | Oletusarvo | `["Suomi"]` (kaikki harvestarit ellei tarkempaa tietoa) |

@@ -30,6 +30,7 @@ _ENRICHMENT_PRIORITIES = [
     ("keywords", "Lisäavainsanat haun parantamiseksi"),
     ("api_endpoint", "Rajapinnan URL"),
     ("api_format", "Rajapinnan formaatti (REST, WFS, OData)"),
+    ("related_services", "Mitkä palvelut käyttävät tätä dataa?"),
     ("quality_notes", "Huomioita datan laadusta"),
     ("organization_context", "Taustatietoa julkaisijasta"),
     ("update_frequency_actual", "Havaittu päivitystiheys"),

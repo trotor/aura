@@ -48,6 +48,7 @@ ENRICHMENT_FIELD_LABELS: dict[str, str] = {
     "api_format": "Rajapinnan formaatti",
     "data_fields": "Datakentät",
     "related_datasets": "Liittyvät datasetit",
+    "related_services": "Liittyvät palvelut",
     "quality_notes": "Laatuhuomiot",
     "use_case": "Käyttötapaus",
     "access_instructions": "Käyttöohjeet",
@@ -59,7 +60,7 @@ ENRICHMENT_FIELD_LABELS: dict[str, str] = {
 }
 
 # Kentät joiden arvo on JSON-taulukko
-_LIST_FIELDS = {"data_fields", "keywords", "tags"}
+_LIST_FIELDS = {"data_fields", "keywords", "tags", "related_services"}
 
 
 def _format_enrichment_value(field: str, value: str) -> str:

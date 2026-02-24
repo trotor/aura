@@ -36,20 +36,33 @@ BaseHarvester (base.py)
 ├── CkanHarvester (ckan.py) — paginoitu CKAN API
 │   ├── AvoindataHarvester (avoindata.py)
 │   ├── HriHarvester (hri.py)
-│   └── SykeHarvester (syke.py)
+│   ├── SykeHarvester (syke.py)
+│   └── LukeOpendataHarvester (luke_opendata.py)
 ├── PxWebHarvester (pxweb.py) — rekursiivinen puunavigaatio
 │   ├── StatfinHarvester (statfin.py)
 │   └── LukeHarvester (luke.py)
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
 │   ├── GtkHarvester (gtk.py)
 │   ├── KunnatHarvester (kunnat.py) — 36 kunnan WMS/WFS/ArcGIS
+│   ├── LipasHarvester (lipas.py) — Jyväskylän yliopisto liikuntapaikat
+│   ├── LukeKarttaHarvester (luke_kartta.py)
 │   ├── MetsakeskusHarvester (metsakeskus.py)
-│   ├── TaustakartatHarvester (taustakartat.py)
+│   ├── MmlHarvester (mml.py) — Maanmittauslaitos
+│   ├── OvertureHarvester (overture.py)
+│   ├── PaituliHarvester (paituli.py) — CSC:n paikkatietopalvelu
 │   ├── RuokavirastoHarvester (ruokavirasto.py)
-│   └── OvertureHarvester (overture.py)
+│   ├── StatfinGeoHarvester (statfin_geo.py)
+│   ├── StukHarvester (stuk.py) — Säteilyturvakeskus
+│   ├── TaustakartatHarvester (taustakartat.py)
+│   ├── VaalirahoitusHarvester (vaalirahoitus.py)
+│   └── VaylaHarvester (vayla.py) — Väylävirasto
 ├── DigitrafficHarvester (digitraffic.py) — OpenAPI-speksien parsinta
 ├── FmiHarvester (fmi.py) — WFS stored queries XML
-└── TraficomHarvester (traficom.py) — OData v4
+├── KoodistotHarvester (koodistot.py) — Suomi.fi-koodistot
+├── SanastotHarvester (sanastot.py) — Suomi.fi-sanastot
+├── SotkanetHarvester (sotkanet.py) — THL Sotkanet REST API
+├── TraficomHarvester (traficom.py) — OData v4
+└── ValtiokonttoriHarvester (valtiokonttori.py) — Valtiokonttorin tuottavuusdata
 ```
 
 ### Uuden harvesterin lisääminen
@@ -79,15 +92,66 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 
 ## MCP-työkalut
 
+**Haku ja selaus:**
+
 | Työkalu | Kuvaus |
 |---------|--------|
-| `search(query, limit, offset, source, format, organization)` | Hae datasettejä suodattimilla |
-| `search_structured(query, limit, offset, source, format, organization)` | Hae JSON-muodossa agenteille |
+| `search(query, ...)` | Hae datasettejä suodattimilla (source, format, organization, region) |
+| `search_structured(query, ...)` | Hae JSON-muodossa agenteille |
+| `search_by_region(region, query)` | Hae alueellisesti (kunta, maakunta, postinumero) |
 | `describe(dataset_id)` | Datasetin yksityiskohtaiset tiedot |
-| `query_data(dataset_id, filters, columns, resource_index, format_hint, max_rows)` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
+| `query_data(dataset_id, ...)` | Esikatsele datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
 | `recommend(topic, limit)` | Suosittele parhaita datasettejä aiheesta |
 | `compare(dataset_ids)` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related(dataset_id, limit)` | Etsi samankaltaiset datasetit |
+
+**Alueanalyysi:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `area_profile(region)` | Alueprofiili: datasetit, laatu, puutteet |
+| `compare_municipalities(municipalities, theme)` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
+
+**Laatu:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `quality_report(dataset_id)` | Datasetin laatupisteet dimensioittain |
+| `quality_overview(source, min_score)` | Yhteenveto laatupisteistä |
+| `quality_ranking(dimension, source, limit)` | Parhaiten pisteytetyt datasetit |
+| `quality_gaps(source, limit)` | Metatiedon puutteet ja parannusehdotukset |
+
+**Rikastus ja tutkimus:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `enrich(dataset_id, field, value, ...)` | Rikasta datasetin tietoja |
+| `batch_enrich(enrichments)` | Tallenna useita rikastuksia kerralla |
+| `get_enrichments_tool(dataset_id)` | Näytä datasetin rikastukset |
+| `suggest_yso_tags(dataset_id, save)` | Ehdota YSO-ontologian avainsanoja |
+| `log_finding(dataset_id, finding, category)` | Kirjaa löydös tutkimuksen aikana |
+| `list_findings()` | Näytä session löydökset |
+| `save_session_findings()` | Tallenna löydökset enrichmenteiksi |
+
+**Viiteaineistot:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `lookup_municipality(query)` | Hae kuntatiedot nimellä, koodilla tai postinumerolla |
+| `reference_status()` | Viiteaineistojen tila |
+| `populate_reference(source)` | Lataa viiteaineistot kantaan |
+
+**Terveystarkastus:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `health_check(source, limit)` | Tarkista resurssien saatavuus (HTTP) |
+| `health_report(source)` | Saatavuusraportti aiempien tarkistusten perusteella |
+
+**Hallinta:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
 | `stats()` | Tilastot: datasetit, organisaatiot, formaatit |
 | `list_organizations(limit)` | Julkaisijat datasettien mukaan |
 | `list_formats(limit)` | Dataformaatit resurssien mukaan |

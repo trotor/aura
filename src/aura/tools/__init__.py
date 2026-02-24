@@ -6,6 +6,7 @@ preview ja query eivät enää rekisteröi omia tooleja — käytä data.query_d
 
 from aura.tools import (  # noqa: F401
     admin,
+    area,
     data,
     describe,
     enrichment,
@@ -18,6 +19,7 @@ from aura.tools import (  # noqa: F401
 
 __all__ = [
     "admin",
+    "area",
     "data",
     "describe",
     "enrichment",

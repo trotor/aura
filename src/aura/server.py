@@ -175,6 +175,7 @@ from aura.tools.admin import (  # noqa: E402, F401
     probe_sizes,
     stats,
 )
+from aura.tools.area import area_profile, compare_municipalities  # noqa: E402, F401
 from aura.tools.data import query_data  # noqa: E402, F401
 from aura.tools.describe import compare, describe  # noqa: E402, F401
 from aura.tools.enrichment import (  # noqa: E402, F401

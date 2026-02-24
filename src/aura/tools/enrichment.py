@@ -17,7 +17,7 @@ from aura.yso import YsoClient
 VALID_ENRICHMENT_FIELDS = {
     "description_extended", "api_endpoint", "api_format",
     "data_fields", "keywords", "tags",
-    "related_datasets", "quality_notes",
+    "related_datasets", "related_services", "quality_notes",
     "use_case", "access_instructions", "organization_context",
     "temporal_coverage", "update_frequency_actual",
     "yso_concepts",
@@ -50,6 +50,8 @@ def enrich(
             - keywords: lisäavainsanat JSON-listana (esim. '["maatalous", "peltolohko"]')
             - tags: vapaamuotoiset tagit JSON-listana (esim. '["paikkatietoaineisto", "INSPIRE"]')
             - related_datasets: liittyvät datasetit
+            - related_services: palvelut jotka käyttävät dataa JSON-listana
+                (esim. '["Reittiopas", "Karttapalvelu"]')
             - quality_notes: huomioita datan laadusta
             - use_case: käyttötapausesimerkki
             - access_instructions: ohjeet datan hakemiseen

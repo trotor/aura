@@ -7,8 +7,8 @@ from aura.harvesters.base import BaseHarvester
 from aura.harvesters.digitraffic import DigitrafficHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
-from aura.harvesters.koodistot import KoodistotHarvester
 from aura.harvesters.hri import HriHarvester
+from aura.harvesters.koodistot import KoodistotHarvester
 from aura.harvesters.kunnat import KunnatHarvester
 from aura.harvesters.lipas import LipasHarvester
 from aura.harvesters.luke import LukeHarvester
@@ -20,6 +20,7 @@ from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.paituli import PaituliHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.sanastot import SanastotHarvester
+from aura.harvesters.sotkanet import SotkanetHarvester
 from aura.harvesters.statfin import StatfinHarvester
 from aura.harvesters.statfin_geo import StatfinGeoHarvester
 
@@ -61,6 +62,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "sanastot": SanastotHarvester,
     "luke-opendata": LukeOpendataHarvester,
     "luke-kartta": LukeKarttaHarvester,
+    "sotkanet": SotkanetHarvester,
 }
 
 
