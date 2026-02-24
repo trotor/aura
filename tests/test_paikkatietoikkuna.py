@@ -66,8 +66,7 @@ CSW_METADATA: dict[str, Any] = {
             "citation": {"title": "Maastotietokannan rakennukset"},
             "abstractText": "Koko Suomen kattava rakennusaineisto.",
             "descriptiveKeywords": [
-                {"keywords": ["rakennukset", "maastotietokanta"]},
-                {"keywords": ["INSPIRE"]},
+                "rakennukset", "maastotietokanta", "INSPIRE",
             ],
             "otherConstraints": ["CC BY 4.0"],
             "topicCategories": ["structure"],

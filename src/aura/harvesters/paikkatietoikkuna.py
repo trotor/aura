@@ -245,12 +245,15 @@ class PaikkatietoikkunaHarvester(BaseHarvester):
         )
         abstract = ident.get("abstractText", "")
 
-        # Avainsanat CSW:stä
+        # Avainsanat CSW:stä (lista stringejä)
         keywords_fi: list[str] = []
-        for kw_group in ident.get("descriptiveKeywords", []):
-            for kw in kw_group.get("keywords", []):
-                if kw and kw not in keywords_fi:
-                    keywords_fi.append(kw)
+        for kw in ident.get("descriptiveKeywords", []):
+            if isinstance(kw, str) and kw and kw not in keywords_fi:
+                keywords_fi.append(kw)
+            elif isinstance(kw, dict):
+                for k in kw.get("keywords", []):
+                    if k and k not in keywords_fi:
+                        keywords_fi.append(k)
 
         # Lisää INSPIRE-ryhmien nimet avainsanoihin
         for layer in layers:
