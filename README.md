@@ -2,6 +2,8 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
+[**Dokumentaatio**](https://trotor.github.io/aura/) · [**Datasettikatalogi**](docs/CATALOG.md) · [**Dataformaatit**](docs/formats.md) · [**Datalähteet**](docs/SOURCES.md)
+
 > **5 800+ datasettiä** · **12 900+ resurssia** · **250+ organisaatiota** · **~2 TB** avointa dataa
 >
 > 27 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Kuntien paikkatiedot (36 kuntaa) ym.
@@ -165,6 +167,7 @@ aura import-enrichments contributions/*.json
 
 Katso täydellinen datasettikatalogi: **[docs/CATALOG.md](docs/CATALOG.md)**
 Katso lähteiden tekniset tiedot: **[docs/SOURCES.md](docs/SOURCES.md)**
+Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 
 | Lähde | Tyyppi | Datasettejä | Arvioitu koko |
 |-------|--------|-------------|---------------|
