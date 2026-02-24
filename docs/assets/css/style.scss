@@ -1,0 +1,24 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+/* Linkit näkyviin — sininen väri mustien sijaan */
+.main-content a {
+  color: #1e6bb8;
+  text-decoration: underline;
+}
+
+.main-content a:hover {
+  color: #155a9c;
+}
+
+/* Taulukon linkit */
+.main-content table a {
+  color: #1e6bb8;
+  text-decoration: none;
+}
+
+.main-content table a:hover {
+  text-decoration: underline;
+}
