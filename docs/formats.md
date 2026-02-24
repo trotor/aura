@@ -1,3 +1,5 @@
+[Takaisin etusivulle](./)
+
 # Dataformaatit
 
 Aura indeksoi avointa dataa useissa eri formaateissa. Tämä sivu kuvaa yleisimmät formaatit ja niiden ominaisuudet.

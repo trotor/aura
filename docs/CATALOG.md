@@ -1,3 +1,5 @@
+[Takaisin etusivulle](./)
+
 # Aura — Datasettikatalogi
 
 > **3,758** datasettiä | **8,959** resurssia | **200** organisaatiota | **1.3 TB** arvioitua dataa

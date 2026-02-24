@@ -1,3 +1,5 @@
+[Takaisin etusivulle](./)
+
 # Auran liittäminen tekoälytyökaluihin
 
 Aura on MCP-palvelin (Model Context Protocol), joka antaa tekoälyn hakea, ymmärtää ja rikastaa suomalaisia avoimia datasettejä.
