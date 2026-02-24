@@ -94,6 +94,8 @@ Yli 1 100 datasettiä on kohdistettu tietyille alueille. Eniten aluekohtaista da
 
 Lisäksi valtaosa dataseteista kattaa koko Suomen — esimerkiksi Tilastokeskuksen tilastot ovat saatavilla kuntatasolla.
 
+[Kaikki 163 kuntaa maakunnittain](kunnat.md)
+
 ---
 
 ## Dataformaatit
@@ -139,6 +141,7 @@ Tietokanta tulee repon mukana valmiina — ei tarvitse harvestoida erikseen.
 
 - [**Dataformaatit**](formats.md) — Auran tukemat 20 dataformaattia
 - [**Organisaatiot**](organisaatiot.md) — 279 datan julkaisijaa
+- [**Kunnat**](kunnat.md) — 163 kuntaa maakunnittain, linkkeineen
 - [**Datasettikatalogi**](CATALOG.md) — Täydellinen lista lähteittäin
 - [**Datalähteet**](SOURCES.md) — Lähteiden tekniset tiedot
 - [**MCP-käyttöönotto**](MCP_SETUP.md) — Auran liittäminen tekoälytyökaluihin
