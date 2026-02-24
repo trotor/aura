@@ -104,6 +104,7 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 | `recommend(topic, limit)` | Suosittele parhaita datasettejä aiheesta |
 | `compare(dataset_ids)` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related(dataset_id, limit)` | Etsi samankaltaiset datasetit |
+| `suggest_questions(region, theme)` | Ehdota esimerkkikysymyksiä teemoittain ja alueittain |
 
 **Alueanalyysi:**
 

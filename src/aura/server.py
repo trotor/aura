@@ -213,3 +213,4 @@ from aura.tools.search import (  # noqa: E402, F401
     search_by_region,
     search_structured,
 )
+from aura.tools.suggest import suggest_questions  # noqa: E402, F401
