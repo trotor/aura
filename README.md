@@ -8,7 +8,7 @@
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
-> *Aura* — suomen kielen kyntämistä. Aura kyntää datan esiin.
+> *Aura* — kyntöaura kääntää maan pintaan piiloutuneen esiin. Aura on myös valon kehä auringon tai kuun ympärillä — hohde joka tekee näkyväksi sen mikä muuten jää piiloon. Samalla tavalla tämä työkalu tuo esiin Suomen avoimen datan ja antaa sille näkyvyyden.
 
 ## Mitä Aura tekee?
 
