@@ -38,6 +38,22 @@ class BaseHarvester(ABC):
     max_retries: int = DEFAULT_MAX_RETRIES
     request_delay: float = DEFAULT_REQUEST_DELAY
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        """Palauta lähteen konfiguraatio sources-taulua varten.
+
+        Aliluokat voivat ylikirjoittaa lisätäkseen harvester_type,
+        query_protocol ja api_base_url.
+        """
+        return {
+            "name": cls.name,
+            "description": cls.description,
+            "url": cls.url,
+            "harvester_type": "custom",
+            "query_protocol": "none",
+            "api_base_url": "",
+        }
+
     def __init__(self, conn: sqlite3.Connection | None = None) -> None:
         if conn is None:
             conn = get_connection()

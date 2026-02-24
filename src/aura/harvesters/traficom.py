@@ -143,6 +143,16 @@ class TraficomHarvester(BaseHarvester):
     description = "Traficom — liikenne- ja viestintärekisterit"
     url = "https://opendata.traficom.fi"
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "odata",
+            "query_protocol": "odata",
+            "api_base_url": ODATA_BASE,
+        })
+        return config
+
     async def harvest(self) -> int:
         count = 0
 

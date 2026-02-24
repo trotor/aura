@@ -45,6 +45,16 @@ class DigitrafficHarvester(BaseHarvester):
     description = "Digitraffic — reaaliaikainen liikennedatan rajapinta"
     url = "https://www.digitraffic.fi"
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "openapi",
+            "query_protocol": "rest_json",
+            "api_base_url": "https://tie.digitraffic.fi",
+        })
+        return config
+
     async def harvest(self) -> int:
         total = 0
 

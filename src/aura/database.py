@@ -878,6 +878,75 @@ def prune_enrichments(
     return result.rowcount
 
 
+# --- Sources ---
+
+
+def upsert_source(
+    conn: sqlite3.Connection,
+    config: dict[str, Any],
+) -> None:
+    """Lisää tai päivitä datalähde sources-tauluun.
+
+    Args:
+        config: Dict jossa avaimet vastaavat sources-taulun sarakkeita.
+            Pakollinen: "name". Muut ovat valinnaisia.
+    """
+    name = config.get("name", "")
+    if not name:
+        return
+    conn.execute(
+        """
+        INSERT INTO sources (
+            name, description, url, harvester_type, query_protocol,
+            api_base_url, config_json, dataset_count, last_harvested_at,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(name) DO UPDATE SET
+            description = excluded.description,
+            url = excluded.url,
+            harvester_type = excluded.harvester_type,
+            query_protocol = excluded.query_protocol,
+            api_base_url = excluded.api_base_url,
+            config_json = excluded.config_json,
+            dataset_count = excluded.dataset_count,
+            last_harvested_at = excluded.last_harvested_at,
+            updated_at = datetime('now')
+        """,
+        (
+            name,
+            config.get("description", ""),
+            config.get("url", ""),
+            config.get("harvester_type", ""),
+            config.get("query_protocol", ""),
+            config.get("api_base_url", ""),
+            config.get("config_json", "{}"),
+            config.get("dataset_count", 0),
+            config.get("last_harvested_at", ""),
+        ),
+    )
+
+
+def get_source(
+    conn: sqlite3.Connection,
+    name: str,
+) -> dict[str, Any] | None:
+    """Hae yksittäinen datalähde nimellä."""
+    row = conn.execute(
+        "SELECT * FROM sources WHERE name = ?", (name,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_all_sources(
+    conn: sqlite3.Connection,
+) -> list[dict[str, Any]]:
+    """Hae kaikki datalähteet."""
+    rows = conn.execute(
+        "SELECT * FROM sources ORDER BY dataset_count DESC, name"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def export_enrichments(
     conn: sqlite3.Connection,
     source_type: str = "",

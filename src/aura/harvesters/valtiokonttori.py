@@ -91,6 +91,16 @@ class ValtiokonttoriHarvester(BaseHarvester):
     description = "Valtiokonttori — julkishallinnon talous- ja henkilöstödata"
     url = "https://avoindata.tutkihallintoa.fi"
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "custom",
+            "query_protocol": "rest_json",
+            "api_base_url": "https://avoindata.tutkihallintoa.fi",
+        })
+        return config
+
     async def harvest(self) -> int:
         total = 0
 

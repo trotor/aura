@@ -26,6 +26,16 @@ class SanastotHarvester(BaseHarvester):
     description = "Suomi.fi-sanastot — julkishallinnon terminologiat ja sanastot"
     url = "https://sanastot.suomi.fi"
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "custom",
+            "query_protocol": "rest_json",
+            "api_base_url": API_BASE,
+        })
+        return config
+
     async def harvest(self) -> int:
         total = 0
         async with self._make_client(timeout=30.0) as client:

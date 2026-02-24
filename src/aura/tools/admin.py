@@ -8,7 +8,7 @@ from fastmcp import Context
 
 import aura.server as _server
 from aura.constants import format_date
-from aura.database import get_stats
+from aura.database import get_all_sources, get_stats, upsert_source
 from aura.search import format_stats
 from aura.server import mcp
 
@@ -99,6 +99,8 @@ async def harvest(source: str = "all", ctx: Context | None = None) -> str:
     from aura.harvesters import get_all_harvesters, get_harvester
 
     conn = _server._get_conn(ctx)
+    now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
+
     if source == "all":
         total = 0
         parts = []
@@ -107,6 +109,12 @@ async def harvest(source: str = "all", ctx: Context | None = None) -> str:
             count = await harvester.harvest()
             parts.append(f"- {name}: {count} datasettiä")
             total += count
+            # Päivitä sources-taulu
+            src_cfg = cls.source_config()
+            src_cfg["dataset_count"] = count
+            src_cfg["last_harvested_at"] = now
+            upsert_source(conn, src_cfg)
+        conn.commit()
         parts.insert(0, f"# Harvest valmis\n\nYhteensä {total} datasettiä:\n")
         return "\n".join(parts)
 
@@ -117,15 +125,62 @@ async def harvest(source: str = "all", ctx: Context | None = None) -> str:
 
     harvester = cls(conn=conn)
     count = await harvester.harvest()
+    # Päivitä sources-taulu
+    src_cfg = cls.source_config()
+    src_cfg["dataset_count"] = count
+    src_cfg["last_harvested_at"] = now
+    upsert_source(conn, src_cfg)
+    conn.commit()
     return f"Haettu {count} datasettiä lähteestä {source}."
 
 
 @mcp.tool()
 def list_sources(ctx: Context | None = None) -> str:
     """Listaa kaikki datalähteet, niiden datasettien lukumäärät ja harvestoinnin tila."""
+    conn = _server._get_conn(ctx)
+
+    # Yritä lukea sources-taulusta ensin
+    db_sources = get_all_sources(conn)
+    if db_sources:
+        return _format_sources_from_db(db_sources)
+
+    # Fallback: lue harvestereista
+    return _format_sources_from_harvesters(conn)
+
+
+def _format_sources_from_db(sources: list[dict]) -> str:
+    """Muotoile lähteet sources-taulusta."""
+    parts = ["# Datalähteet\n"]
+    now = datetime.now(tz=UTC)
+
+    for src in sources:
+        name = src["name"]
+        desc = src.get("description", "")
+        count = src.get("dataset_count", 0)
+        last_harvest = src.get("last_harvested_at", "")
+        protocol = src.get("query_protocol", "")
+
+        status = f"{count} datasettiä"
+        warning = ""
+        if last_harvest:
+            harvest_dt = datetime.fromisoformat(last_harvest)
+            days_old = (now - harvest_dt.replace(tzinfo=UTC)).days
+            status += f" (viimeksi: {format_date(last_harvest, include_time=True)})"
+            if days_old > 7:
+                warning = f" ⚠ {days_old} pv vanha"
+        elif count == 0:
+            status = "ei harvestoitu"
+
+        proto_tag = f" [{protocol}]" if protocol and protocol != "none" else ""
+        parts.append(f"- **{name}**: {desc} [{status}]{proto_tag}{warning}")
+
+    return "\n".join(parts)
+
+
+def _format_sources_from_harvesters(conn) -> str:
+    """Fallback: lue lähteet harvestereista."""
     from aura.harvesters import get_all_harvesters
 
-    conn = _server._get_conn(ctx)
     parts = ["# Datalähteet\n"]
     now = datetime.now(tz=UTC)
 

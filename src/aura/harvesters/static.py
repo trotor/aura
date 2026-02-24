@@ -47,6 +47,15 @@ class StaticHarvester(BaseHarvester):
     default_update_frequency: str = ""
     datasets_config: list[dict[str, Any]] = []
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "static",
+            "query_protocol": "static",
+        })
+        return config
+
     async def harvest(self) -> int:
         count = 0
         for cfg in self.datasets_config:

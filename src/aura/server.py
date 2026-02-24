@@ -175,6 +175,7 @@ from aura.tools.admin import (  # noqa: E402, F401
     probe_sizes,
     stats,
 )
+from aura.tools.data import query_data  # noqa: E402, F401
 from aura.tools.describe import compare, describe  # noqa: E402, F401
 from aura.tools.enrichment import (  # noqa: E402, F401
     batch_enrich,
@@ -183,12 +184,14 @@ from aura.tools.enrichment import (  # noqa: E402, F401
     suggest_yso_tags,
 )
 from aura.tools.health import health_check, health_report  # noqa: E402, F401
+from aura.tools.preview import preview_data  # noqa: E402, F401
 from aura.tools.quality import (  # noqa: E402, F401
     quality_gaps,
     quality_overview,
     quality_ranking,
     quality_report,
 )
+from aura.tools.query import query_pxweb  # noqa: E402, F401
 from aura.tools.reference import (  # noqa: E402, F401
     lookup_municipality,
     populate_reference,

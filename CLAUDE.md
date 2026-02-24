@@ -84,14 +84,15 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 | `search(query, limit, offset, source, format, organization)` | Hae datasettejä suodattimilla |
 | `search_structured(query, limit, offset, source, format, organization)` | Hae JSON-muodossa agenteille |
 | `describe(dataset_id)` | Datasetin yksityiskohtaiset tiedot |
+| `query_data(dataset_id, filters, columns, resource_index, format_hint, max_rows)` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
 | `recommend(topic, limit)` | Suosittele parhaita datasettejä aiheesta |
 | `compare(dataset_ids)` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related(dataset_id, limit)` | Etsi samankaltaiset datasetit |
 | `stats()` | Tilastot: datasetit, organisaatiot, formaatit |
 | `list_organizations(limit)` | Julkaisijat datasettien mukaan |
 | `list_formats(limit)` | Dataformaatit resurssien mukaan |
-| `harvest(source)` | Hae metatiedot lähteistä |
-| `list_sources()` | Datalähteet ja harvestoinnin tila |
+| `harvest(source)` | Hae metatiedot lähteistä (päivittää sources-taulun) |
+| `list_sources()` | Datalähteet ja harvestoinnin tila (lukee sources-taulusta) |
 | `probe_sizes(source)` | Mittaa paikkatietoaineistojen koot |
 
 ## Rajausaineistot ja karttalehtijako

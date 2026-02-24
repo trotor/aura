@@ -29,6 +29,16 @@ class CkanHarvester(BaseHarvester):
     ckan_base_url: str = ""
     ckan_source: str = ""
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "ckan",
+            "query_protocol": "ckan",
+            "api_base_url": cls.ckan_base_url,
+        })
+        return config
+
     async def harvest(self) -> int:
         total_harvested = 0
         consecutive_errors = 0

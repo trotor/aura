@@ -40,6 +40,16 @@ class PxWebHarvester(BaseHarvester):
     dataset_id_prefix: str = ""
     notes_template: str = "Tilastotaulu"
 
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "pxweb",
+            "query_protocol": "pxweb",
+            "api_base_url": cls.pxweb_base_url,
+        })
+        return config
+
     async def harvest(self) -> int:
         async with self._make_client(timeout=60.0) as client:
             total = await self._crawl_folder(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import xml.etree.ElementTree as ET
+from typing import Any
 
 from aura.database import upsert_dataset
 from aura.harvesters.base import BaseHarvester
@@ -38,6 +39,16 @@ class FmiHarvester(BaseHarvester):
     name = "fmi"
     description = "Ilmatieteen laitos (FMI) — sää-, ilmasto- ja merihavaintodata"
     url = "https://www.ilmatieteenlaitos.fi"
+
+    @classmethod
+    def source_config(cls) -> dict[str, Any]:
+        config = super().source_config()
+        config.update({
+            "harvester_type": "wfs",
+            "query_protocol": "wfs",
+            "api_base_url": WFS_BASE,
+        })
+        return config
 
     async def harvest(self) -> int:
         async with self._make_client(timeout=60.0) as client:
