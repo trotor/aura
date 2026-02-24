@@ -97,7 +97,7 @@ class Dataset(BaseModel):
                     name=r.get("name") or "",
                     name_fi=name_tr.get("fi", ""),
                     name_en=name_tr.get("en", ""),
-                    description=r.get("description", ""),
+                    description=r.get("description") or "",
                     description_fi=desc_tr.get("fi", ""),
                     description_en=desc_tr.get("en", ""),
                     format=r.get("format", ""),

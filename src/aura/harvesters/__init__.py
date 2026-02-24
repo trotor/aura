@@ -12,6 +12,8 @@ from aura.harvesters.hri import HriHarvester
 from aura.harvesters.kunnat import KunnatHarvester
 from aura.harvesters.lipas import LipasHarvester
 from aura.harvesters.luke import LukeHarvester
+from aura.harvesters.luke_kartta import LukeKarttaHarvester
+from aura.harvesters.luke_opendata import LukeOpendataHarvester
 from aura.harvesters.metsakeskus import MetsakeskusHarvester
 from aura.harvesters.mml import MmlHarvester
 from aura.harvesters.overture import OvertureHarvester
@@ -57,6 +59,8 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "kunnat": KunnatHarvester,
     "koodistot": KoodistotHarvester,
     "sanastot": SanastotHarvester,
+    "luke-opendata": LukeOpendataHarvester,
+    "luke-kartta": LukeKarttaHarvester,
 }
 
 

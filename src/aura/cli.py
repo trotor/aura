@@ -198,6 +198,22 @@ def main() -> None:
         help="Viive sekunteina datasettien välissä (oletus: 0.2)",
     )
 
+    # enrich-pxweb
+    enrich_pxweb_parser = subparsers.add_parser(
+        "enrich-pxweb",
+        help="Rikasta PxWeb-taulut dimensiotiedoilla (muuttujat, aikasarjat)",
+    )
+    enrich_pxweb_parser.add_argument(
+        "source",
+        nargs="?",
+        default="all",
+        help="PxWeb-lähde (statfin, luke) tai 'all' (oletus: all)",
+    )
+    enrich_pxweb_parser.add_argument(
+        "--limit", type=int, default=0,
+        help="Enimmäismäärä tauluja per lähde (0 = kaikki)",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -587,6 +603,32 @@ def main() -> None:
             dry_run=args.dry_run,
             delay=args.delay,
         ))
+
+    elif args.command == "enrich-pxweb":
+        from aura.harvesters import HARVESTERS
+        from aura.harvesters.pxweb import PxWebHarvester
+
+        pxweb_sources = {
+            name: cls for name, cls in HARVESTERS.items()
+            if issubclass(cls, PxWebHarvester)
+        }
+
+        if args.source == "all":
+            targets = list(pxweb_sources.items())
+        elif args.source in pxweb_sources:
+            targets = [(args.source, pxweb_sources[args.source])]
+        else:
+            available = ", ".join(pxweb_sources.keys())
+            print(f"Tuntematon PxWeb-lähde: {args.source}. Saatavilla: {available}")
+            sys.exit(1)
+
+        total = 0
+        for name, cls in targets:
+            harvester = cls()
+            count = asyncio.run(harvester.harvest_dimensions(limit=args.limit))
+            print(f"  {name}: {count} taulua rikastettu")
+            total += count
+        print(f"\nYhteensä: {total} taulua rikastettu dimensiotiedoilla.")
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 import httpx
 
-from aura.database import upsert_dataset
+from aura.database import add_enrichment, get_enrichments, upsert_dataset
 from aura.harvesters.base import BaseHarvester
 from aura.models import Dataset, Resource
 
@@ -132,6 +133,123 @@ class PxWebHarvester(BaseHarvester):
             ],
             estimated_size_bytes=5_000_000,
         )
+
+    async def harvest_dimensions(self, limit: int = 0) -> int:
+        """Hae taulujen dimensiotiedot ja tallenna enrichmenteiksi.
+
+        Hakee jokaisen PxWeb-taulun muuttujat (variables) API:sta ja
+        tallentaa ne data_fields-rikastuksena. Ohittaa jo rikastetut.
+
+        Args:
+            limit: Enimmäismäärä tauluja (0 = kaikki).
+
+        Returns:
+            Rikastettujen taulujen lukumäärä.
+        """
+        # Hae kaikki tämän lähteen PxWeb-resurssit
+        rows = self.conn.execute(
+            """
+            SELECT d.id, r.url FROM datasets d
+            JOIN resources r ON r.dataset_id = d.id
+            WHERE d.source = ? AND r.format = 'PXWEB'
+            ORDER BY d.id
+            """,
+            (self.name,),
+        ).fetchall()
+
+        # Suodata jo rikastetut
+        to_enrich = []
+        for row in rows:
+            existing = get_enrichments(self.conn, row[0])
+            if any(e["field"] == "data_fields" for e in existing):
+                continue
+            to_enrich.append((row[0], row[1]))
+
+        if limit > 0:
+            to_enrich = to_enrich[:limit]
+
+        if not to_enrich:
+            logger.info("[%s] Kaikki taulut on jo rikastettu", self.name)
+            return 0
+
+        logger.info(
+            "[%s] Rikastetaan %d / %d taulua dimensiotiedoilla",
+            self.name, len(to_enrich), len(rows),
+        )
+
+        enriched = 0
+        async with self._make_client(timeout=30.0) as client:
+            for i, (dataset_id, api_url) in enumerate(to_enrich):
+                try:
+                    resp = await self._fetch(client, api_url)
+                    meta = resp.json()
+                except Exception as e:
+                    logger.debug("[%s] Ohitetaan %s: %s", self.name, dataset_id, e)
+                    continue
+
+                variables = meta.get("variables", [])
+                if not variables:
+                    continue
+
+                fields = []
+                time_var = None
+                for var in variables:
+                    code = var.get("code", "")
+                    text = var.get("text", code)
+                    values = var.get("values", [])
+                    value_texts = var.get("valueTexts", [])
+                    field_info: dict[str, Any] = {
+                        "code": code,
+                        "name": text,
+                        "value_count": len(values),
+                    }
+                    # Näytä muutama esimerkkiarvo
+                    examples = value_texts[:5] if value_texts else values[:5]
+                    if examples:
+                        field_info["examples"] = examples
+                    fields.append(field_info)
+
+                    # Tunnista aikadimensio
+                    if code.lower() in ("vuosi", "year", "kuukausi", "month",
+                                         "vuosineljännes", "quarter"):
+                        time_var = var
+
+                add_enrichment(
+                    self.conn,
+                    dataset_id,
+                    "data_fields",
+                    json.dumps(fields, ensure_ascii=False),
+                    confidence="verified",
+                    source_type="harvest",
+                    source_detail=f"PxWeb API {api_url}",
+                )
+
+                # Tallenna ajallinen kattavuus aikadimension perusteella
+                if time_var:
+                    time_values = time_var.get("values", [])
+                    if len(time_values) >= 2:
+                        temporal = f"{time_values[0]}–{time_values[-1]}"
+                        add_enrichment(
+                            self.conn,
+                            dataset_id,
+                            "temporal_coverage",
+                            temporal,
+                            confidence="verified",
+                            source_type="harvest",
+                            source_detail=f"PxWeb API {api_url}",
+                        )
+
+                enriched += 1
+                if (i + 1) % 100 == 0:
+                    logger.info(
+                        "[%s] Rikastettu %d / %d taulua",
+                        self.name, enriched, len(to_enrich),
+                    )
+
+        logger.info(
+            "[%s] Dimensiorikastus valmis: %d taulua", self.name, enriched,
+        )
+        return enriched
 
     def _path_to_keywords(self, path: str) -> list[str]:
         """Muunna polku avainsanoiksi."""

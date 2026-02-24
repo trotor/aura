@@ -1,11 +1,12 @@
 """Testit PxWebHarvester-kantaluokalle."""
 
+import json
 import sqlite3
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from aura.database import init_db
+from aura.database import get_enrichments, init_db
 from aura.harvesters.luke import LukeHarvester
 from aura.harvesters.pxweb import PxWebHarvester
 from aura.harvesters.statfin import StatfinHarvester
@@ -139,3 +140,150 @@ class TestCrawl:
 
         count = await h._crawl_folder(mock_client, "https://example.com/bad/", "StatFin")
         assert count == 0
+
+
+SAMPLE_TABLE_META = {
+    "title": "Testitaulu muuttujina Vuosi ja Tiedot",
+    "variables": [
+        {
+            "code": "Vuosi",
+            "text": "Vuosi",
+            "values": ["2020", "2021", "2022", "2023"],
+            "valueTexts": ["2020", "2021", "2022", "2023"],
+        },
+        {
+            "code": "Tiedot",
+            "text": "Tiedot",
+            "values": ["val1", "val2"],
+            "valueTexts": ["Arvo 1", "Arvo 2"],
+        },
+    ],
+}
+
+
+class TestHarvestDimensions:
+    """harvest_dimensions()-metodin testit."""
+
+    def _seed_dataset(self, conn: sqlite3.Connection) -> None:
+        """Lisää yksi StatFin-datasetti kantaan testattavaksi."""
+        h = StatfinHarvester(conn=conn)
+        item = {"id": "testi.px", "type": "t", "text": "Taulu", "updated": "2024-01-01"}
+        from aura.database import upsert_dataset
+        ds = h._table_to_dataset(item, "StatFin", "https://pxdata.stat.fi/PxWeb/api/v1/fi/StatFin/")
+        upsert_dataset(conn, ds)
+
+    @pytest.mark.asyncio
+    async def test_enriches_data_fields(self):
+        """Dimensiotiedot tallennetaan data_fields-rikastuksena."""
+        conn = _memory_db()
+        self._seed_dataset(conn)
+        h = StatfinHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_TABLE_META
+        mock_resp.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            count = await h.harvest_dimensions()
+
+        assert count == 1
+
+        enrichments = get_enrichments(conn, "statfin-testi.px")
+        fields_enr = [e for e in enrichments if e["field"] == "data_fields"]
+        assert len(fields_enr) == 1
+        fields = json.loads(fields_enr[0]["value"])
+        assert len(fields) == 2
+        assert fields[0]["code"] == "Vuosi"
+        assert fields[0]["value_count"] == 4
+        assert fields[1]["code"] == "Tiedot"
+
+    @pytest.mark.asyncio
+    async def test_enriches_temporal_coverage(self):
+        """Aikadimensiosta lasketaan temporal_coverage."""
+        conn = _memory_db()
+        self._seed_dataset(conn)
+        h = StatfinHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_TABLE_META
+        mock_resp.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest_dimensions()
+
+        enrichments = get_enrichments(conn, "statfin-testi.px")
+        temporal = [e for e in enrichments if e["field"] == "temporal_coverage"]
+        assert len(temporal) == 1
+        assert temporal[0]["value"] == "2020–2023"
+
+    @pytest.mark.asyncio
+    async def test_skips_already_enriched(self):
+        """Jo rikastetut datasetit ohitetaan."""
+        conn = _memory_db()
+        self._seed_dataset(conn)
+        h = StatfinHarvester(conn=conn)
+
+        # Rikasta ensin
+        from aura.database import add_enrichment
+        add_enrichment(conn, "statfin-testi.px", "data_fields", "[]")
+
+        mock_client = AsyncMock()
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            count = await h.harvest_dimensions()
+
+        assert count == 0
+        # API:a ei kutsuttu
+        mock_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handles_api_error(self):
+        """API-virheet ohitetaan ilman crashia."""
+        conn = _memory_db()
+        self._seed_dataset(conn)
+        h = StatfinHarvester(conn=conn)
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=Exception("HTTP 500"))
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            count = await h.harvest_dimensions()
+
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_limit_parameter(self):
+        """limit-parametri rajoittaa rikastettavien määrää."""
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+
+        # Lisää kaksi datasettia
+        from aura.database import upsert_dataset
+        for i in range(2):
+            item = {"id": f"t{i}.px", "type": "t", "text": f"Taulu {i}", "updated": ""}
+            ds = h._table_to_dataset(item, "StatFin", "https://example.com/")
+            upsert_dataset(conn, ds)
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_TABLE_META
+        mock_resp.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        with patch.object(h, "_make_client") as mock_make:
+            mock_make.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_make.return_value.__aexit__ = AsyncMock(return_value=False)
+            count = await h.harvest_dimensions(limit=1)
+
+        assert count == 1
