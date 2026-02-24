@@ -26,11 +26,12 @@ Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 | [Väylävirasto](#väylävirasto) | WFS/WMS/OGC API | 5 | 13 | ~9 GB |
 | [PaItuli (CSC)](#paituli-csc) | WMS/WFS | 5 | 9 | ~88 GB |
 | [LIPAS](#lipas) | WFS/WMS | 3 | 6 | ~1 GB |
-| [Kuntien paikkatiedot](#kuntien-paikkatiedot) | WFS/WMS | 6 | 10 | ~26 GB |
+| [Kuntien paikkatiedot](#kuntien-paikkatiedot) | WFS/WMS/ArcGIS | 36 | ~70 | ~57 GB |
+| [Paikkatietoikkuna](#paikkatietoikkuna) | Oskari API | 689 | 3 329 | — |
 | [STUK](#stuk-säteilyturvakeskus) | API | 2 | 2 | ~150 MB |
 | [GTK](#gtk) | ArcGIS WFS/WMS | 5 | 8 | 7 GB |
 | [Taustakartat](#taustakartat) | TMS | 4 | 4 | ~20 GB |
-| **Yhteensä** | | **~5 660** | **~10 400** | **~1,9 TB** |
+| **Yhteensä** | | **~6 500** | **~16 200** | **~2 TB** |
 
 ### Resurssityypit
 
@@ -478,26 +479,104 @@ Jyväskylän yliopiston LIPAS-rekisteri sisältää Suomen julkiset liikuntapaik
 ## Kuntien paikkatiedot
 
 **URL:** (eri kaupungit)
-**API:** WFS/WMS (GeoServer, Tekla OGC Web)
+**API:** WFS/WMS/ArcGIS (GeoServer, Tekla OGC Web, Pirkanmaan pirnet.fi)
 **Autentikointi:** Ei tarvita
-**Datasettejä:** 6
-**Resursseja:** 10
-**Arvioitu koko:** ~26 GB
+**Datasettejä:** 36
+**Resursseja:** ~70
+**Arvioitu koko:** ~57 GB
 
-Kuuden suurimman kaupungin avoimet paikkatietoaineistot.
+36 kunnan avoimet paikkatietoaineistot (WMS/WFS-rajapinnat). Kunnat on ryhmitelty palvelualustan mukaan.
 
-| Kaupunki | WMS-tasoja | Resurssit |
-|----------|-----------|-----------|
-| Helsinki | 461 | WFS, WMS |
-| Tampere | 173 | WFS, WMS |
-| Espoo | 130 | WFS, WMS |
-| Vantaa | 112 | WFS, WMS |
-| Turku | 68 | WMS |
-| Oulu | 28 | WMS |
+#### GeoServer-kunnat
+
+| Kunta | Rajapinta |
+|-------|-----------|
+| Espoo | WFS, WMS |
+| Helsinki | WFS, WMS |
+| Hämeenlinna | WFS, WMS |
+| Joensuu | WFS, WMS |
+| Jyväskylä | WFS, WMS |
+| Kajaani | WFS, WMS |
+| Kokkola | WFS, WMS |
+| Kotka | WFS, WMS |
+| Kouvola | WFS, WMS |
+| Kuopio | WFS, WMS |
+| Lahti | WFS, WMS |
+| Lappeenranta | WFS, WMS |
+| Mikkeli | WFS, WMS |
+| Naantali | WFS, WMS |
+| Oulu | WMS |
+| Pori | WFS, WMS |
+| Raisio | WFS, WMS |
+| Rauma | WFS, WMS |
+| Rovaniemi | WFS, WMS |
+| Salo | WFS, WMS |
+| Seinäjoki | WFS, WMS |
+| Tampere | WFS, WMS |
+| Turku | WMS |
+| Vantaa | WFS, WMS |
+
+#### Tekla OGC Web -kunnat
+
+| Kunta | Rajapinta |
+|-------|-----------|
+| Hyvinkää | WFS, WMS |
+| Kauniainen | WFS, WMS |
+| Nurmijärvi | WFS, WMS |
+| Tuusula | WFS, WMS |
+| Vihti | WFS, WMS |
+
+#### Pirkanmaan pirnet.fi (ArcGIS)
+
+| Kunta | Rajapinta |
+|-------|-----------|
+| Hämeenkyrö | ArcGIS |
+| Kangasala | ArcGIS |
+| Lempäälä | ArcGIS |
+| Nokia | ArcGIS |
+| Orivesi | ArcGIS |
+| Pirkkala | ArcGIS |
+| Ylöjärvi | ArcGIS |
 
 #### Harvester-toteutus
 
-`src/aura/harvesters/kunnat.py` — StaticHarvester. Jokaiselle kaupungille oma datasetti ja organisaatio.
+`src/aura/harvesters/kunnat.py` — StaticHarvester. Jokaiselle kunnalle oma datasetti ja organisaatio.
+
+---
+
+## Paikkatietoikkuna
+
+**URL:** https://paikkatietoikkuna.fi
+**API:** Oskari Action Routes (`https://kartta.paikkatietoikkuna.fi/action`)
+**Autentikointi:** Ei tarvita
+**Datasettejä:** 689
+**Resursseja:** 3 329
+**Organisaatioita:** 61
+
+Kansallinen paikkatietoportaali, jota ylläpitää Maanmittauslaitos. Kokoaa 2 796 karttatasoa 60+ organisaatiolta. Aineistot on luokiteltu INSPIRE-teemoittain (39 ryhmää).
+
+Karttatasotyypit: 2 041 WMS, 698 WFS, 41 WMTS, 8 3D Tiles, 6 tilastotasoa, 2 ArcGIS.
+
+Suurimmat tiedontuottajat:
+
+| Organisaatio | Karttatasoja |
+|---|---|
+| Tilastokeskus | 786 |
+| Luonnonvarakeskus | 363 |
+| Jyväskylän yliopisto (LIPAS) | 319 |
+| Suomen ympäristökeskus | 303 |
+| Väylävirasto | 204 |
+| Helsingin kaupunki | 159 |
+| Suomen metsäkeskus | 76 |
+| Maanmittauslaitos | 74 |
+| Traficom | 68 |
+| Tampereen kaupunki | 68 |
+
+**Huom:** Osa aineistoista esiintyy myös muissa Auran lähteissä (SYKE, MML, LIPAS jne.). Paikkatietoikkunan kautta saadaan INSPIRE-luokittelu ja taso-kohtaiset WMS/WFS-osoitteet.
+
+#### Harvester-toteutus
+
+`src/aura/harvesters/paikkatietoikkuna.py` — BaseHarvester. Kaksivaiheinen: (1) kaikki tasot `GetHierarchicalMapLayerGroups`-kutsulla, (2) CSW-metatiedot `GetCSWData`-kutsulla jokaiselle uniikille datasetille.
 
 ---
 
