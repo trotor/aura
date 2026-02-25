@@ -214,6 +214,50 @@ def main() -> None:
         help="Enimmäismäärä tauluja per lähde (0 = kaikki)",
     )
 
+    # infer-schemas
+    infer_schema_parser = subparsers.add_parser(
+        "infer-schemas",
+        help="Päättele datasettien kenttätiedot (schema introspection)",
+    )
+    infer_schema_parser.add_argument(
+        "--source", default="",
+        help="Rajaa lähteeseen (esim. avoindata.fi)",
+    )
+    infer_schema_parser.add_argument(
+        "--limit", type=int, default=50,
+        help="Käsiteltävien datasettien enimmäismäärä (oletus: 50)",
+    )
+    infer_schema_parser.add_argument(
+        "--delay", type=float, default=0.3,
+        help="Viive sekunteina pyyntöjen välissä (oletus: 0.3)",
+    )
+
+    # refresh
+    refresh_parser = subparsers.add_parser(
+        "refresh",
+        help="Kokonaisvirkistys: harvest + laatu + health (valinnainen)",
+    )
+    refresh_parser.add_argument(
+        "--source", default="all",
+        help="Lähde tai 'all' (oletus: all)",
+    )
+    refresh_parser.add_argument(
+        "--include-static", action="store_true",
+        help="Sisällytä staattiset harvesterit",
+    )
+    refresh_parser.add_argument(
+        "--health", action="store_true",
+        help="Suorita myös health check",
+    )
+    refresh_parser.add_argument(
+        "--health-limit", type=int, default=200,
+        help="Health checkin resurssiraja (oletus: 200)",
+    )
+    refresh_parser.add_argument(
+        "--schemas", action="store_true",
+        help="Päättele myös skeematiedot",
+    )
+
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
@@ -225,6 +269,9 @@ def main() -> None:
     )
 
     if args.command == "harvest":
+        from datetime import datetime
+
+        from aura.database import upsert_source
         from aura.harvesters import get_all_harvesters, get_harvester
         from aura.harvesters.static import StaticHarvester
 
@@ -233,6 +280,8 @@ def main() -> None:
                 tag = " (staattinen)" if issubclass(cls, StaticHarvester) else ""
                 print(f"  {name:25s} {cls.description}{tag}")
             return
+
+        now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
         if args.source == "all":
             total = 0
@@ -246,15 +295,37 @@ def main() -> None:
                 count = asyncio.run(harvester.harvest())
                 print(f"  {name}: {count} datasettiä")
                 total += count
+                # Päivitä sources-taulu (#125)
+                src_cfg = cls.source_config()
+                src_cfg["dataset_count"] = count
+                src_cfg["last_harvested_at"] = now
+                upsert_source(harvester.conn, src_cfg)
+                harvester.conn.commit()
             if skipped:
                 print(f"\nOhitettu staattiset: {', '.join(skipped)}")
                 print("  (käytä --include-static sisällyttääksesi)")
             print(f"\nYhteensä: {total} datasettiä")
+            # Laske laatupisteet harvestoinnin jälkeen (#127)
+            from aura.quality import score_all_datasets
+
+            qcount = score_all_datasets(harvester.conn)
+            print(f"Laatupisteet laskettu {qcount} datasetille.")
         else:
             cls = get_harvester(args.source)
             harvester = cls()
             count = asyncio.run(harvester.harvest())
+            # Päivitä sources-taulu (#125)
+            src_cfg = cls.source_config()
+            src_cfg["dataset_count"] = count
+            src_cfg["last_harvested_at"] = now
+            upsert_source(harvester.conn, src_cfg)
+            harvester.conn.commit()
             print(f"Haettu {count} datasettiä lähteestä {args.source}.")
+            # Laske laatupisteet harvestoinnin jälkeen (#127)
+            from aura.quality import score_all_datasets
+
+            qcount = score_all_datasets(harvester.conn, source=args.source)
+            print(f"Laatupisteet laskettu {qcount} datasetille.")
 
     elif args.command == "serve":
         from aura.server import mcp
@@ -630,6 +701,22 @@ def main() -> None:
             total += count
         print(f"\nYhteensä: {total} taulua rikastettu dimensiotiedoilla.")
 
+    elif args.command == "infer-schemas":
+        asyncio.run(_infer_schemas(
+            source=args.source,
+            limit=args.limit,
+            delay=args.delay,
+        ))
+
+    elif args.command == "refresh":
+        asyncio.run(_refresh(
+            source=args.source,
+            include_static=args.include_static,
+            run_health=args.health,
+            health_limit=args.health_limit,
+            run_schemas=args.schemas,
+        ))
+
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations
 
@@ -733,6 +820,182 @@ async def _auto_tag(
         print(f"\nDry-run valmis. Tagitettaisiin {tagged} datasettiä ({skipped} ohitettu).")
     else:
         print(f"\nTagitettu {tagged} datasettiä, virheitä {errors}.")
+
+
+async def _infer_schemas(
+    source: str = "",
+    limit: int = 50,
+    delay: float = 0.3,
+) -> None:
+    """Päättele datasettien kenttätiedot esikatselun perusteella (#124)."""
+    from aura.database import get_connection, init_db
+    from aura.tools.preview import _pick_resource, _preview_csv, _preview_json
+    from aura.tools.schema import save_schema_from_markdown
+
+    conn = get_connection()
+    init_db(conn)
+
+    # Hae datasetit joilla on CSV/JSON-resursseja mutta ei vielä skeemaa
+    query = """
+        SELECT d.id, d.name, COALESCE(d.title_fi, d.title) as title
+        FROM datasets d
+        JOIN resources r ON r.dataset_id = d.id
+        LEFT JOIN resource_schema rs ON rs.dataset_id = d.id
+        WHERE UPPER(r.format) IN ('CSV', 'JSON', 'GEOJSON')
+          AND rs.dataset_id IS NULL
+    """
+    params: list[str] = []
+    if source:
+        query += " AND d.source = ?"
+        params.append(source)
+    query += " GROUP BY d.id ORDER BY d.name LIMIT ?"
+    params.append(str(limit))
+
+    datasets = conn.execute(query, params).fetchall()
+
+    if not datasets:
+        print("Kaikilla dataseteilla on jo skeematiedot (tai ei CSV/JSON-resursseja).")
+        return
+
+    print(f"Päätellään skeemoja {len(datasets)} datasetille...\n")
+
+    inferred = 0
+    errors = 0
+
+    for i, ds in enumerate(datasets, 1):
+        ds_id = ds["id"]
+        title = ds["title"] or ds["name"]
+
+        resources = conn.execute(
+            "SELECT * FROM resources WHERE dataset_id = ?", (ds_id,),
+        ).fetchall()
+        resources = [dict(r) for r in resources]
+
+        resource = _pick_resource(resources, None, "CSV")
+        if resource is None:
+            resource = _pick_resource(resources, None, "JSON")
+        if resource is None:
+            continue
+
+        fmt = (resource.get("format") or "").upper()
+        url = resource.get("url", "")
+        res_id = resource.get("id", "")
+
+        if not url:
+            continue
+
+        try:
+            if fmt == "CSV":
+                body = await _preview_csv(url, 10)
+            else:
+                body = await _preview_json(url, 10)
+
+            save_schema_from_markdown(conn, res_id, ds_id, body)
+            inferred += 1
+        except Exception as e:
+            errors += 1
+            if errors <= 5:
+                print(f"  VIRHE: {title[:50]} — {e}")
+
+        if i % 10 == 0 or i == len(datasets):
+            print(f"  [{i}/{len(datasets)}] {inferred} skeemaa pääteltynä...")
+
+        if delay > 0 and i < len(datasets):
+            await asyncio.sleep(delay)
+
+    print(f"\nValmis: {inferred} skeemaa pääteltynä, {errors} virhettä.")
+
+
+async def _refresh(
+    source: str = "all",
+    include_static: bool = False,
+    run_health: bool = False,
+    health_limit: int = 200,
+    run_schemas: bool = False,
+) -> None:
+    """Kokonaisvirkistys: harvest + quality + health + schemas (#123)."""
+    from datetime import datetime
+
+    from aura.database import get_connection, init_db, upsert_source
+    from aura.harvesters import get_all_harvesters, get_harvester
+    from aura.harvesters.static import StaticHarvester
+    from aura.quality import score_all_datasets
+
+    conn = get_connection()
+    init_db(conn)
+    now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
+
+    # 1. Harvest
+    print("=" * 50)
+    print("VAIHE 1: Harvestointi")
+    print("=" * 50)
+
+    if source == "all":
+        total = 0
+        skipped = []
+        for name, cls in get_all_harvesters().items():
+            if issubclass(cls, StaticHarvester) and not include_static:
+                skipped.append(name)
+                continue
+            print(f"  Harvestoidaan: {name}...")
+            harvester = cls(conn=conn)
+            count = await harvester.harvest()
+            print(f"    {count} datasettiä")
+            total += count
+            src_cfg = cls.source_config()
+            src_cfg["dataset_count"] = count
+            src_cfg["last_harvested_at"] = now
+            upsert_source(conn, src_cfg)
+        conn.commit()
+        if skipped:
+            print(f"  Ohitettu staattiset: {', '.join(skipped)}")
+        print(f"  Yhteensä: {total} datasettiä\n")
+    else:
+        cls = get_harvester(source)
+        harvester = cls(conn=conn)
+        count = await harvester.harvest()
+        src_cfg = cls.source_config()
+        src_cfg["dataset_count"] = count
+        src_cfg["last_harvested_at"] = now
+        upsert_source(conn, src_cfg)
+        conn.commit()
+        print(f"  {count} datasettiä lähteestä {source}\n")
+
+    # 2. Laatupisteet
+    print("=" * 50)
+    print("VAIHE 2: Laatupisteytys")
+    print("=" * 50)
+
+    src_filter = "" if source == "all" else source
+    qcount = score_all_datasets(conn, source=src_filter)
+    print(f"  Laatupisteet laskettu {qcount} datasetille.\n")
+
+    # 3. Health check (valinnainen)
+    if run_health:
+        print("=" * 50)
+        print("VAIHE 3: Health check")
+        print("=" * 50)
+
+        from aura.health import check_all_resources
+
+        summary = await check_all_resources(
+            conn,
+            source=src_filter,
+            limit=health_limit,
+        )
+        print(f"  Tarkistettu: {summary.total}")
+        print(f"  Saatavilla:  {summary.available}")
+        print(f"  Virheitä:    {summary.errors}\n")
+
+    # 4. Schema introspection (valinnainen)
+    if run_schemas:
+        print("=" * 50)
+        print(f"VAIHE {'4' if run_health else '3'}: Schema introspection")
+        print("=" * 50)
+
+        await _infer_schemas(source=src_filter, limit=100)
+
+    print("\nRefresh valmis!")
 
 
 def _gap_pct(n: int, total: int) -> str:

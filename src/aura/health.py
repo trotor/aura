@@ -306,6 +306,9 @@ async def check_all_resources(
     if response_times:
         summary.avg_response_ms = sum(response_times) / len(response_times)
 
+    # Auto-detect auth requirements from 401/403 responses (#126)
+    _detect_auth_from_results(conn, summary.results)
+
     logger.info(
         "[health] Tarkistettu %d resurssia: %d saatavilla, %d ei saatavilla, %d virhettä",
         summary.total, summary.available, summary.unavailable, summary.errors,
@@ -365,6 +368,45 @@ def get_unavailable_resources(
     params.append(limit)
 
     return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+
+def _detect_auth_from_results(
+    conn: sqlite3.Connection,
+    results: list[HealthResult],
+) -> None:
+    """Havaitse autentikoinnin tarve 401/403-vastauksista (#126).
+
+    Merkitsee datasetin auth_method-enrichmentiksi jos jokin resurssi
+    palauttaa 401 tai 403.
+    """
+    auth_datasets: set[str] = set()
+    for r in results:
+        if r.status_code in (401, 403):
+            auth_datasets.add(r.dataset_id)
+
+    if not auth_datasets:
+        return
+
+    from aura.database import add_enrichment
+
+    for ds_id in auth_datasets:
+        # Tarkista onko jo olemassa
+        existing = conn.execute(
+            "SELECT 1 FROM enrichments WHERE dataset_id = ? AND field = 'auth_method' LIMIT 1",
+            (ds_id,),
+        ).fetchone()
+        if existing:
+            continue
+
+        add_enrichment(
+            conn, ds_id, "auth_method", "registration",
+            confidence="medium",
+            source_type="health_check",
+            source_detail="Auto-detected from HTTP 401/403",
+        )
+        logger.info("[health] Auth-vaatimus havaittu datasetille %s", ds_id)
+
+    conn.commit()
 
 
 def get_dataset_health(

@@ -259,9 +259,21 @@ def _normalize_geo_coverage(values: list[str]) -> list[str]:
 
 def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
     # Normalisoi geographical_coverage ennen tallennusta
-    dataset = dataset.model_copy(
-        update={"geographical_coverage": _normalize_geo_coverage(dataset.geographical_coverage)}
-    )
+    updates: dict[str, Any] = {
+        "geographical_coverage": _normalize_geo_coverage(dataset.geographical_coverage),
+    }
+
+    # Normalisoi lisenssi SPDX-muotoon (#119)
+    if dataset.license_id:
+        from aura.constants import normalize_license
+
+        spdx_id, spdx_title = normalize_license(dataset.license_id)
+        if spdx_id:
+            updates["license_id"] = spdx_id
+        if spdx_title:
+            updates["license_title"] = spdx_title
+
+    dataset = dataset.model_copy(update=updates)
 
     # Upsert organization if present
     if dataset.organization_id:

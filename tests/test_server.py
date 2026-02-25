@@ -922,7 +922,11 @@ class TestStructuralVerification:
         assert "CSV" in result
         assert "vaesto.csv" in result
         assert "Helsingin kaupunki" in result
-        assert "cc-by-4.0" in result.lower() or "CC BY 4.0" in result
+        assert (
+            "cc-by-4.0" in result.lower()
+            or "CC BY 4.0" in result
+            or "Creative Commons" in result
+        )
 
     @pytest.mark.asyncio
     async def test_describe_enrichment_gaps_shown(self) -> None:

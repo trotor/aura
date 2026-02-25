@@ -115,7 +115,11 @@ async def harvest(source: str = "all", ctx: Context | None = None) -> str:
             src_cfg["last_harvested_at"] = now
             upsert_source(conn, src_cfg)
         conn.commit()
-        parts.insert(0, f"# Harvest valmis\n\nYhteensä {total} datasettiä:\n")
+        # Laske laatupisteet harvestoinnin jälkeen (#127)
+        from aura.quality import score_all_datasets
+
+        qcount = score_all_datasets(conn)
+        parts.insert(0, f"# Harvest valmis\n\nYhteensä {total} datasettiä (laatu: {qcount}):\n")
         return "\n".join(parts)
 
     try:
@@ -131,7 +135,11 @@ async def harvest(source: str = "all", ctx: Context | None = None) -> str:
     src_cfg["last_harvested_at"] = now
     upsert_source(conn, src_cfg)
     conn.commit()
-    return f"Haettu {count} datasettiä lähteestä {source}."
+    # Laske laatupisteet harvestoinnin jälkeen (#127)
+    from aura.quality import score_all_datasets
+
+    qcount = score_all_datasets(conn, source=source)
+    return f"Haettu {count} datasettiä lähteestä {source}. Laatupisteet: {qcount}."
 
 
 @mcp.tool()
