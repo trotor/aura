@@ -6,6 +6,7 @@ Ei importtaa aura.server:iä (välttää sirkulaariset importit).
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any
@@ -16,6 +17,22 @@ logger = logging.getLogger(__name__)
 
 _INT_PATTERN = re.compile(r"^-?\d+$")
 _FLOAT_PATTERN = re.compile(r"^-?\d+[.,]\d+$")
+
+# Suomalaiset avaintunnisteet kenttänimen perusteella (#117)
+# (pattern, key_name, key_standard)
+_KEY_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+    (re.compile(r"kunta.?(koodi|numero|code)", re.I), "kuntakoodi", "Tilastokeskus 3-num"),
+    (re.compile(r"municipality.?code", re.I), "kuntakoodi", "Tilastokeskus 3-num"),
+    (re.compile(r"^kunta$", re.I), "kuntakoodi", "Tilastokeskus"),
+    (re.compile(r"maakunta.?(koodi|code)", re.I), "maakuntakoodi", "Tilastokeskus 2-num"),
+    (re.compile(r"region.?code", re.I), "maakuntakoodi", "Tilastokeskus 2-num"),
+    (re.compile(r"postin(umero|ro)|postal.?code|zipcode", re.I), "postinumero", "Posti 5-num"),
+    (re.compile(r"vuosi|year|^v$", re.I), "vuosi", "4-num"),
+    (re.compile(r"ely.?(koodi|code|keskus)", re.I), "ELY-koodi", "Tilastokeskus"),
+    (re.compile(r"y.?tunnus|business.?id", re.I), "y-tunnus", "PRH 8-num"),
+    (re.compile(r"hetu|henkilö|person.?id|ssn", re.I), "henkilötunnus", "anonymisoitu"),
+    (re.compile(r"kiinteistö.?tunnus|property.?id", re.I), "kiinteistötunnus", "MML"),
+]
 
 
 def infer_type(values: list[str]) -> str:
@@ -52,6 +69,29 @@ def parse_md_table(md: str) -> tuple[list[str], list[list[str]]]:
     return headers, rows
 
 
+def detect_joinable_keys(field_names: list[str]) -> list[dict[str, str]]:
+    """Tunnista yhteiset avaimet kenttänimistä (#117).
+
+    Returns:
+        Lista tunnistettuja avaimia: [{"field": ..., "key": ..., "standard": ...}]
+    """
+    keys: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for name in field_names:
+        for pattern, key_name, standard in _KEY_PATTERNS:
+            if key_name in seen:
+                continue
+            if pattern.search(name):
+                keys.append({
+                    "field": name,
+                    "key": key_name,
+                    "standard": standard,
+                })
+                seen.add(key_name)
+                break
+    return keys
+
+
 def save_schema_from_markdown(
     conn: Any,
     resource_id: str,
@@ -71,4 +111,35 @@ def save_schema_from_markdown(
         ftype = infer_type(col_values)
         fields.append((header, ftype))
     upsert_resource_schema(conn, resource_id, dataset_id, fields)
+
+    # Tunnista yhteiset avaimet ja tallenna enrichmentiksi (#117)
+    keys = detect_joinable_keys(headers)
+    if keys:
+        _save_joinable_keys(conn, dataset_id, keys)
+
     conn.commit()
+
+
+def _save_joinable_keys(
+    conn: Any,
+    dataset_id: str,
+    keys: list[dict[str, str]],
+) -> None:
+    """Tallenna tunnistetut avaimet joinable_keys-enrichmentiksi."""
+    from aura.database import add_enrichment
+
+    value = json.dumps(keys, ensure_ascii=False)
+    # Tarkista onko jo olemassa
+    existing = conn.execute(
+        "SELECT 1 FROM enrichments "
+        "WHERE dataset_id = ? AND field = 'joinable_keys' LIMIT 1",
+        (dataset_id,),
+    ).fetchone()
+    if existing:
+        return
+    add_enrichment(
+        conn, dataset_id, "joinable_keys", value,
+        confidence="medium",
+        source_type="schema_analysis",
+        source_detail="Auto-detected from field names",
+    )

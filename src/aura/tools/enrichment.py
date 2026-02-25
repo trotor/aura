@@ -22,6 +22,7 @@ VALID_ENRICHMENT_FIELDS = {
     "temporal_coverage", "update_frequency_actual",
     "yso_concepts",
     "auth_method", "auth_registration_url", "auth_notes",
+    "crs", "joinable_keys",
 }
 
 MAX_ENRICHMENT_VALUE_LENGTH = 10_000
@@ -59,6 +60,9 @@ def enrich(
             - auth_method: autentikointimenetelmä (none, apikey, oauth, registration)
             - auth_registration_url: URL josta pääsy haetaan
             - auth_notes: muita huomioita pääsyvaatimuksista
+            - crs: koordinaattijärjestelmä (esim. "EPSG:3067", "EPSG:4326")
+            - joinable_keys: yhdistettävät avaimet JSON-listana
+                (esim. '[{"field":"kunta","key":"kuntakoodi","standard":"Tilastokeskus"}]')
             - organization_context: taustatietoa julkaisijasta
             - temporal_coverage: ajallinen kattavuus
             - update_frequency_actual: havaittu päivitystiheys

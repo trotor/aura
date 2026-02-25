@@ -72,6 +72,7 @@ class FmiHarvester(BaseHarvester):
 
             dataset = self._query_to_dataset(query_id, title, abstract)
             upsert_dataset(self.conn, dataset)
+            self._auto_enrich_crs(dataset)
             count += 1
 
         self.conn.commit()

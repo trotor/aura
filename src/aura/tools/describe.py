@@ -26,6 +26,8 @@ from aura.tools.quality import DIMENSION_LABELS
 _ENRICHMENT_PRIORITIES = [
     ("access_instructions", "Miten dataa haetaan käytännössä?"),
     ("auth_method", "Autentikointimenetelmä (none/apikey/oauth/registration)?"),
+    ("crs", "Koordinaattijärjestelmä (esim. EPSG:3067)?"),
+    ("joinable_keys", "Millä avaimilla data yhdistetään muihin aineistoihin?"),
     ("data_fields", "Mitä kenttiä/sarakkeita data sisältää?"),
     ("use_case", "Mihin dataa voi käyttää?"),
     ("temporal_coverage", "Miltä ajanjaksolta data on?"),

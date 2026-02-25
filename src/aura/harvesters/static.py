@@ -61,6 +61,7 @@ class StaticHarvester(BaseHarvester):
         for cfg in self.datasets_config:
             for dataset in self._expand(cfg):
                 upsert_dataset(self.conn, dataset)
+                self._auto_enrich_crs(dataset)
                 count += 1
         self.conn.commit()
         logger.info("[%s] Harvest valmis: %d datasettiä", self.name, count)

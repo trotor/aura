@@ -79,6 +79,7 @@ class CkanHarvester(BaseHarvester):
                     dataset = Dataset.from_ckan(raw, source=self.ckan_source)
                     upsert_dataset(self.conn, dataset)
                     self._enrich_from_extras(dataset.id, raw)
+                    self._auto_enrich_crs(dataset)
                     total_harvested += 1
 
                 self.conn.commit()

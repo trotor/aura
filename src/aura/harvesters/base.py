@@ -175,6 +175,27 @@ class BaseHarvester(ABC):
         defaults.update(kwargs)
         return Dataset(**defaults)
 
+    # Paikkatietoformaatit joille CRS on relevantti
+    _SPATIAL_FORMATS = {"WFS", "WMS", "WCS", "GEOJSON", "GPKG", "SHP", "GML", "KML"}
+
+    def _auto_enrich_crs(self, dataset: Dataset) -> None:
+        """Aseta CRS-enrichment automaattisesti paikkatietoresursseille (#116).
+
+        Suomalaisille paikkatietoaineistoille oletus on EPSG:3067 (ETRS-TM35FIN).
+        """
+        formats = {(r.format or "").upper() for r in dataset.resources}
+        if not formats & self._SPATIAL_FORMATS:
+            return
+
+        # Oletus suomalaisille: EPSG:3067
+        geo = dataset.geographical_coverage
+        is_finnish = any(
+            g.lower() in ("suomi", "finland") for g in geo
+        ) if geo else True  # oletuksena suomalainen
+
+        crs = "EPSG:3067" if is_finnish else "EPSG:4326"
+        self._add_enrichment(dataset.id, "crs", crs)
+
     def _add_enrichment(
         self,
         dataset_id: str,
