@@ -51,7 +51,11 @@ class SanastotHarvester(BaseHarvester):
                     params={"pageSize": PAGE_SIZE, "pageFrom": page_from},
                 )
                 data = resp.json()
-                terminologies = data.get("terminologies", [])
+                terminologies = (
+                    data.get("responseObjects")
+                    or data.get("terminologies")
+                    or []
+                )
 
                 if not terminologies:
                     break
