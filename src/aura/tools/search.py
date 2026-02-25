@@ -142,6 +142,7 @@ async def search_structured(
             "num_resources": d.get("num_resources", 0),
             "estimated_size_bytes": d.get("estimated_size_bytes", 0),
             "access_level": d.get("access_level", "open"),
+            "harvested_at": d.get("harvested_at", ""),
             "enrichment_count": enrichment_counts.get(ds_id, 0),
         })
 

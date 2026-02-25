@@ -148,6 +148,17 @@ async def query_data(
         logger.warning("query_data virhe: %s", e, exc_info=True)
         body = f"Kysely epäonnistui: {e}"
 
+    # Tallenna skeema sivuvaikutuksena (best-effort)
+    if resource is not None:
+        try:
+            from aura.tools.schema import save_schema_from_markdown
+
+            save_schema_from_markdown(
+                conn, resource.get("id", ""), dataset.get("id", ""), body,
+            )
+        except Exception:
+            logger.debug("Schema-tallennus epäonnistui", exc_info=True)
+
     return header + body
 
 

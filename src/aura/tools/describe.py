@@ -13,6 +13,8 @@ from aura.database import (
     get_dataset,
     get_datasets_by_ids,
     get_latest_enrichments,
+    get_resource_schema,
+    get_source,
     get_stale_enrichments,
 )
 from aura.quality import get_quality_scores
@@ -61,6 +63,14 @@ async def describe(dataset_id: str, ctx: Context | None = None) -> str:
         stale_ids=stale_ids,
         conflicts=conflicts,
     )
+
+    # Rajapintatieto sources-taulusta
+    source_info = get_source(conn, dataset.get("source", ""))
+    if source_info:
+        result += _format_source_line(source_info)
+
+    # Kenttätiedot (schema introspection)
+    result += _format_schema_section(conn, ds_id)
 
     # Laatupisteet
     quality = get_quality_scores(conn, ds_id)
@@ -132,6 +142,44 @@ def compare(dataset_ids: list[str], ctx: Context | None = None) -> str:
 
 
 # --- Apufunktiot ---
+
+
+def _format_schema_section(conn: Any, dataset_id: str) -> str:
+    """Muotoile datasetin kenttätiedot (schema introspection)."""
+    schema = get_resource_schema(conn, dataset_id)
+    if not schema:
+        return ""
+
+    # Ryhmitä resurssin mukaan
+    by_resource: dict[str, list[dict[str, Any]]] = {}
+    for row in schema:
+        rid = row["resource_id"]
+        by_resource.setdefault(rid, []).append(row)
+
+    parts = ["\n\n### Kenttätiedot\n"]
+    for rid, fields in by_resource.items():
+        if len(by_resource) > 1:
+            parts.append(f"**Resurssi:** {rid[:12]}...")
+        for f in fields:
+            parts.append(f"- `{f['field_name']}` ({f['field_type']})")
+
+    return "\n".join(parts)
+
+
+def _format_source_line(source_info: dict[str, Any]) -> str:
+    """Muotoile rajapintatiedon rivi describe()-tulokseen."""
+    protocol = source_info.get("query_protocol", "")
+    base_url = source_info.get("api_base_url", "")
+    if not protocol and not base_url:
+        return ""
+
+    parts = []
+    if protocol:
+        parts.append(protocol.upper())
+    if base_url:
+        parts.append(base_url)
+
+    return f"\n**Rajapinta:** {' | '.join(parts)}"
 
 
 def _format_quality_section(quality: dict[str, Any]) -> str:

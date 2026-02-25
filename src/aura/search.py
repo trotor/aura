@@ -198,6 +198,10 @@ def format_dataset_detail(
         label = {"registration": "Vaatii rekisteröinnin", "restricted": "Rajoitettu pääsy"}
         summary += f"\n**Saatavuus:** {label.get(access_level, access_level)}"
 
+    harvested = format_date(dataset.get("harvested_at"))
+    if harvested:
+        summary += f"\n**Harvestoitu:** {harvested}"
+
     if enrichments:
         summary += format_enrichments(enrichments, stale_ids=stale_ids)
 

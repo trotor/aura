@@ -947,6 +947,53 @@ def get_all_sources(
     return [dict(r) for r in rows]
 
 
+# --- Resource Schema ---
+
+
+def upsert_resource_schema(
+    conn: sqlite3.Connection,
+    resource_id: str,
+    dataset_id: str,
+    fields: list[tuple[str, str]],
+) -> None:
+    """Tallenna resurssin kenttätiedot (field_name, field_type) -parit.
+
+    Korvaa olemassa olevat kentät samalle resurssille.
+    """
+    if not fields:
+        return
+    conn.execute(
+        "DELETE FROM resource_schema WHERE resource_id = ?", (resource_id,)
+    )
+    conn.executemany(
+        """
+        INSERT INTO resource_schema (resource_id, dataset_id, field_name, field_type)
+        VALUES (?, ?, ?, ?)
+        """,
+        [(resource_id, dataset_id, name, ftype) for name, ftype in fields],
+    )
+
+
+def get_resource_schema(
+    conn: sqlite3.Connection,
+    dataset_id: str,
+) -> list[dict[str, Any]]:
+    """Hae datasetin resurssien kenttätiedot.
+
+    Palauttaa listan: resource_id, field_name, field_type, detected_at.
+    """
+    rows = conn.execute(
+        """
+        SELECT rs.resource_id, rs.field_name, rs.field_type, rs.detected_at
+        FROM resource_schema rs
+        WHERE rs.dataset_id = ?
+        ORDER BY rs.resource_id, rs.rowid
+        """,
+        (dataset_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def export_enrichments(
     conn: sqlite3.Connection,
     source_type: str = "",
