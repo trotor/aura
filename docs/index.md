@@ -1,6 +1,6 @@
 # Aura — Suomalaisen avoimen datan discovery-palvelu
 
-Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu kokoaa yhteen metadatan 26 avoimen datan lähteestä ja tarjoaa sen haettavaksi tekoälyille ja ihmisille.
+Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu kokoaa yhteen metadatan 27 avoimen datan lähteestä ja tarjoaa sen haettavaksi tekoälyille ja ihmisille.
 
 ---
 
@@ -8,8 +8,8 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 | | |
 |---|---|
-| **6 500+** datasettiä | **16 200+** resurssia |
-| **279** organisaatiota | **26** datalähdettä |
+| **7 000+** datasettiä | **17 000+** resurssia |
+| **290+** organisaatiota | **27** datalähdettä |
 | **~2 TB** arvioitua dataa | **308** kuntaa viitetaulussa |
 
 ---
@@ -18,12 +18,13 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 | Lähde | Tyyppi | Datasettejä | Organisaatioita |
 |-------|--------|-------------|-----------------|
-| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 737 | 172 |
+| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 738 | 172 |
 | [Tilastokeskus (StatFin)](https://stat.fi) | PxWeb API | 1 524 | 1 |
 | [Paikkatietoikkuna](https://paikkatietoikkuna.fi) | Oskari API | 689 | 61 |
 | [LUKE](https://statdb.luke.fi) | PxWeb API | 662 | 1 |
-| [SYKE](https://ckan.ymparisto.fi) | CKAN API | 615 | 7 |
+| [SYKE](https://ckan.ymparisto.fi) | CKAN API | 614 | 7 |
 | [HRI (hri.fi)](https://hri.fi) | CKAN API | 549 | 28 |
+| [Suomi.fi-koodistot](https://koodistot.suomi.fi) | REST API | 511 | 1 |
 | [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1 |
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 1 |
 | [LUKE avoin tutkimusdata](https://opendata.luke.fi) | CKAN | 124 | 1 |
@@ -33,7 +34,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | 1 |
 | [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 1 |
 | [Vaalirahoitusvalvonta](https://www.vaalirahoitusvalvonta.fi) | CSV | 27 | 1 |
-| + 11 muuta lähdettä | | 77 | |
+| + 11 muuta lähdettä | | 72 | |
 
 [Tarkemmat tiedot lähteistä](SOURCES.md)
 
@@ -107,7 +108,7 @@ Lisäksi valtaosa dataseteista kattaa koko Suomen — esimerkiksi Tilastokeskuks
 | PxWeb | 2 326 | Tilastotaulukot |
 | WFS | 1 549 | Paikkatietorajapinta |
 | XLSX | 860 | Excel-taulukot |
-| CSV | 550 | Taulukkodata |
+| CSV | 1 061 | Taulukkodata |
 | PDF | 338 | Dokumentit |
 | ZIP | 335 | Pakatut aineistot |
 | SHP | 270 | Shapefile-paikkatieto |
@@ -140,7 +141,7 @@ Tietokanta tulee repon mukana valmiina — ei tarvitse harvestoida erikseen.
 ## Dokumentaatio
 
 - [**Dataformaatit**](formats.md) — Auran tukemat 20 dataformaattia
-- [**Organisaatiot**](organisaatiot.md) — 279 datan julkaisijaa
+- [**Organisaatiot**](organisaatiot.md) — 290+ datan julkaisijaa
 - [**Kunnat**](kunnat.md) — 163 kuntaa maakunnittain, linkkeineen
 - [**Datasettikatalogi**](CATALOG.md) — Täydellinen lista lähteittäin
 - [**Datalähteet**](SOURCES.md) — Lähteiden tekniset tiedot

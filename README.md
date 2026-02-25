@@ -4,9 +4,9 @@
 
 [**Dokumentaatio**](https://trotor.github.io/aura/) · [**Datasettikatalogi**](docs/CATALOG.md) · [**Dataformaatit**](docs/formats.md) · [**Datalähteet**](docs/SOURCES.md)
 
-> **5 800+ datasettiä** · **12 900+ resurssia** · **250+ organisaatiota** · **~2 TB** avointa dataa
+> **7 000+ datasettiä** · **17 000+ resurssia** · **290+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 27 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Kuntien paikkatiedot (36 kuntaa) ym.
+> 27 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -18,7 +18,9 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
+- **Laatupisteyttää** — automaattinen laadun arviointi neljällä dimensiolla
 - **Rikastaa joukkoistamalla** — MCP-sessiot kerryttävät tietoa dataseteistä
+- **Tunnistaa skeemoja** — päättelee kenttänimet ja tyypit esikatselusta
 - **Palvelee tekoälyjä** MCP-serverin kautta (Claude, GPT, jne.)
 
 ## Vaatimukset
@@ -131,6 +133,8 @@ aura sources
 aura harvest              # kaikki lähteet
 aura harvest avoindata.fi  # yksittäinen lähde
 aura harvest --list        # listaa saatavilla olevat
+aura refresh              # harvest + laatupisteet + health + skeema
+aura infer-schemas        # päättele kenttätyypit esikatselusta
 
 # Rikastukset
 aura export-enrichments -o contributions/omat.json
@@ -141,27 +145,63 @@ aura import-enrichments contributions/*.json
 
 ## MCP-työkalut
 
+**Haku ja selaus:**
+
 | Työkalu | Kuvaus |
 |---------|--------|
 | `search` | Hae datasettejä luonnollisella kielellä (suodattimet: lähde, formaatti, organisaatio, saatavuus, alue) |
 | `search_structured` | Hae datasettejä ja palauta JSON tekoälyagenteille |
-| `describe` | Kuvaa datasetti yksityiskohtaisesti (sis. rikastukset) |
+| `search_by_region` | Hae alueellisesti (kunta, maakunta, postinumero) |
+| `describe` | Kuvaa datasetti yksityiskohtaisesti (sis. skeema, laatu, rikastukset) |
 | `query_data` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
 | `recommend` | Suosittele parhaita datasettejä aiheesta |
 | `compare` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related` | Etsi samankaltaiset datasetit |
+| `suggest_questions` | Ehdota esimerkkikysymyksiä teemoittain ja alueittain |
+
+**Alueanalyysi:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
 | `area_profile` | Alueprofiili: datasetit, laatu, puutteet |
 | `compare_municipalities` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
-| `enrich` | Rikasta datasetin tietoja (avainsanat, kuvaukset, laatuhuomiot) |
-| `get_enrichments_tool` | Näytä datasetin rikastukset |
+| `lookup_municipality` | Hae kuntatiedot nimellä, koodilla tai postinumerolla |
+
+**Laatu:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
 | `quality_report` | Datasetin laatupisteet dimensioittain |
+| `quality_overview` | Yhteenveto laatupisteistä |
 | `quality_ranking` | Parhaiten pisteytetyt datasetit |
+| `quality_gaps` | Metatiedon puutteet ja parannusehdotukset |
+
+**Rikastus ja tutkimus:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `enrich` | Rikasta datasetin tietoja (avainsanat, kuvaukset, laatuhuomiot) |
+| `batch_enrich` | Tallenna useita rikastuksia kerralla |
+| `get_enrichments_tool` | Näytä datasetin rikastukset |
+| `suggest_yso_tags` | Ehdota YSO-ontologian avainsanoja |
+| `log_finding` | Kirjaa löydös tutkimuksen aikana |
+| `list_findings` | Näytä session löydökset |
+| `save_session_findings` | Tallenna löydökset enrichmenteiksi |
+
+**Hallinta:**
+
+| Työkalu | Kuvaus |
+|---------|--------|
 | `stats` | Näytä tilastot tietokannasta |
 | `list_organizations` | Listaa datan julkaisijat |
 | `list_formats` | Listaa saatavilla olevat dataformaatit |
 | `harvest` | Hae datasettien metatiedot lähteistä |
 | `list_sources` | Listaa datalähteet ja harvestoinnin tila |
 | `probe_sizes` | Mittaa paikkatietoaineistojen koot |
+| `health_check` | Tarkista resurssien saatavuus (HTTP) |
+| `health_report` | Saatavuusraportti aiempien tarkistusten perusteella |
+| `reference_status` | Viiteaineistojen tila |
+| `populate_reference` | Lataa viiteaineistot kantaan |
 
 ## Datalähteet
 
@@ -171,23 +211,24 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 
 | Lähde | Tyyppi | Datasettejä | Arvioitu koko |
 |-------|--------|-------------|---------------|
-| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 737 | 102 GB |
+| [avoindata.fi](https://avoindata.suomi.fi) | CKAN API | 1 738 | 102 GB |
 | [Tilastokeskus](https://stat.fi) | PxWeb API | 1 524 | 7,1 GB |
+| [Paikkatietoikkuna](https://paikkatietoikkuna.fi) | Oskari API | 689 | — |
 | [LUKE](https://statdb.luke.fi) | PxWeb API | 662 | 3,1 GB |
-| [SYKE](https://ckan.ymparisto.fi) | CKAN API | 615 | 18 GB |
+| [SYKE](https://ckan.ymparisto.fi) | CKAN API | 614 | 18 GB |
 | [HRI (hri.fi)](https://hri.fi) | CKAN API | 549 | 39 GB |
+| [Suomi.fi-koodistot](https://koodistot.suomi.fi) | REST API | 511 | — |
 | [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1,5 GB |
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
 | [LUKE avoin tutkimusdata](https://opendata.luke.fi) | CKAN | 124 | 2,1 GB |
-| [LUKE paikkatietopalvelu](https://kartta.luke.fi) | WMS/WFS | 10 | 70 GB |
-| [Tilastokeskus paikkatieto](https://geo.stat.fi) | WMS/WFS | 9 | 1,5 GB |
-| [THL Sotkanet](https://sotkanet.fi) | REST API | ~3 500 | — |
 | [Valtiokonttori](https://avoindata.tutkihallintoa.fi) | REST API | 48 | — |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
 | Kuntien paikkatiedot (36 kuntaa) | WMS/WFS/ArcGIS | 36 | 57 GB |
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
 | [Traficom](https://opendata.traficom.fi) | OData v4 | 32 | 2,5 GB |
 | [Vaalirahoitusvalvonta](https://www.vaalirahoitusvalvonta.fi) | CSV | 27 | — |
+| [LUKE paikkatietopalvelu](https://kartta.luke.fi) | WMS/WFS | 10 | 70 GB |
+| [Tilastokeskus paikkatieto](https://geo.stat.fi) | WMS/WFS | 9 | 1,5 GB |
 | [MML](https://www.maanmittauslaitos.fi) | WMS/WFS/OGC API | 7 | 184 GB |
 | [Overture Maps](https://overturemaps.org) | GeoParquet (S3) | 6 | 215 GB |
 | [Väylävirasto](https://vayla.fi) | WMS/WFS/OGC API | 5 | 8,8 GB |
@@ -196,9 +237,9 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | 19 GB |
 | [LIPAS](https://www.jyu.fi/sport/fi/yhteistyo/lipas) | WMS/WFS | 3 | 1 GB |
 | [STUK](https://stuk.fi) | WMS/REST | 2 | — |
-| [Suomi.fi-koodistot](https://koodistot.suomi.fi) | REST API | — | — |
 | [Suomi.fi-sanastot](https://sanastot.suomi.fi) | REST API | — | — |
-| **Yhteensä** | | **~9 300+** | **~2 TB** |
+| [THL Sotkanet](https://sotkanet.fi) | REST API | ~3 500 | — |
+| **Yhteensä** | | **~10 500+** | **~2 TB** |
 
 ## Osallistuminen
 
@@ -238,6 +279,9 @@ git commit -m "data: enrich Ruokaviraston datasettejä"
 | `keywords` | lista | Lisäavainsanat (`'["maatalous", "peltolohko"]'`) |
 | `tags` | lista | Vapaamuotoiset tagit (`'["paikkatietoaineisto"]'`) |
 | `data_fields` | lista | Datasetin kentät (`'["id", "nimi", "pinta_ala"]'`) |
+| `joinable_keys` | lista | Yhdistettävät avaimet (`'[{"field":"kunta","key":"kuntakoodi"}]'`) |
+| `related_services` | lista | Palvelut jotka käyttävät dataa |
+| `yso_concepts` | lista | YSO-ontologian käsitteet |
 | `description_extended` | teksti | Laajennettu kuvaus |
 | `api_endpoint` | teksti | Löydetty rajapinta-URL |
 | `api_format` | teksti | Rajapinnan formaatti |
@@ -248,6 +292,10 @@ git commit -m "data: enrich Ruokaviraston datasettejä"
 | `temporal_coverage` | teksti | Ajallinen kattavuus |
 | `update_frequency_actual` | teksti | Havaittu päivitystiheys |
 | `organization_context` | teksti | Taustatietoa julkaisijasta |
+| `crs` | teksti | Koordinaattijärjestelmä (esim. EPSG:3067) |
+| `auth_method` | teksti | Autentikointimenetelmä (none, apikey, oauth) |
+| `auth_registration_url` | teksti | URL josta pääsy haetaan |
+| `auth_notes` | teksti | Muita huomioita pääsyvaatimuksista |
 
 ### Lisää uusia datalähteitä
 
@@ -281,6 +329,13 @@ aura/
 
 SQLite + FTS5 -täystekstihaku. Tietokanta on osa git-repoa — ei tarvitse harvestoida erikseen.
 
+> **Git LFS** — `data/aura.db` tallennetaan [Git LFS:llä](https://git-lfs.github.com/) repon koon hallitsemiseksi. Kloonaaminen vaatii `git lfs`:n:
+> ```bash
+> brew install git-lfs   # macOS
+> git lfs install        # kerran per kone
+> git clone https://github.com/trotor/aura.git  # LFS-tiedostot haetaan automaattisesti
+> ```
+
 Skeemamuutokset hoidetaan migraatiojärjestelmällä (`scripts/migrations/`). Migraatiot ajetaan automaattisesti `init_db()`:n yhteydessä — tietokanta ei nollaudu päivityksessä.
 
 ## Maantieteellinen kattavuus ja rajausaineistot
@@ -291,7 +346,7 @@ Aura tallentaa jokaiselle datasetille `geographical_coverage`-kentän, joka kert
 
 | Tilasto | Arvo |
 |---------|------|
-| Datasettejä joilla aluetieto | ~1 200+ / 5 824 |
+| Datasettejä joilla aluetieto | ~1 200+ / 7 024 |
 | Yleisimmät arvot | `Helsinki`, `Turku`, `Oulu`, `Espoo`, `Vantaa` |
 | Viitetaulut | 308 kuntaa, 3 784 postinumeroa |
 | Oletusarvo | `["Suomi"]` (kaikki harvestarit ellei tarkempaa tietoa) |

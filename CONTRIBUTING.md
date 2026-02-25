@@ -59,6 +59,9 @@ aura import-enrichments contributions/*.json
 | `data_fields` | Datasetin kentät/sarakkeet (JSON-lista, esim. `["id", "nimi"]`) |
 | `keywords` | Lisäavainsanat (JSON-lista, esim. `["maatalous", "peltolohko"]`) |
 | `tags` | Vapaamuotoiset tagit (JSON-lista, esim. `["paikkatietoaineisto"]`) |
+| `joinable_keys` | Yhdistettävät avaimet (JSON, esim. `[{"field":"kunta","key":"kuntakoodi"}]`) |
+| `related_services` | Palvelut jotka käyttävät dataa (JSON-lista) |
+| `yso_concepts` | YSO-ontologian käsitteet (JSON-lista) |
 | `api_endpoint` | Löydetty rajapinta-URL |
 | `api_format` | Rajapinnan formaatti (REST, WFS, OData, jne.) |
 | `access_instructions` | Ohjeet datan hakemiseen |
@@ -68,8 +71,12 @@ aura import-enrichments contributions/*.json
 | `temporal_coverage` | Ajallinen kattavuus |
 | `update_frequency_actual` | Havaittu päivitystiheys |
 | `organization_context` | Taustatietoa julkaisijasta |
+| `crs` | Koordinaattijärjestelmä (esim. EPSG:3067) |
+| `auth_method` | Autentikointimenetelmä (none, apikey, oauth, registration) |
+| `auth_registration_url` | URL josta pääsy haetaan |
+| `auth_notes` | Muita huomioita pääsyvaatimuksista |
 
-> `data_fields`, `keywords` ja `tags` ovat lista-kenttiä: arvo on JSON-taulukko. Muut kentät ovat vapaata tekstiä.
+> Lista-kentät (`data_fields`, `keywords`, `tags`, `joinable_keys`, `related_services`, `yso_concepts`) tallennetaan JSON-taulukkoina. Muut kentät ovat vapaata tekstiä.
 
 ### 2. Lisää uusi datalähde
 
