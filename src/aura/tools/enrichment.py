@@ -21,6 +21,7 @@ VALID_ENRICHMENT_FIELDS = {
     "use_case", "access_instructions", "organization_context",
     "temporal_coverage", "update_frequency_actual",
     "yso_concepts",
+    "auth_method", "auth_registration_url", "auth_notes",
 }
 
 MAX_ENRICHMENT_VALUE_LENGTH = 10_000
@@ -55,6 +56,9 @@ def enrich(
             - quality_notes: huomioita datan laadusta
             - use_case: käyttötapausesimerkki
             - access_instructions: ohjeet datan hakemiseen
+            - auth_method: autentikointimenetelmä (none, apikey, oauth, registration)
+            - auth_registration_url: URL josta pääsy haetaan
+            - auth_notes: muita huomioita pääsyvaatimuksista
             - organization_context: taustatietoa julkaisijasta
             - temporal_coverage: ajallinen kattavuus
             - update_frequency_actual: havaittu päivitystiheys

@@ -123,6 +123,7 @@ async def search_structured(
 
     ds_ids = [d.get("id", "") for d in results]
     enrichment_counts = _batch_enrichment_counts(conn, ds_ids)
+    health_map = _batch_health_status(conn, ds_ids)
 
     structured = []
     for d in results:
@@ -144,6 +145,7 @@ async def search_structured(
             "access_level": d.get("access_level", "open"),
             "harvested_at": d.get("harvested_at", ""),
             "enrichment_count": enrichment_counts.get(ds_id, 0),
+            "health": health_map.get(ds_id),
         })
 
     return json.dumps(
@@ -428,6 +430,36 @@ def _batch_quality_scores(
         dataset_ids,
     ).fetchall()
     return {row["dataset_id"]: row["score"] for row in rows}
+
+
+def _batch_health_status(
+    conn: sqlite3.Connection, dataset_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Hae dataset-tason saatavuusyhteenveto yhdellä kyselyllä."""
+    if not dataset_ids:
+        return {}
+    placeholders = ",".join("?" for _ in dataset_ids)
+    rows = conn.execute(
+        f"""
+        SELECT
+            dataset_id,
+            MAX(is_available) AS is_available,
+            MAX(checked_at) AS last_checked,
+            CAST(ROUND(AVG(response_time_ms)) AS INTEGER) AS avg_response_time_ms
+        FROM resource_health
+        WHERE dataset_id IN ({placeholders})
+        GROUP BY dataset_id
+        """,
+        dataset_ids,
+    ).fetchall()
+    return {
+        row["dataset_id"]: {
+            "is_available": bool(row["is_available"]),
+            "last_checked": row["last_checked"],
+            "avg_response_time_ms": row["avg_response_time_ms"],
+        }
+        for row in rows
+    }
 
 
 def _resolve_region(conn: sqlite3.Connection, region: str) -> list[str]:

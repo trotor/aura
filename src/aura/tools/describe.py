@@ -25,6 +25,7 @@ from aura.tools.quality import DIMENSION_LABELS
 # Enrichment-kentät prioriteettijärjestyksessä
 _ENRICHMENT_PRIORITIES = [
     ("access_instructions", "Miten dataa haetaan käytännössä?"),
+    ("auth_method", "Autentikointimenetelmä (none/apikey/oauth/registration)?"),
     ("data_fields", "Mitä kenttiä/sarakkeita data sisältää?"),
     ("use_case", "Mihin dataa voi käyttää?"),
     ("temporal_coverage", "Miltä ajanjaksolta data on?"),
