@@ -829,6 +829,8 @@ async def _infer_schemas(
 ) -> None:
     """Päättele datasettien kenttätiedot esikatselun perusteella (#124)."""
     from aura.database import get_connection, init_db
+
+    import aura.server  # noqa: F401 — resolve circular import before tools
     from aura.tools.preview import _pick_resource, _preview_csv, _preview_json
     from aura.tools.schema import save_schema_from_markdown
 
