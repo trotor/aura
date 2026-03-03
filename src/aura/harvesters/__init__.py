@@ -21,6 +21,7 @@ from aura.harvesters.paikkatietoikkuna import PaikkatietoikkunaHarvester
 from aura.harvesters.paituli import PaituliHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.sanastot import SanastotHarvester
+from aura.harvesters.smartsmear import SmartSmearHarvester
 from aura.harvesters.sotkanet import SotkanetHarvester
 from aura.harvesters.statfin import StatfinHarvester
 from aura.harvesters.statfin_geo import StatfinGeoHarvester
@@ -64,6 +65,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "sanastot": SanastotHarvester,
     "luke-opendata": LukeOpendataHarvester,
     "luke-kartta": LukeKarttaHarvester,
+    "smartsmear": SmartSmearHarvester,
     "sotkanet": SotkanetHarvester,
 }
 
