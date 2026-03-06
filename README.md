@@ -425,7 +425,17 @@ Katso **[CONTRIBUTING.md](CONTRIBUTING.md)** tarkemmat ohjeet.
 
 ## Versiointi
 
-[Semantic Versioning 2.0.0](https://semver.org/) · [VERSIONING.md](VERSIONING.md) · [CHANGELOG.md](CHANGELOG.md)
+[Semantic Versioning 2.0.0](https://semver.org/) · [What's New](docs/WHATSNEW.md) · [VERSIONING.md](VERSIONING.md) · [CHANGELOG.md](CHANGELOG.md)
+
+## Aura etäpalveluna
+
+Aura toimii tällä hetkellä paikallisena palveluna — jokainen käyttäjä ajaa oman instanssinsa. Etsimme organisaatiota, joka haluaisi tarjota Auran keskitettynä etäpalveluna: **remote MCP -palvelin**, johon kuka tahansa voisi yhdistää AI-assistenttinsa.
+
+Teknisesti palvelu on kevyt — SQLite-kanta, Python-prosessi ja ajastettu harvestointi. Koodi on MIT-lisenssillä vapaasti käytettävissä.
+
+Tämä sopisi erityisesti taholle, jonka tehtävänä on edistää suomalaisen datan löydettävyyttä: tutkimusinfrastruktuurin ylläpitäjä, avoimen datan edistäjä, julkishallinnon digitalisaatiotaho tai kirjasto- ja arkistosektori.
+
+Kiinnostuitko? **[Lue lisää ja ota yhteyttä (issue #130)](https://github.com/trotor/aura/issues/130)**
 
 ## Lisenssi
 
