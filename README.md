@@ -2,11 +2,11 @@
 
 **Suomalaisen avoimen datan discovery- ja ymmärryspalvelu**
 
-[**Dokumentaatio**](https://trotor.github.io/aura/) · [**Datasettikatalogi**](docs/CATALOG.md) · [**Dataformaatit**](docs/formats.md) · [**Datalähteet**](docs/SOURCES.md)
+[**Dokumentaatio**](https://trotor.github.io/aura/) · [**What's New**](docs/WHATSNEW.md) · [**Datasettikatalogi**](docs/CATALOG.md) · [**Dataformaatit**](docs/formats.md) · [**Datalähteet**](docs/SOURCES.md)
 
 > **7 000+ datasettiä** · **17 000+ resurssia** · **290+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 27 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Kuntien paikkatiedot (36 kuntaa) ym.
+> 28 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -14,7 +14,7 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 27 avoimen datan lähteestä
+- **Aggregoi** metadatan 28 avoimen datan lähteestä
 - **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
