@@ -5,6 +5,7 @@ from __future__ import annotations
 from aura.harvesters.avoindata import AvoindataHarvester
 from aura.harvesters.base import BaseHarvester
 from aura.harvesters.digitraffic import DigitrafficHarvester
+from aura.harvesters.fluentoutdoors import FluentOutdoorsHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
 from aura.harvesters.hri import HriHarvester
@@ -12,6 +13,7 @@ from aura.harvesters.koodistot import KoodistotHarvester
 from aura.harvesters.kunnat import KunnatHarvester
 from aura.harvesters.lajitietokeskus import LajitietokeskusHarvester
 from aura.harvesters.lipas import LipasHarvester
+from aura.harvesters.lipas_api import LipasApiHarvester
 from aura.harvesters.luke import LukeHarvester
 from aura.harvesters.luke_kartta import LukeKarttaHarvester
 from aura.harvesters.luke_opendata import LukeOpendataHarvester
@@ -59,6 +61,8 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "vayla": VaylaHarvester,
     "stuk": StukHarvester,
     "lipas": LipasHarvester,
+    "lipas-api": LipasApiHarvester,
+    "fluentoutdoors": FluentOutdoorsHarvester,
     "paikkatietoikkuna": PaikkatietoikkunaHarvester,
     "paituli": PaituliHarvester,
     "kunnat": KunnatHarvester,

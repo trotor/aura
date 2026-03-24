@@ -170,7 +170,10 @@ class LukeKarttaHarvester(StaticHarvester):
             "resources": [
                 {
                     "format": "WMS",
-                    "url": f"{GEOSERVER}/luke/wms?service=WMS&version=1.3.0&request=GetCapabilities",
+                    "url": (
+                        f"{GEOSERVER}/luke/wms"
+                        "?service=WMS&version=1.3.0&request=GetCapabilities"
+                    ),
                     "name_fi": "Rannikkoalueiden kutualueet — WMS-karttapalvelu",
                 },
             ],
@@ -191,7 +194,10 @@ class LukeKarttaHarvester(StaticHarvester):
             "resources": [
                 {
                     "format": "WMS",
-                    "url": f"{GEOSERVER}/luke/wms?service=WMS&version=1.3.0&request=GetCapabilities",
+                    "url": (
+                        f"{GEOSERVER}/luke/wms"
+                        "?service=WMS&version=1.3.0&request=GetCapabilities"
+                    ),
                     "name_fi": "Kalastusalueet — WMS-karttapalvelu",
                 },
             ],
@@ -212,7 +218,10 @@ class LukeKarttaHarvester(StaticHarvester):
             "resources": [
                 {
                     "format": "WMS",
-                    "url": f"{GEOSERVER}/luke/wms?service=WMS&version=1.3.0&request=GetCapabilities",
+                    "url": (
+                        f"{GEOSERVER}/luke/wms"
+                        "?service=WMS&version=1.3.0&request=GetCapabilities"
+                    ),
                     "name_fi": "Harmaahylkeiden laskenta — WMS-karttapalvelu",
                 },
             ],

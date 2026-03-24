@@ -123,8 +123,6 @@ class SanastotHarvester(BaseHarvester):
 
         dataset_id = f"sanastot-{prefix}"
         modified = term.get("modified", "")
-        uri = term.get("uri", f"https://sanastot.suomi.fi/terminology/{prefix}")
-
         # Resurssit: HTML-sivu ja JSON-LD export
         resources = [
             Resource(
