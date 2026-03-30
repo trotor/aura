@@ -160,7 +160,9 @@ _FTS5_OPERATORS = {"AND", "OR", "NOT", "NEAR"}
 def _fts5_escape_term(t: str) -> str:
     """Escapoi yksittäinen termi FTS5-kyselyä varten."""
     t = t.replace('"', '""')
-    needs_quote = " " in t or t.upper() in _FTS5_OPERATORS
+    # Lainaa termit jotka sisältävät välilyöntejä, viivoja (FTS5 tulkitsee
+    # sarakeprefiksinä) tai FTS5-operaattoreita
+    needs_quote = " " in t or "-" in t or t.upper() in _FTS5_OPERATORS
     return f'"{t}"' if needs_quote else t
 
 

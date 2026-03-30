@@ -4,9 +4,9 @@
 
 [**Dokumentaatio**](https://trotor.github.io/aura/) · [**What's New**](docs/WHATSNEW.md) · [**Datasettikatalogi**](docs/CATALOG.md) · [**Dataformaatit**](docs/formats.md) · [**Datalähteet**](docs/SOURCES.md)
 
-> **7 000+ datasettiä** · **17 000+ resurssia** · **290+ organisaatiota** · **~2 TB** avointa dataa
+> **7 200+ datasettiä** · **17 000+ resurssia** · **370+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 28 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, Kuntien paikkatiedot (36 kuntaa) ym.
+> 30 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -14,14 +14,15 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Mitä Aura tekee?
 
-- **Aggregoi** metadatan 28 avoimen datan lähteestä
-- **Normalisoi** CKAN, PxWeb, OData, WFS ja OpenAPI -formaatit yhtenäiseen muotoon
+- **Aggregoi** metadatan 30 avoimen datan lähteestä
+- **Normalisoi** CKAN, PxWeb, OData, WFS, OpenAPI ja GTFS -formaatit yhtenäiseen muotoon
 - **Tekee hakukelpoiseksi** — FTS5-täystekstihaku luonnollisella kielellä
 - **Arvioi datakoon** — jokaiselle datasetille arvioitu koko
 - **Laatupisteyttää** — automaattinen laadun arviointi neljällä dimensiolla
 - **Rikastaa joukkoistamalla** — MCP-sessiot kerryttävät tietoa dataseteistä
 - **Tunnistaa skeemoja** — päättelee kenttänimet ja tyypit esikatselusta
 - **Palvelee tekoälyjä** MCP-serverin kautta (Claude, GPT, jne.)
+- **Mahdollistaa reaaliaikakyselyt** — agentti voi hakea dataa suoraan rajapinnoista (Digitraffic, PxWeb, WFS, OData ym.)
 
 ## Vaatimukset
 
@@ -203,6 +204,41 @@ aura import-enrichments contributions/*.json
 | `reference_status` | Viiteaineistojen tila |
 | `populate_reference` | Lataa viiteaineistot kantaan |
 
+## Rajapintojen suora käyttö agentissa
+
+Aura ei ole pelkkä hakemisto — tekoälyagentti voi **hakea dataa suoraan** rajapinnoista käyttäjän puolesta. Kun käyttäjä kysyy esimerkiksi junan aikataulua, agentti etsii Aurasta oikean rajapinnan ja kyselee sitä reaaliajassa.
+
+### Esimerkkejä
+
+**Junaliikenne:**
+> *"Moneltako IC147 saapuu Kuopioon tänään?"*
+>
+> Agentti etsii Aurasta Digitraffic rata-API:n ja hakee aikataulun: `rata.digitraffic.fi/api/v1/trains/2026-03-30/147`
+
+**Tilastot:**
+> *"Mikä on Tampereen väkiluku?"*
+>
+> Agentti löytää Tilastokeskuksen PxWeb-taulun ja kyselee sen `query_data`-työkalulla.
+
+**Sää:**
+> *"Mikä on lämpötila Helsingissä?"*
+>
+> Agentti hakee Ilmatieteen laitoksen WFS-rajapinnasta reaaliaikahavainnon.
+
+### Tuetut rajapintatyypit
+
+| Rajapinta | Suora kysely | Esimerkkilähde |
+|-----------|-------------|----------------|
+| REST/JSON | `query_data` tai suora HTTP | Digitraffic (tie, rata, meri), Sotkanet |
+| PxWeb | `query_data` (suodattimet) | Tilastokeskus, LUKE |
+| WFS | `query_data` (bbox, tyyppi) | FMI, SYKE, MML, Väylävirasto |
+| OData v4 | `query_data` (filter) | Traficom |
+| CSV | `query_data` (rivit) | avoindata.fi, HRI |
+| GTFS | GTFS-tiedostojen URL:t | Digitransit (32 operaattoria) |
+| GraphQL | Vaatii rekisteröitymisen | Digitransit Routing API |
+
+**Huom:** Osa rajapinnoista (Digitransit GraphQL, MML OGC API) vaatii API-avaimen. Agentti ohjaa rekisteröitymiseen tarvittaessa.
+
 ## Datalähteet
 
 Katso täydellinen datasettikatalogi: **[docs/CATALOG.md](docs/CATALOG.md)**
@@ -220,6 +256,7 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Suomi.fi-koodistot](https://koodistot.suomi.fi) | REST API | 511 | — |
 | [Digitraffic](https://www.digitraffic.fi) | REST/OpenAPI | 162 | 1,5 GB |
 | [Ilmatieteen laitos](https://www.ilmatieteenlaitos.fi) | WFS 2.0 | 160 | 14 GB |
+| [Digitransit](https://digitransit.fi) | GTFS/GraphQL | 40 | — |
 | [LUKE avoin tutkimusdata](https://opendata.luke.fi) | CKAN | 124 | 2,1 GB |
 | [Valtiokonttori](https://avoindata.tutkihallintoa.fi) | REST API | 48 | — |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
@@ -237,6 +274,7 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | 19 GB |
 | [LIPAS](https://www.jyu.fi/sport/fi/yhteistyo/lipas) | WMS/WFS | 3 | 1 GB |
 | [STUK](https://stuk.fi) | WMS/REST | 2 | — |
+| [Finap/NAP](https://finap.fi) | Portaali | 5 | — |
 | [Suomi.fi-sanastot](https://sanastot.suomi.fi) | REST API | — | — |
 | [THL Sotkanet](https://sotkanet.fi) | REST API | ~3 500 | — |
 | **Yhteensä** | | **~10 500+** | **~2 TB** |
@@ -315,7 +353,7 @@ aura/
 │   ├── models.py           # Pydantic-tietomallit
 │   ├── search.py           # Hakutoiminnot ja muotoilu
 │   ├── cli.py              # Komentorivityökalu
-│   └── harvesters/         # Datalähteiden keräimet (27 kpl)
+│   └── harvesters/         # Datalähteiden keräimet (29 kpl)
 ├── data/
 │   ├── aura.db             # SQLite-tietokanta (osa repoa)
 │   └── boundaries/         # Rajausaineistot GeoPackage (gitignore)

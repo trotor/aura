@@ -57,6 +57,8 @@ BaseHarvester (base.py)
 │   ├── VaalirahoitusHarvester (vaalirahoitus.py)
 │   └── VaylaHarvester (vayla.py) — Väylävirasto
 ├── DigitrafficHarvester (digitraffic.py) — OpenAPI-speksien parsinta
+├── DigitransitHarvester (digitransit.py) — kansallinen joukkoliikenne (GTFS)
+├── FinapHarvester (finap.py) — NAP-liikennepalvelukatalogi
 ├── FmiHarvester (fmi.py) — WFS stored queries XML
 ├── KoodistotHarvester (koodistot.py) — Suomi.fi-koodistot
 ├── SanastotHarvester (sanastot.py) — Suomi.fi-sanastot
@@ -263,6 +265,22 @@ Projektin `.mcp.json` konfiguroi MCP-palvelimen automaattisesti:
     }
   }
 }
+```
+
+## Output — analyysien tallennus
+
+Kun sessio tuottaa analyyttistä sisältöä (tilannekuvat, vertailut, selvitykset), tarjoa käyttäjälle tallennusta `output/sessions/`-kansioon. Kansio on gitignoressa eli paikallinen.
+
+Tiedostomuoto: `output/sessions/YYYY-MM-DD-aihe.md` YAML-frontmatterilla:
+
+```yaml
+---
+date: 2026-03-26
+topic: Lyhyt otsikko
+sources:
+  - käytetyt datalähteet
+tags: [aihe1, aihe2]
+---
 ```
 
 ## Commit-käytännöt

@@ -5,6 +5,8 @@ from __future__ import annotations
 from aura.harvesters.avoindata import AvoindataHarvester
 from aura.harvesters.base import BaseHarvester
 from aura.harvesters.digitraffic import DigitrafficHarvester
+from aura.harvesters.digitransit import DigitransitHarvester
+from aura.harvesters.finap import FinapHarvester
 from aura.harvesters.fluentoutdoors import FluentOutdoorsHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
@@ -48,6 +50,8 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "statfin-geo": StatfinGeoHarvester,
     "luke": LukeHarvester,
     "digitraffic": DigitrafficHarvester,
+    "digitransit": DigitransitHarvester,
+    "finap": FinapHarvester,
     "fmi": FmiHarvester,
     "gtk": GtkHarvester,
     "traficom": TraficomHarvester,
