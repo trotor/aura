@@ -76,6 +76,21 @@ asiakas (Claude, ChatGPT ym.) voi käyttää Auraa ilman repon kloonausta.
 - **(Valinnainen) Route 53 + ACM** — custom domain ja sertifikaatti, esim. `mcp.aura.fi`.
 - **(Roadmap, vaihe 2) S3** — `aura.db`:n jakelu ilman image-rebuildia.
 
+### 3.1 Julkitaho-näkökulma (kohde + portability)
+
+Palvelu on tulossa julkiselle taholle; lopullista AWS-tiliä, domainia ja toteutustapaa ei ole vielä
+sovittu. Tämä **ei muuta v1-suositusta** (App Runner), mutta huomioidaan:
+
+- **EU-region / dataresidenssi:** valitaan EU-region (eu-west-1 Irlanti tai eu-central-1 Frankfurt;
+  **huom:** App Runner ei välttämättä ole eu-north-1 Tukholmassa — varmistettava region-valinnassa).
+  Data on avointa julkista dataa ja read-only, joten residenssi ei ole kriittinen, mutta hyvä käytäntö.
+- **Tilin omistus / landing zone:** jos julkitaho hostaa palvelun omassa AWS-organisaatiossaan, heidän
+  guardrailinsa (sallitut palvelut, pakollinen VPC, tagit, verkkorakenne) voivat ohjata valintaa.
+- **Portability on suunnittelun kantava periaate:** koska palvelu on **kontti** (stateless, read-only,
+  yksi `/mcp`-endpoint), se siirtyy sellaisenaan App Runnerista ECS Fargateen / EKS:ään / julkitahon
+  landing zoneen **ilman sovellusmuutoksia**. Region ja tili ovat Terraform-muuttujia. → App Runner on
+  turvallinen ja nopea v1-valinta, joka ei lukitse pois julkitahon mahdollisia vaatimuksia.
+
 ## 4. Komponenttisuunnittelu
 
 ### 4.1 HTTP-transport-moodi
@@ -158,9 +173,11 @@ Pieni, luettava moduulisetti `infra/`-kansioon:
 - `dns.tf` (valinnainen) — ACM-sertti + custom domain App Runnerille.
 - `variables.tf` / `outputs.tf` — region, image-tag, domain; output: palvelun URL.
 
-Tila: Terraform-state remote backendissä (S3 + DynamoDB lock) **tai** alkuun lokaali/manuaalinen apply
-(ei salaisuuksia → state ei sisällä avaimia, mutta voi sisältää ARN-tunnisteita; pidetään state pois
-julkisesta reposta).
+**Salassapito (julkinen repo):** mitään AWS-tunnistetta ei kovakoodata reposovittuun koodiin.
+Arkaluontoiset arvot (account id, region, OIDC-rooli-ARN, ECR-URI, domain) annetaan `*.tfvars`-
+tiedostona joka on **.gitignoressa**. Terraform-state private S3-backendissä (+ DynamoDB lock) —
+ei koskaan julkiseen repoon. `.gitignore`: `*.tfvars`, `.terraform/`, `*.tfstate*`,
+`.terraform.lock.hcl` (lock voi jäädä, mutta state ei).
 
 > Vaihtoehto: AWS CDK (Python) jos halutaan infra samalla kielellä kuin projekti. Valittu Terraform
 > "helppo + kypsä App Runner -tuki" -syystä. Päätös kirjataan issueen.
@@ -169,12 +186,18 @@ julkisesta reposta).
 
 Workflow `.github/workflows/deploy.yml`:
 
-1. **Trigger:** push `main`-haaraan tai release-tagiin (päätetään issuessa; oletus: tag-pohjainen
-   tuotantodeploy, jotta jokainen harvest-commit ei deployaa).
-2. **Auth:** `aws-actions/configure-aws-credentials` OIDC:llä → lyhytikäinen rooli. Ei secrets-storea.
-3. **Build & push:** Docker build → tag (git SHA + `latest`) → push ECR:ään.
-4. **Deploy:** App Runner auto-deploy (tai eksplisiittinen `start-deployment` -API-kutsu).
-5. **(Valinnainen) Smoke test:** deployn jälkeen kutsu `/health` ja yksi MCP-`stats`-kutsu.
+1. **Trigger:** **vain `workflow_dispatch`** (manuaalinen, eksplisiittinen "oma deployment-triggeri").
+   Ei auto-deployta pushista eikä App Runnerin auto-deploya. Deploy ajetaan Actions-napista tai
+   `gh workflow run deploy.yml`. Suojataan **GitHub Environmentilla** (`production`), joka voi vaatia
+   hyväksynnän ennen ajoa.
+2. **Salassapito (julkinen repo):** kaikki AWS-tunnisteet (account id, region, OIDC-rooli-ARN, ECR-URI,
+   domain) tallennetaan **GitHub Actions secrets/variables** -muotoon (yksityisiä myös julkisessa
+   repossa) tai suojattuun Environmentiin — **ei koskaan koodiin**.
+3. **Auth:** `aws-actions/configure-aws-credentials` OIDC:llä → lyhytikäinen rooli. Ei secrets-storea
+   pitkäikäisille avaimille.
+4. **Build & push:** Docker build → tag (git SHA + `latest`) → push ECR:ään.
+5. **Deploy:** eksplisiittinen App Runner `start-deployment` -API-kutsu (auto-deploy pois).
+6. **(Valinnainen) Smoke test:** deployn jälkeen kutsu `/health` ja yksi MCP-`stats`-kutsu.
 
 Erillinen `ci.yml` (jos ei jo): ruff + mypy + pytest PR:issä (ei AWS-riippuvuutta).
 
