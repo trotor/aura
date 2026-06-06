@@ -69,7 +69,7 @@ asiakas (Claude, ChatGPT ym.) voi käyttää Auraa ilman repon kloonausta.
 **Komponentit:**
 
 - **AWS App Runner** — ajaa Aura-kontin, tarjoaa hallitun HTTPS-endpointin, autoscalingin ja
-  custom domainin. Health check `/health`-polkuun. Auto-deploy uuden ECR-imagen ilmestyessä.
+  custom domainin. Health check `/health`-polkuun. Deploy laukaistaan eksplisiittisesti (auto-deploy pois).
 - **Amazon ECR** — kontti-imagejen rekisteri. Imageen leivottu `data/aura.db` (v1).
 - **CloudWatch** — App Runnerin lokit ja metriikat (request count, latency, 5xx).
 - **IAM OIDC -rooli** — GitHub Actions ottaa lyhytikäisen roolin (ei tallennettuja avaimia).
@@ -147,8 +147,8 @@ Ohjataan env-muuttujalla `AURA_READONLY=1` (asetetaan App Runnerissa):
 ### Vaihe 1 (MVP) — DB leivottu imageen
 
 - `aura.db` kopioidaan imageen build-aikana.
-- **Päivitysflow:** lokaali `harvest` → committaa `aura.db` → `git push` (main tai release-tag) →
-  GitHub Actions buildaa imagen → ECR → App Runner auto-deployaa.
+- **Päivitysflow:** lokaali `harvest` → committaa `aura.db` → `git push` → kun halutaan julkaista,
+  laukaistaan manuaalinen deploy-triggeri → GitHub Actions buildaa imagen → ECR → App Runner -deploy.
 - **Edut:** atominen (kanta + koodi samassa artefaktissa), versioitu, rollback image-tagilla, nolla
   lisäinfraa. Sopii nykyiseen "DB on gitissä" -workflowhun.
 
