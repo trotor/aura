@@ -26,7 +26,8 @@ asiakas (Claude, ChatGPT ym.) voi käyttää Auraa ilman repon kloonausta.
 - Web-palvelun (FastAPI `aura web`) hostaus — eri elinkaari, käsitellään myöhemmin (ks. roadmap).
 - Remote-kirjoitukset / joukkoistus pilvessä.
 - OAuth / käyttäjäkohtaisuus.
-- Boundaries-gpkg-tiedostojen (299 MB) vienti pilveen — ei tarvita MCP-tooleissa ajonaikaisesti.
+- Boundaries-gpkg-tiedostojen (299 MB) vienti pilveen — ei tarvita: paikkatieto tarjotaan
+  kannasta MCP-työkaluilla (ks. §4.6), ei gpkg-tiedostoista.
 
 ## 2. Lähtötilanteen havainnot
 
@@ -123,10 +124,37 @@ Ohjataan env-muuttujalla `AURA_READONLY=1` (asetetaan App Runnerissa):
 
 `server.py`:n `instructions`-teksti viittaa local-FS:ään (`data/boundaries/*.gpkg`). Remote-moodissa:
 
-- Pudotetaan FS-pohjaiset boundaries-ohjeet ja korvataan ohjeella, että karttalehti-/kuntatiedot
-  haetaan kannasta (`ref_map_sheets`, `ref_municipalities`) tai tulevasta MCP-toolista.
+- Korvataan FS-pohjaiset boundaries-ohjeet ohjeella käyttää **§4.6:n paikkatietotyökaluja**, jotka
+  palvelevat saman tiedon kannasta (`ref_map_sheets` bbox jo valmiina). Agentti saa siis saman
+  paikkatieto-osaamisen ilman tiedostojärjestelmää.
 - Säilytetään rajapintojen suora käyttö -ohje (query_data toimii remotessa, koska outbound HTTP).
 - Toteutus: `build_instructions(readonly: bool) -> str` tai kaksi vakiota.
+
+### 4.6 Paikkatietotyökalut MCP:ssä (spatial enrichment)
+
+**Tavoite (käyttäjän toive):** agentti osaa hyödyntää Auran valmista paikkatietoa — rajata
+kyselyjä kohderajapintoihin (WFS/WCS/OGC) alueella ja ymmärtää mitä "paikkatieto" tarkoittaa
+kussakin yhteydessä. Esim. *"millaisia tietoja meillä on karttalehdeltä L4133?"* → Aura palauttaa
+lehden bbox:n + osaa rajata datakyselyt sille alueelle. Tämä toimii **täysin kannasta**, joten se
+sopii read-only-remoteen.
+
+**Data-valmius:**
+- `ref_map_sheets` sisältää **jo** bbox:n (`min_x/min_y/max_x/max_y`), centroidin, mittakaavan ja
+  hierarkkisen tunnuksen (`id`, esim. `L4133A`) → karttalehtirajaus heti mahdollista.
+- `ref_municipalities` **ei** sisällä bbox:ia → tarvitaan pieni offline-populaattorilisäys (bbox-sarakkeet
+  + täyttö `kuntajako_1000k.gpkg`:sta). Sama mekanismi kuin `ref_map_sheets` sai bbox:nsa.
+
+**Uudet read-only-toolit (palvelevat kannasta):**
+- `map_sheet(id)` — palauttaa karttalehden bbox:n (EPSG:3067), centroidin ja mittakaavan; valmis
+  WFS/WCS-`bbox`-parametriksi.
+- `find_map_sheets(bbox | point | municipality, scale)` — mitkä lehdet osuvat alueelle; lisäksi
+  hierarkkinen rajaus tunnus-prefiksillä (esim. kaikki `L413%` -lehdet halutulla mittakaavalla).
+- `municipality_bbox(name | code)` — kunnan bbox aluerajaukseen (vaatii populaattorilisäyksen).
+- *(Harkittava)* `query_data`:n laajennus: valinnainen `map_sheet`/`municipality`-parametri, joka
+  muuntaa alueen bbox:ksi ja syöttää sen WFS/OGC-kyselyyn automaattisesti → "rikastaa kyselyn targettiin".
+
+**Hyöty:** sama paikkatieto-osaaminen toimii sekä lokaalisti että remotessa, ja se hyödyttää myös
+nykyistä lokaalikäyttöä (ei enää riippuvuutta gpkg-tiedostoista perusrajauksissa).
 
 ### 4.4 Kontti-image (Dockerfile)
 
@@ -243,9 +271,9 @@ Vaiheistettu, kukin oma epic/spec myöhemmin:
 2. **Web-palvelun hostaus** (`aura web`): sama kontti tai erillinen App Runner -service; staattinen
    build CloudFront+S3:een tai SSR App Runnerissa. Oma elinkaari.
 3. **Väärinkäytön esto:** CloudFront + WAF rate-limiting jos avoin endpoint sitä vaatii.
-4. **Karttalehti-/boundary-MCP-toolit:** korvataan local-FS-ohjeet oikeilla tooleilla
-   (`map_sheet_bbox`, `municipality_bbox`) jotka palvelevat `ref_*`-tauluista — hyödyttää myös
-   lokaalikäyttöä.
+4. **Paikkatietotyökalujen laajennus:** §4.6:n peruskalut (map_sheet, find_map_sheets,
+   municipality_bbox) ovat v1:ssä. Laajennus: `query_data`-rikastus alueparametrilla, hierarkkinen
+   lehtinavigointi, point-in-polygon-haut tarkemmalla `kuntajako_10k`-aineistolla.
 5. **Remote-kirjoitukset / joukkoistus:** jos halutaan crowdsourcing pilvessä → erillinen kirjoitus-store
    (DynamoDB tai EFS-SQLite) tai PR-pohjainen kontribuutio. Vaatii oman suunnittelun.
 6. **OAuth / käyttäjäkohtaisuus:** MCP-spec OAuth jos tarvitaan kiintiöitä per käyttäjä.
@@ -258,11 +286,13 @@ Epic: **AWS deployment (remote MCP)**. Issuet karkeassa riippuvuusjärjestyksess
 
 1. HTTP-transport-moodi `serve`-komentoon (`--http`, stateless).
 2. Read-only-moodi: tool-gateys + RO-SQLite + `config.is_readonly()`.
-3. Remote-instructions-variantti (ei local-FS-lupauksia).
-4. `/health`-endpoint.
-5. Dockerfile + `.dockerignore` (vain `aura.db`, ei boundaries).
-6. Terraform: ECR + App Runner + IAM OIDC (+ valinnainen domain).
-7. GitHub Actions deploy-workflow (OIDC → build → push → deploy).
-8. Observability + budjetti + smoke test.
-9. Dokumentaatio: README "Remote MCP" -osio + asiakaskonfiguraatiot.
-10. (Roadmap-issue) Vaihe 2: DB S3:sta + `aura db-publish`.
+3. Paikkatietotyökalut (§4.6): `map_sheet`, `find_map_sheets` (kannasta, valmis heti) +
+   `ref_municipalities`-bbox-populaattori + `municipality_bbox`. *(Harkittava `query_data`-laajennus.)*
+4. Remote-instructions-variantti (ohjaa §4.6-työkaluihin, ei local-FS-lupauksia).
+5. `/health`-endpoint.
+6. Dockerfile + `.dockerignore` (vain `aura.db`, ei boundaries).
+7. Terraform: ECR + App Runner + IAM OIDC (+ valinnainen domain).
+8. GitHub Actions deploy-workflow (OIDC → build → push → deploy).
+9. Observability + budjetti + smoke test.
+10. Dokumentaatio: README "Remote MCP" -osio + asiakaskonfiguraatiot.
+11. (Roadmap-issue) Vaihe 2: DB S3:sta + `aura db-publish`.
