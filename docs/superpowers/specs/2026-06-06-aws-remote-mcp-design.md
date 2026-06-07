@@ -189,6 +189,30 @@ nykyistä lokaalikäyttöä (ei enää riippuvuutta gpkg-tiedostoista perusrajau
 - **Suunnitellaan jo v1:ssä:** käynnistyslataaja kirjoitetaan niin, että S3-lähde on pelkkä
   env-muuttuja → vaihe 2 on additiivinen, ei refaktorointia.
 
+### 5.3 Tietokantateknologia ja skaalautuvuus
+
+**Kysymys:** pitäisikö SQLite korvata skaalautuvammalla AWS-kannalla (RDS/Aurora/DynamoDB)?
+
+**Päätös: ei v1:ssä.** Read-only-käyttöön bundlattu SQLite on tässä työkuormassa *skaalautuvin* ja
+halvin vaihtoehto, ei pullonkaula:
+
+- **87 MB mahtuu RAM/page-cacheen.** Jokaisella instanssilla oma kopio → nollakontentio, ei
+  yhteyspoolia, ei verkkolatenssia. Lukukapasiteetti kasvaa lineaarisesti instanssimäärän mukana.
+  Jaettu RDS/Aurora olisi tähän askel taaksepäin (yksi pullonkaula + verkkohyppy + kiinteä kustannus + ops).
+- **FTS5-suomihaku on ydintä.** Postgres vaatisi haun uudelleenkirjoituksen (`tsvector`/`pg_trgm`,
+  eri ranking); DynamoDB:ssä ei täystekstihakua lainkaan (vaatisi OpenSearchin). Iso työ ilman hyötyä
+  read-only-skenaariossa.
+- **Kustannus/ops:** SQLite 0 €/kk, ei patchattavaa.
+
+**Migraatiotriggerit (milloin skaalautuva kanta on perusteltu):**
+1. **Pilvikirjoitukset / joukkoistus** (roadmap #5) — jaettu kirjoitustila. Ainoa vahva ajuri; v1:ssä rajattu pois.
+2. **Datasetti kasvaa monen GB:n kokoiseksi** → ensin vaihe 2 (DB S3:sta), vasta sitten Postgres/Aurora.
+3. **Semanttinen haku (embeddings)** → Postgres + `pgvector` tai OpenSearch. Aito pitkän linjan syy.
+
+**Migraatiopolku, jos trigger osuu:** pidetään `database.py` ainoana data-access-rajana, jolloin
+vaihto on rajattu. Kandidaatit: **Aurora Serverless v2 (Postgres + FTS/pgvector)** read-painotteiseen,
+tai **DynamoDB + OpenSearch** jos kirjoitukset + haku eriytetään. Arvioidaan omana spec:nä silloin.
+
 ## 6. IaC — Terraform
 
 Pieni, luettava moduulisetti `infra/`-kansioon:
