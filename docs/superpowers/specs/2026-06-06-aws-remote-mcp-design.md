@@ -92,6 +92,27 @@ sovittu. Tämä **ei muuta v1-suositusta** (App Runner), mutta huomioidaan:
   landing zoneen **ilman sovellusmuutoksia**. Region ja tili ovat Terraform-muuttujia. → App Runner on
   turvallinen ja nopea v1-valinta, joka ei lukitse pois julkitahon mahdollisia vaatimuksia.
 
+### 3.2 Sopiiko App Runner MCP-backendiin? (vs. EC2-välivaihe)
+
+**Kyllä — stateless streamable HTTP:lle.** MCP streamable HTTP = HTTP request/response + SSE-striimaus
+vastauksessa, **ei WebSocketteja**. App Runner ei tue WebSocketteja, mutta MCP ei niitä tarvitse → ei
+ongelma. Stateless-moodissa pyynnöt ovat lyhyitä ja riippumattomia → autoscaling toimii puhtaasti.
+*Implementaatiossa varmistettava:* App Runnerin request-timeout-asetus + SSE-striimaus toimii läpi.
+
+**EC2-välivaihe MVP:nä — "meneekö App Runner tukkoon tarpeettomasti"?**
+- **Throughput ei ole ongelma kummallakaan.** Read-only 87 MB SQLite RAMissa, FTS-kyselyt
+  millisekuntteja. Pieni EC2 (t4g.micro ~6 $/kk) jaksaa valtavasti lukukyselyitä; ei "mene tukkoon"
+  normaaliliikenteellä — eikä App Runner.
+- **Ero on ops-taakassa, ei suorituskyvyssä.** EC2 siirtää sinulle TLS-sertit (nginx/caddy + Let's
+  Encrypt), prosessin valvonnan, OS-patchauksen, uptimen ja kovennuksen — julkiselle avoimelle
+  endpointille isompi hyökkäyspinta ja jatkuvaa käsityötä.
+- **App Runner antaa hallitun HTTPS:n, autoscalingin, health checkin ja nollan OS-ylläpidon**;
+  deploy = pushaa image. Idle-kustannus matala (~muutama $/kk).
+
+**Päätös:** App Runner on MVP. EC2 olisi *enemmän* toilia, ei vähemmän. Poikkeus: pelkkä päästä-päähän
+**pikavalidointi** ennen IaC:ta voidaan tehdä kertakäyttöisellä EC2:lla tai lokaalilla tunnelilla
+(`cloudflared`/`ngrok`); varsinainen MVP menee App Runneriin.
+
 ## 4. Komponenttisuunnittelu
 
 ### 4.1 HTTP-transport-moodi
