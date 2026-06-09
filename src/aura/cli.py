@@ -40,7 +40,19 @@ def main() -> None:
     )
 
     # serve
-    subparsers.add_parser("serve", help="Käynnistä MCP-server")
+    serve_parser = subparsers.add_parser("serve", help="Käynnistä MCP-server")
+    serve_parser.add_argument(
+        "--http", action="store_true",
+        help="Aja streamable HTTP -transportilla (remote MCP) stdion sijaan",
+    )
+    serve_parser.add_argument(
+        "--host", default=None,
+        help="HTTP-host (oletus: AURA_HTTP_HOST tai 127.0.0.1)",
+    )
+    serve_parser.add_argument(
+        "--port", type=int, default=None,
+        help="HTTP-portti (oletus: AURA_HTTP_PORT tai 8000)",
+    )
 
     # search
     search_parser = subparsers.add_parser("search", help="Hae datasettejä")
@@ -328,9 +340,11 @@ def main() -> None:
             print(f"Laatupisteet laskettu {qcount} datasetille.")
 
     elif args.command == "serve":
+        from aura.serve import resolve_serve_config
         from aura.server import mcp
 
-        mcp.run()
+        cfg = resolve_serve_config(http=args.http, host=args.host, port=args.port)
+        mcp.run(**cfg.run_args())
 
     elif args.command == "search":
         from aura.database import get_connection, init_db, search_datasets
