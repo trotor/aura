@@ -10,6 +10,7 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
+from aura.config import is_readonly
 from aura.database import (
     get_connection,
     init_db,
@@ -22,14 +23,51 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Hallitse tietokantayhteyttä serverin elinkaaren ajan."""
-    conn = get_connection(check_same_thread=False)
-    init_db(conn)
+    readonly = is_readonly()
+    conn = get_connection(check_same_thread=False, readonly=readonly)
+    if not readonly:
+        # init_db kirjoittaa (migraatiot/skeema) → ohitetaan read-only-moodissa.
+        init_db(conn)
     yso = YsoClient()
     try:
         yield {"db": conn, "findings": [], "yso": yso}
     finally:
         await yso.close()
         conn.close()
+
+
+# Toolit jotka kirjoittavat tietokantaan → poistetaan read-only-remotessa.
+# (log_finding/list_findings ovat session-muistia, eivät kirjoita kantaan.)
+WRITE_TOOL_NAMES = frozenset(
+    {
+        "harvest",
+        "probe_sizes",
+        "enrich",
+        "batch_enrich",
+        "save_session_findings",
+        "populate_reference",
+    }
+)
+
+
+def apply_readonly_gating(
+    server: FastMCP | None = None, *, readonly: bool | None = None
+) -> list[str]:
+    """Poista kirjoittavat toolit kun server on read-only-moodissa.
+
+    Palauttaa poistettujen toolien nimet. Ei tee mitään jos ei read-only.
+    """
+    if server is None:
+        server = mcp
+    if readonly is None:
+        readonly = is_readonly()
+    if not readonly:
+        return []
+    removed: list[str] = []
+    for name in WRITE_TOOL_NAMES:
+        server.local_provider.remove_tool(name)
+        removed.append(name)
+    return removed
 
 
 mcp = FastMCP(
