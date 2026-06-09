@@ -23,6 +23,7 @@ def get_connection(
     db_path: Path = DEFAULT_DB_PATH,
     *,
     check_same_thread: bool = True,
+    readonly: bool = False,
 ) -> sqlite3.Connection:
     """Avaa tietokantayhteys.
 
@@ -30,7 +31,16 @@ def get_connection(
         db_path: Polku tietokantatiedostoon.
         check_same_thread: Jos False, sallii yhteyden käytön eri threadeista.
             Turvallista WAL-moden kanssa read-heavy käytössä (esim. MCP-server).
+        readonly: Jos True, avaa yhteys vain luettavaksi (``mode=ro``). Estää
+            kaikki kirjoitukset jo SQLite-tasolla (remote read-only -moodi).
     """
+    if readonly:
+        # mode=ro: ei mkdiriä eikä WAL-pragmaa (ne kirjoittaisivat levylle).
+        uri = f"file:{db_path}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, check_same_thread=check_same_thread)
+        conn.row_factory = sqlite3.Row
+        return conn
+
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row

@@ -341,8 +341,9 @@ def main() -> None:
 
     elif args.command == "serve":
         from aura.serve import resolve_serve_config
-        from aura.server import mcp
+        from aura.server import apply_readonly_gating, mcp
 
+        apply_readonly_gating(mcp)
         cfg = resolve_serve_config(http=args.http, host=args.host, port=args.port)
         mcp.run(**cfg.run_args())
 
