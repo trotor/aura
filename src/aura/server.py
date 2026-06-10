@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastmcp import Context, FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from aura.config import is_readonly
 from aura.database import (
@@ -48,6 +50,12 @@ WRITE_TOOL_NAMES = frozenset(
         "populate_reference",
     }
 )
+
+
+def health_payload(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Rakenna /health-vastauksen runko: tila + datasettien määrä (DB-tarkistus)."""
+    count = conn.execute("SELECT COUNT(*) FROM datasets").fetchone()[0]
+    return {"status": "ok", "datasets": int(count)}
 
 
 def apply_readonly_gating(
@@ -104,6 +112,16 @@ mcp = FastMCP(
     ),
     lifespan=_lifespan,
 )
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def _health_route(request: Request) -> JSONResponse:
+    """Kevyt terveystarkistus App Runnerille: 200 + datasettien määrä."""
+    conn = get_connection(readonly=is_readonly())
+    try:
+        return JSONResponse(health_payload(conn))
+    finally:
+        conn.close()
 
 
 _module_conn: sqlite3.Connection | None = None

@@ -11,6 +11,7 @@ import sys
 import time
 from collections.abc import Iterator
 
+import httpx
 import pytest
 from fastmcp import Client
 
@@ -57,3 +58,12 @@ async def test_initialize_and_list_tools_over_http(http_server: str) -> None:
         tools = await client.list_tools()
     names = {t.name for t in tools}
     assert "search" in names
+
+
+def test_health_endpoint_returns_200(http_server: str) -> None:
+    health_url = http_server.replace("/mcp", "/health")
+    resp = httpx.get(health_url, timeout=10)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["datasets"] >= 0
