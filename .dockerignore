@@ -1,0 +1,32 @@
+# Virtuaaliympäristö ja git
+.venv/
+.git/
+.gitignore
+.gitattributes
+
+# Rajausaineistot (299 MB) — EI tarvita MCP-tooleissa ajonaikaisesti
+data/boundaries/
+
+# SQLite-sivutiedostot (vain päätiedosto data/aura.db kopioidaan)
+data/aura.db-shm
+data/aura.db-wal
+
+# Testit ja kehitysartefaktit
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+**/__pycache__/
+*.pyc
+.playwright-mcp/
+
+# Output ja dokumentaatio (ei ajonaikaista)
+output/
+docs/
+contributions/
+scripts/
+
+# IDE/editor
+.vscode/
+.idea/
+.claude/
