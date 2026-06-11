@@ -15,6 +15,7 @@ from aura.tools import (  # noqa: F401
     reference,
     research,
     search,
+    spatial,
     suggest,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "reference",
     "research",
     "search",
+    "spatial",
     "suggest",
 ]
