@@ -148,6 +148,50 @@ def find_map_sheets(
     return "\n".join(lines)
 
 
+def _municipality_row(conn: sqlite3.Connection, query: str) -> sqlite3.Row | None:
+    """Hae kunta nimellä (fi/sv) tai kuntakoodilla."""
+    row: sqlite3.Row | None
+    if query.isdigit() and len(query) <= 3:
+        code = query.zfill(3)
+        row = conn.execute(
+            "SELECT * FROM ref_municipalities WHERE code = ?", (code,)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM ref_municipalities "
+            "WHERE name_fi = ? COLLATE NOCASE OR name_sv = ? COLLATE NOCASE",
+            (query, query),
+        ).fetchone()
+    return row
+
+
+@mcp.tool()
+def municipality_bbox(query: str, ctx: Context | None = None) -> str:
+    """Hae kunnan bbox (EPSG:3067) aluerajaukseen.
+
+    Palauttaa kunnan rajauslaatikon valmiina WFS/WCS-kyselyyn. Voit ketjuttaa:
+    hae kunnan bbox → syötä se ``find_map_sheets(bbox=...)``-kutsuun.
+
+    Args:
+        query: Kunnan nimi (fi/sv) tai kuntakoodi (esim. 'Helsinki' tai '091').
+    """
+    conn = _server._get_conn(ctx)
+    row = _municipality_row(conn, query.strip())
+    if row is None:
+        return f"Kuntaa '{query}' ei löytynyt."
+    if row["min_x"] is None:
+        return (
+            f"Kunnan {row['name_fi']} bbox-tietoja ei ole ladattu. "
+            "Aja ensin: `populate_reference('municipality_bbox')`."
+        )
+    bbox = f"{row['min_x']},{row['min_y']},{row['max_x']},{row['max_y']},EPSG:3067"
+    return (
+        f"Kunta {row['name_fi']} ({row['code']}, EPSG:3067)\n"
+        f"  bbox (WFS/WCS): {bbox}\n\n"
+        f"Käytä bbox-arvoa aluerajauksena tai find_map_sheets(bbox=...)-kutsussa."
+    )
+
+
 @mcp.tool()
 def map_sheet(sheet_id: str, ctx: Context | None = None) -> str:
     """Hae karttalehden bbox (EPSG:3067) aluerajaukseen.

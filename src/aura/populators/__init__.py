@@ -6,6 +6,7 @@ from aura.populators.base import BasePopulator
 from aura.populators.boundaries import BoundaryPopulator
 from aura.populators.map_sheets import MapSheetPopulator
 from aura.populators.municipalities import MunicipalityPopulator
+from aura.populators.municipality_bbox import MunicipalityBboxPopulator
 from aura.populators.postal_codes import PostalCodePopulator
 
 # Rekisteri kaikista populaattoreista
@@ -14,6 +15,7 @@ POPULATORS: dict[str, type[BasePopulator]] = {
     "postal_codes": PostalCodePopulator,
     "boundaries": BoundaryPopulator,
     "map_sheets": MapSheetPopulator,
+    "municipality_bbox": MunicipalityBboxPopulator,
 }
 
 

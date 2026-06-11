@@ -103,3 +103,65 @@ def test_find_map_sheets_requires_a_filter() -> None:
     with patch("aura.server._get_conn", return_value=conn):
         out = find_map_sheets(scale="utm25")
     assert "anna" in out.lower() or "vähintään" in out.lower() or "bbox" in out.lower()
+
+
+def _db_with_municipalities() -> sqlite3.Connection:
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE ref_municipalities (
+            code TEXT PRIMARY KEY, name_fi TEXT, name_sv TEXT,
+            min_x REAL, min_y REAL, max_x REAL, max_y REAL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO ref_municipalities "
+        "(code, name_fi, name_sv, min_x, min_y, max_x, max_y) "
+        "VALUES ('091','Helsinki','Helsingfors',25490000.0,6665000.0,25515000.0,6690000.0)"
+    )
+    conn.execute(
+        "INSERT INTO ref_municipalities (code, name_fi, name_sv) "
+        "VALUES ('992','Bbox-puuttuu','-')"
+    )
+    conn.commit()
+    return conn
+
+
+def test_municipality_bbox_by_name() -> None:
+    from aura.server import municipality_bbox
+
+    conn = _db_with_municipalities()
+    with patch("aura.server._get_conn", return_value=conn):
+        out = municipality_bbox("Helsinki")
+    assert "25490000" in out and "6665000" in out
+    assert "EPSG:3067" in out
+
+
+def test_municipality_bbox_by_code() -> None:
+    from aura.server import municipality_bbox
+
+    conn = _db_with_municipalities()
+    with patch("aura.server._get_conn", return_value=conn):
+        out = municipality_bbox("91")  # zero-pad → 091
+    assert "Helsinki" in out
+    assert "25515000" in out
+
+
+def test_municipality_bbox_missing_data_message() -> None:
+    from aura.server import municipality_bbox
+
+    conn = _db_with_municipalities()
+    with patch("aura.server._get_conn", return_value=conn):
+        out = municipality_bbox("Bbox-puuttuu")
+    assert "populate_reference" in out or "ei ole" in out.lower()
+
+
+def test_municipality_bbox_unknown() -> None:
+    from aura.server import municipality_bbox
+
+    conn = _db_with_municipalities()
+    with patch("aura.server._get_conn", return_value=conn):
+        out = municipality_bbox("Atlantis")
+    assert "ei löytynyt" in out.lower() or "ei löydy" in out.lower()
