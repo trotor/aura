@@ -1,6 +1,7 @@
 """Testit laatupisteytysmoduulille."""
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -25,6 +26,15 @@ def _memory_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     init_db(conn)
     return conn
+
+
+def _days_ago(days: int) -> str:
+    """Aikaleima N päivää sitten.
+
+    Tuoreuspisteytys vertaa nykyhetkeen, joten kovakoodattu päivämäärä
+    vanhenee ja testi alkaa hylätä ajan kuluessa.
+    """
+    return (datetime.now(tz=UTC) - timedelta(days=days)).replace(tzinfo=None).isoformat()
 
 
 def _complete_dataset() -> dict:
@@ -108,13 +118,13 @@ class TestCompleteness:
 class TestTimeliness:
     def test_recent_scores_high(self):
         d = _complete_dataset()
-        d["metadata_modified"] = "2026-02-20T12:00:00"
+        d["metadata_modified"] = _days_ago(10)  # < 30 vrk → 100 p
         score, _ = calculate_timeliness(d)
         assert score >= 85
 
     def test_old_scores_low(self):
         d = _complete_dataset()
-        d["metadata_modified"] = "2020-01-01T12:00:00"
+        d["metadata_modified"] = _days_ago(1000)  # > 730 vrk → 10 p
         score, _ = calculate_timeliness(d)
         assert score <= 10
 
@@ -169,7 +179,7 @@ class TestDocumentation:
 class TestOverallQuality:
     def test_complete_dataset_high_score(self):
         d = _complete_dataset()
-        d["metadata_modified"] = "2026-02-20T12:00:00"
+        d["metadata_modified"] = _days_ago(10)
         scores = calculate_quality(d, _resources(), enrichment_count=3)
         assert "overall" in scores
         overall = scores["overall"][0]

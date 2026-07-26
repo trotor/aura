@@ -1,6 +1,7 @@
 """Testit area_profile- ja compare_municipalities-työkaluille."""
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 import aura.server  # noqa: F401 — import server first to avoid circular import
 from aura.database import init_db, upsert_dataset
@@ -118,10 +119,20 @@ class TestDetectGaps:
 class TestComputeFreshness:
     """Testit tuoreusanalyysille."""
 
+    @staticmethod
+    def _days_ago(days: int) -> str:
+        """Aikaleima N päivää sitten.
+
+        Tuoreusraja vertaa nykyhetkeen (< 365 vrk), joten kovakoodattu
+        päivämäärä vanhenee ja testi alkaa hylätä ajan kuluessa.
+        """
+        moment = datetime.now(tz=UTC) - timedelta(days=days)
+        return moment.replace(tzinfo=None).isoformat()
+
     def test_fresh_datasets(self) -> None:
         datasets = [
-            {"metadata_modified": "2025-06-01T00:00:00"},
-            {"metadata_modified": "2025-12-01T00:00:00"},
+            {"metadata_modified": self._days_ago(30)},
+            {"metadata_modified": self._days_ago(200)},
         ]
         fresh, total = _compute_freshness(datasets)
         assert total == 2
@@ -129,7 +140,7 @@ class TestComputeFreshness:
 
     def test_old_datasets(self) -> None:
         datasets = [
-            {"metadata_modified": "2020-01-01T00:00:00"},
+            {"metadata_modified": self._days_ago(500)},
         ]
         fresh, total = _compute_freshness(datasets)
         assert total == 1
