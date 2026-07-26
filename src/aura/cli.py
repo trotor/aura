@@ -273,6 +273,12 @@ def main() -> None:
     # migrate
     subparsers.add_parser("migrate", help="Aja tietokantamigraatiot")
 
+    # lemmatize
+    subparsers.add_parser(
+        "lemmatize",
+        help="Indeksoi suomen perusmuodot hakua varten (datasets.lemmas)",
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -741,6 +747,19 @@ def main() -> None:
             print(f"Ajettu {count} migraatiota.")
         else:
             print("Ei uusia migraatioita.")
+
+    elif args.command == "lemmatize":
+        from aura.database import get_connection, run_migrations
+        from aura.lemmatize import LEMMATIZER_AVAILABLE, index_lemmas
+
+        if not LEMMATIZER_AVAILABLE:
+            print("simplemma puuttuu. Asenna: pip install simplemma")
+            return
+
+        conn = get_connection()
+        run_migrations(conn)
+        count = index_lemmas(conn)
+        print(f"Lemmat indeksoitu {count} datasetille.")
 
     else:
         parser.print_help()
