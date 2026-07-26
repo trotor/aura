@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aura.constants import parse_json_list
+from aura.lemmatize import build_fts_query
 from aura.models import Dataset
 from aura.size_estimator import parse_file_size
 
@@ -402,6 +403,47 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
         )
 
 
+# BM25-kenttäpainot, järjestys = datasets_fts:n sarakejärjestys.
+#
+# Ilman painoja FTS5:n `rank` kohtelee otsikko-osumaa ja kuvauksen keskeltä
+# löytyvää osumaa samanarvoisina, mikä on hakulaadun kannalta väärin: haku
+# "asuntojen hinnat" nosti kärkeen sianlihan hinnat, koska sana "hinnat"
+# esiintyi kuvaustekstissä yhtä painavasti kuin otsikossa.
+_FTS_WEIGHTS_WITH_LEMMAS: tuple[float, ...] = (
+    3.0,   # name
+    8.0,   # title
+    10.0,  # title_fi
+    4.0,   # title_en
+    2.0,   # title_sv
+    1.5,   # notes
+    2.0,   # notes_fi
+    1.0,   # notes_en
+    0.5,   # notes_sv
+    6.0,   # keywords_fi
+    3.0,   # keywords_en
+    1.0,   # organization_title
+    5.0,   # lemmas
+)
+_FTS_WEIGHTS_LEGACY: tuple[float, ...] = _FTS_WEIGHTS_WITH_LEMMAS[:-1]
+
+# Jos tiukka AND-haku tuottaa vähemmän kuin tämän, löysennetään asteittain.
+RELAX_THRESHOLD = 3
+
+
+def _has_lemma_column(conn: sqlite3.Connection) -> bool:
+    """Onko migraatio 018 (lemmas-sarake) ajettu tähän kantaan?"""
+    cols = conn.execute("PRAGMA table_info(datasets)").fetchall()
+    return any(row[1] == "lemmas" for row in cols)
+
+
+def _bm25_expr(conn: sqlite3.Connection) -> str:
+    """Rakenna painotettu bm25()-lauseke kannan sarakemäärän mukaan."""
+    weights = (
+        _FTS_WEIGHTS_WITH_LEMMAS if _has_lemma_column(conn) else _FTS_WEIGHTS_LEGACY
+    )
+    return "bm25(datasets_fts, " + ", ".join(str(w) for w in weights) + ")"
+
+
 def search_datasets(
     conn: sqlite3.Connection,
     query: str,
@@ -416,8 +458,19 @@ def search_datasets(
 ) -> list[dict[str, Any]]:
     """Hae datasettejä FTS5-täystekstihaulla ja suodattimilla.
 
-    Hakee sekä FTS5-indeksistä että enrichment-avainsanoista (keywords, tags,
-    description_extended). FTS-osumat tulevat ensin, enrichment-osumat perässä.
+    Haku etenee asteittain löysentäen, jotta tarkkuus säilyy silloin kun
+    hyviä osumia on, ja kattavuus silloin kun ei ole:
+
+    1. **Tiukka** — lemmatisoitu AND-haku (ks. ``aura.lemmatize``). Jokaisen
+       hakusanan on osuttava, joko pinta- tai perusmuodossaan.
+    2. **Löysä** — samat termit OR:lla, jos tiukka tuotti alle
+       ``RELAX_THRESHOLD`` tulosta. BM25 suosii yhä useampaan termiin osuvia.
+    3. **Laajennettu** — sanasto- ja YSO-termit (``expanded_query``), vasta
+       jos edelliset eivät tuottaneet mitään.
+
+    Vaihe 3 oli aiemmin *ensimmäinen* vaihe, mikä tuhosi tarkkuuden: kymmenien
+    eri termien OR-lauseke sai bm25:n rankkaamaan kohinaa (haku
+    "metsänhakkuut Pirkanmaa" palautti kärkitulokseksi Tampereen bussipysäkit).
 
     Args:
         query: Hakusanat.
@@ -428,6 +481,9 @@ def search_datasets(
              sillä on vähintään yksi resurssi kyseisessä formaatissa.
         organization: Suodata organisaation mukaan (osa nimestä riittää).
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted").
+        expanded_query: Valmis FTS5-lauseke sanasto-/YSO-laajennuksesta.
+            Käytetään vain viimeisenä keinona.
+        region_names: Rajaa maantieteellisen kattavuuden mukaan.
     """
     # Suodattimet (yhteinen FTS- ja enrichment-haulle)
     filter_conditions: list[str] = []
@@ -456,18 +512,12 @@ def search_datasets(
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
-    # Käytä laajennettua hakua jos annettu (esim. YSO-laajennus)
-    fts_query = expanded_query if expanded_query else query
-
-    # Parametrit: FTS match, enrichment FTS match, suodattimet, limit, offset
-    params: list[Any] = [fts_query, fts_query, *filter_params, limit, offset]
-
-    rows = conn.execute(
-        f"""
+    lemma_col = "lemmas" if _has_lemma_column(conn) else None
+    sql = f"""
         SELECT d.*, COALESCE(fts.rank, 0) as rank
         FROM datasets d
         LEFT JOIN (
-            SELECT rowid, rank
+            SELECT rowid, {_bm25_expr(conn)} AS rank
             FROM datasets_fts
             WHERE datasets_fts MATCH ?
         ) fts ON d.rowid = fts.rowid
@@ -481,10 +531,56 @@ def search_datasets(
         {filter_where}
         ORDER BY rank
         LIMIT ? OFFSET ?
-        """,
-        params,
-    ).fetchall()
-    return [dict(row) for row in rows]
+    """
+
+    # Haetaan limit+offset riviä per vaihe; sivutus leikataan vasta yhdistämisen
+    # jälkeen, koska eri vaiheiden tulosjoukot ovat sisäkkäisiä.
+    fetch = limit + offset
+
+    def _run(ds_query: str, enr_query: str) -> list[dict[str, Any]]:
+        params: list[Any] = [ds_query, enr_query, *filter_params, fetch, 0]
+        return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+    # Rakenna yritykset tiukimmasta löysimpään. enrichments_fts:ssä ei ole
+    # lemmas-saraketta, joten se saa oman lauseke­varianttinsa.
+    attempts: list[tuple[str, str]] = []
+    strict_ds = build_fts_query(query, strict=True, lemma_column=lemma_col)
+    if strict_ds:
+        attempts.append(
+            (strict_ds, build_fts_query(query, strict=True, lemma_column=None))
+        )
+        loose_ds = build_fts_query(query, strict=False, lemma_column=lemma_col)
+        if loose_ds != strict_ds:
+            attempts.append(
+                (loose_ds, build_fts_query(query, strict=False, lemma_column=None))
+            )
+    if expanded_query:
+        attempts.append((expanded_query, expanded_query))
+    if not attempts:
+        # Kysely oli pelkkiä stopsanoja tai tokenisoinnin jälkeen tyhjä
+        attempts.append((query, query))
+
+    # Tulokset kasataan vaihe kerrallaan: tiukan haun osumat säilyvät kärjessä
+    # ja löysemmät vaiheet vain täydentävät häntää. Tämä on olennaista — jos
+    # löysä joukko *korvaisi* tiukan, harvinaisen mutta täsmällisen osuman
+    # tilalle nousisi laaja OR-kohina.
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ds_query, enr_query in attempts:
+        try:
+            rows = _run(ds_query, enr_query)
+        except sqlite3.OperationalError:
+            logger.warning("[search] Kelvoton FTS5-lauseke: %r", ds_query)
+            continue
+        for row in rows:
+            key = str(row.get("id", ""))
+            if key not in seen:
+                seen.add(key)
+                merged.append(row)
+        if len(merged) >= max(RELAX_THRESHOLD, fetch):
+            break
+
+    return merged[offset : offset + limit]
 
 
 def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict[str, Any] | None:
