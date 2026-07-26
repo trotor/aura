@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from aura.database import upsert_dataset
@@ -11,20 +12,22 @@ from aura.models import Resource
 
 logger = logging.getLogger(__name__)
 
-# Azure APIM discovery -rajapinta
-APIM_DISCOVERY_URL = (
-    "https://avoindata.tutkihallintoa.fi/developer/apis"
-    "?api-version=2022-04-01-preview"
-)
-APIM_OPERATIONS_URL = (
-    "https://avoindata.tutkihallintoa.fi/developer/apis/{api_id}/operations"
-    "?api-version=2022-04-01-preview"
-)
+# Azure APIM:n kehittäjäportaali julkaisee taustarajapintansa osoitteen
+# omassa config.json-tiedostossaan. Luetaan se ajonaikaisesti sen sijaan että
+# kovakoodattaisiin: portaali siirsi datarajapinnan omalle domainilleen
+# (avoindata.tutkihallintoa.fi/developer/apis → *.data.azure-api.net), mikä
+# hiljensi harvesterin nollaan datasettiin.
+PORTAL_CONFIG_URL = "https://avoindata.tutkihallintoa.fi/config.json"
+
+# Varajärjestely jos config.json ei ole saatavilla (havaittu 2026-07-26).
+FALLBACK_DATA_API_URL = "https://vkf-ipa-p-public-apim.data.azure-api.net"
+FALLBACK_DATA_API_VERSION = "2022-04-01-preview"
+
 API_GATEWAY_URL = "https://api.tutkihallintoa.fi"
 
 # API-kohtaiset lisätiedot
 API_METADATA: dict[str, dict[str, Any]] = {
-    "valtiontalousv1": {
+    "valtiontalous": {
         "title_fi": "Valtion taloustiedot",
         "keywords": ["valtiontalous", "budjetti", "talousarvio", "tilinpäätös"],
         "update_frequency": "kuukausittain",
@@ -33,7 +36,7 @@ API_METADATA: dict[str, dict[str, Any]] = {
             "hallinnonalat, kirjanpitoyksiköt ja momentit."
         ),
     },
-    "centralgovernmentdebtv1": {
+    "centralgovernmentdebt": {
         "title_fi": "Valtionvelka",
         "keywords": ["valtionvelka", "velka", "BKT", "obligaatiot"],
         "update_frequency": "kuukausittain",
@@ -42,7 +45,7 @@ API_METADATA: dict[str, dict[str, Any]] = {
             "ja korkotiedot vuodesta 1940."
         ),
     },
-    "financingandloansv1": {
+    "financingandloans": {
         "title_fi": "Rahoitus ja lainat",
         "keywords": ["lainat", "rahoitus", "arava", "ASP", "takaukset"],
         "update_frequency": "kuukausittain",
@@ -51,7 +54,7 @@ API_METADATA: dict[str, dict[str, Any]] = {
             "ASP-järjestelmä ja valtiontakaukset."
         ),
     },
-    "valtionhenkilostov1": {
+    "valtionhenkilosto": {
         "title_fi": "Valtion henkilöstö",
         "keywords": ["henkilöstö", "valtio", "työvuodet", "työntekijät"],
         "update_frequency": "kuukausittain",
@@ -60,7 +63,7 @@ API_METADATA: dict[str, dict[str, Any]] = {
             "kuukausittain vuodesta 2010."
         ),
     },
-    "kuntatalousv1": {
+    "kuntatalous": {
         "title_fi": "Kuntatalous",
         "keywords": ["kunnat", "kuntatalous", "taksonomia", "tilinpäätös"],
         "update_frequency": "vuosittain",
@@ -68,7 +71,7 @@ API_METADATA: dict[str, dict[str, Any]] = {
             "Kuntien talousraportoinnin taksonomia- ja dimensiotiedot."
         ),
     },
-    "tilikartav1": {
+    "tilikartta": {
         "title_fi": "Valtion tilikartta",
         "keywords": ["tilikartta", "kirjanpito", "tililuokat"],
         "update_frequency": "vuosittain",
@@ -101,10 +104,16 @@ class ValtiokonttoriHarvester(BaseHarvester):
         })
         return config
 
+    def __init__(self, conn: Any = None) -> None:
+        super().__init__(conn)
+        self._data_api_url = FALLBACK_DATA_API_URL
+        self._data_api_version = FALLBACK_DATA_API_VERSION
+
     async def harvest(self) -> int:
         total = 0
 
         async with self._make_client(timeout=30.0) as client:
+            await self._discover_data_api(client)
             apis = await self._fetch_apis(client)
             for api in apis:
                 count = await self._harvest_api(client, api)
@@ -113,10 +122,44 @@ class ValtiokonttoriHarvester(BaseHarvester):
         logger.info("[valtiokonttori] Harvest valmis: %d datasettiä", total)
         return total
 
+    async def _discover_data_api(self, client: Any) -> None:
+        """Lue taustarajapinnan osoite portaalin config.json:sta.
+
+        Azure APIM:n kehittäjäportaali julkaisee oman datarajapintansa
+        osoitteen ja versionsa. Lukemalla ne ajonaikaisesti harvesteri kestää
+        sen, että portaali siirtää rajapinnan toiseen osoitteeseen.
+        """
+        try:
+            response = await self._fetch(client, PORTAL_CONFIG_URL)
+            config: dict[str, Any] = response.json()
+        except Exception as e:
+            logger.warning(
+                "[valtiokonttori] config.json ei saatavilla (%s), "
+                "käytetään varaosoitetta %s",
+                e, FALLBACK_DATA_API_URL,
+            )
+            return
+
+        url = config.get("dataApiUrl")
+        if isinstance(url, str) and url:
+            self._data_api_url = url.rstrip("/")
+        version = config.get("dataApiVersion")
+        if isinstance(version, str) and version:
+            self._data_api_version = version
+
+        logger.info(
+            "[valtiokonttori] Datarajapinta: %s (api-version=%s)",
+            self._data_api_url, self._data_api_version,
+        )
+
+    def _data_api(self, path: str) -> str:
+        """Rakenna datarajapinnan URL versioparametrilla."""
+        return f"{self._data_api_url}/{path}?api-version={self._data_api_version}"
+
     async def _fetch_apis(self, client: Any) -> list[dict[str, Any]]:
         """Hae API-lista APIM discovery -endpointista."""
         try:
-            response = await self._fetch(client, APIM_DISCOVERY_URL)
+            response = await self._fetch(client, self._data_api("apis"))
             data: dict[str, Any] = response.json()
             result: list[dict[str, Any]] = data.get("value", [])
             return result
@@ -166,7 +209,7 @@ class ValtiokonttoriHarvester(BaseHarvester):
         api_id: str,
     ) -> list[dict[str, Any]]:
         """Hae API:n operaatiot APIM:stä."""
-        url = APIM_OPERATIONS_URL.format(api_id=api_id)
+        url = self._data_api(f"apis/{api_id}/operations")
         try:
             response = await self._fetch(client, url)
             data: dict[str, Any] = response.json()
@@ -180,8 +223,14 @@ class ValtiokonttoriHarvester(BaseHarvester):
             return []
 
     def _normalize_api_id(self, api_id: str) -> str:
-        """Normalisoi API ID avaimeksi API_METADATA-hakuun."""
-        return api_id.lower().replace("-", "").replace("_", "")
+        """Normalisoi API ID avaimeksi API_METADATA-hakuun.
+
+        Erottimet poistetaan ja mahdollinen versiopääte katkaistaan:
+        portaali on käyttänyt sekä muotoa ``valtiontalousv1`` että
+        ``central-government-debt``.
+        """
+        key = api_id.lower().replace("-", "").replace("_", "")
+        return re.sub(r"v\d+$", "", key)
 
     def _get_api_meta(self, api_id: str) -> dict[str, Any]:
         """Hae API-kohtaiset lisätiedot."""

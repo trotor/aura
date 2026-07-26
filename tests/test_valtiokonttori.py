@@ -78,6 +78,9 @@ SAMPLE_OPERATIONS_DEBT = {
 }
 
 
+MOCK_DATA_API_URL = "https://test-apim.data.azure-api.net"
+
+
 def _mock_client(
     apis: dict | None = None,
     operations_map: dict[str, dict] | None = None,
@@ -97,8 +100,12 @@ def _mock_client(
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
 
-        if "developer/apis?" in url and "operations" not in url:
-            resp.json.return_value = apis
+        # Järjestys on merkitsevä: operaatio-URL sisältää myös "/apis".
+        if "config.json" in url:
+            resp.json.return_value = {
+                "dataApiUrl": MOCK_DATA_API_URL,
+                "dataApiVersion": "2022-04-01-preview",
+            }
         elif "/operations?" in url:
             # Parsitaan API ID URL:sta
             for api_id, ops in operations_map.items():
@@ -107,6 +114,8 @@ def _mock_client(
                     break
             else:
                 resp.json.return_value = {"value": []}
+        elif "/apis?" in url:
+            resp.json.return_value = apis
         else:
             resp.json.return_value = {"value": []}
         return resp
@@ -130,11 +139,55 @@ class TestValtiokonttoriConfig:
         assert ds.source == "valtiokonttori"
 
     def test_api_metadata_keys(self):
-        """API_METADATA sisältää tunnetut API:t."""
+        """API_METADATA sisältää tunnetut API:t normalisoiduilla tunnisteilla."""
         from aura.harvesters.valtiokonttori import API_METADATA
-        assert "valtiontalousv1" in API_METADATA
-        assert "centralgovernmentdebtv1" in API_METADATA
-        assert "tilikartav1" in API_METADATA
+        assert "valtiontalous" in API_METADATA
+        assert "centralgovernmentdebt" in API_METADATA
+        assert "tilikartta" in API_METADATA
+
+    def test_normalize_api_id_handles_both_id_styles(self):
+        """Portaali on käyttänyt sekä versioituja että väliviivallisia ID:itä.
+
+        Regressio 2026-07-26: rajapinta vaihtoi tunnisteet muodosta
+        "ValtiontalousV1" muotoon "valtiontalous" ja "central-government-debt".
+        """
+        h = ValtiokonttoriHarvester(conn=_memory_db())
+        assert h._normalize_api_id("ValtiontalousV1") == "valtiontalous"
+        assert h._normalize_api_id("valtiontalous") == "valtiontalous"
+        assert h._normalize_api_id("central-government-debt") == "centralgovernmentdebt"
+        assert h._normalize_api_id("CentralGovernmentDebtV1") == "centralgovernmentdebt"
+
+
+class TestValtiokonttoriDiscovery:
+    """Datarajapinnan osoitteen löytäminen portaalin config.json:sta.
+
+    Regressio 2026-07-26: portaali siirsi datarajapinnan omalle domainilleen,
+    jolloin kovakoodattu /developer/apis palautti 404 ja harvestointi tuotti
+    nolla datasettiä hiljaisesti.
+    """
+
+    @pytest.mark.asyncio
+    async def test_reads_data_api_url_from_config(self):
+        h = ValtiokonttoriHarvester(conn=_memory_db())
+        await h._discover_data_api(_mock_client())
+
+        assert h._data_api_url == MOCK_DATA_API_URL
+        assert h._data_api("apis") == (
+            f"{MOCK_DATA_API_URL}/apis?api-version=2022-04-01-preview"
+        )
+
+    @pytest.mark.asyncio
+    async def test_falls_back_when_config_unavailable(self):
+        """Jos config.json ei vastaa, käytetään tunnettua varaosoitetta."""
+        from aura.harvesters.valtiokonttori import FALLBACK_DATA_API_URL
+
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=RuntimeError("404"))
+
+        h = ValtiokonttoriHarvester(conn=_memory_db())
+        await h._discover_data_api(client)
+
+        assert h._data_api_url == FALLBACK_DATA_API_URL
 
 
 class TestValtiokonttoriHarvest:
