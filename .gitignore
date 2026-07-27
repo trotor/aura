@@ -48,6 +48,9 @@ data/aura.db-wal
 # Henkilökohtaiset analyysit ja sessiotulosteet
 output/
 
+# Hakuevaluaatio (kultainen setti + metriikat, ei avoimeen repoon)
+# eval/ siirretty aura-pro-repoon 26.7.2026
+
 # Playwright MCP -työkalun väliaikaistiedostot
 .playwright-mcp/
 
