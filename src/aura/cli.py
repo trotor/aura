@@ -10,6 +10,7 @@ from datetime import UTC
 
 from aura import __version__
 from aura.constants import format_date
+from aura.prune import STALE_AFTER_DAYS
 
 
 def main() -> None:
@@ -279,6 +280,24 @@ def main() -> None:
         help="Indeksoi suomen perusmuodot hakua varten (datasets.lemmas)",
     )
 
+    # prune
+    prune_ds = subparsers.add_parser(
+        "prune", help="Poista lähteestä kadonneet datasetit (oletuksena kuiva-ajo)"
+    )
+    prune_ds.add_argument("--source", default="", help="Rajaa yhteen lähteeseen")
+    prune_ds.add_argument(
+        "--days",
+        type=int,
+        default=STALE_AFTER_DAYS,
+        help=f"Päiviä lähteen viimeisimmästä ajosta (oletus: {STALE_AFTER_DAYS})",
+    )
+    prune_ds.add_argument(
+        "--apply", action="store_true", help="Poista oikeasti (ilman tätä kuiva-ajo)"
+    )
+    prune_ds.add_argument(
+        "--force", action="store_true", help="Salli kuratoitujen rikastusten poisto"
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -302,8 +321,11 @@ def main() -> None:
         now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
         if args.source == "all":
+            from aura.prune import check_count_regression
+
             total = 0
             skipped = []
+            warnings: list[str] = []
             for name, cls in get_all_harvesters().items():
                 if issubclass(cls, StaticHarvester) and not args.include_static:
                     skipped.append(name)
@@ -313,12 +335,21 @@ def main() -> None:
                 count = asyncio.run(harvester.harvest())
                 print(f"  {name}: {count} datasettiä")
                 total += count
+                # Vertaa edelliseen ajoon ENNEN kuin sources-rivi ylikirjoitetaan
+                warning = check_count_regression(harvester.conn, name, count)
+                if warning:
+                    warnings.append(warning)
+                    print(f"  VAROITUS  {warning}")
                 # Päivitä sources-taulu (#125)
                 src_cfg = cls.source_config()
                 src_cfg["dataset_count"] = count
                 src_cfg["last_harvested_at"] = now
                 upsert_source(harvester.conn, src_cfg)
                 harvester.conn.commit()
+            if warnings:
+                print(f"\n{len(warnings)} lähdettä tuotti odotettua vähemmän:")
+                for warning in warnings:
+                    print(f"  - {warning}")
             if skipped:
                 print(f"\nOhitettu staattiset: {', '.join(skipped)}")
                 print("  (käytä --include-static sisällyttääksesi)")
@@ -491,6 +522,55 @@ def main() -> None:
             total_imported += count
 
         print(f"\nTuotu yhteensä {total_imported} rikastusta.")
+
+    elif args.command == "prune":
+        from aura.database import get_connection, init_db
+        from aura.prune import find_stale, prune_datasets
+
+        conn = get_connection()
+        init_db(conn)
+
+        reports = find_stale(conn, days=args.days, source=args.source)
+        if not reports:
+            print(f"Ei vanhentuneita datasettejä (ikäraja {args.days} päivää).")
+            return
+
+        print(f"{'LÄHDE':<20} {'VIIMEISIN AJO':<21} {'POISTUU':>8} {'JÄÄ':>8}")
+        print("-" * 60)
+        for report in reports:
+            print(
+                f"{report.source:<20} {report.latest_harvest[:19]:<21} "
+                f"{report.stale:>8} {report.remaining:>8}"
+            )
+        print("-" * 60)
+
+        try:
+            stats = prune_datasets(
+                conn,
+                days=args.days,
+                source=args.source,
+                apply=args.apply,
+                force=args.force,
+            )
+        except ValueError as exc:
+            print(f"\nKESKEYTETTY: {exc}")
+            raise SystemExit(1) from exc
+
+        if stats["curated_enrichments"]:
+            print(
+                f"\nHUOM: mukana {stats['curated_enrichments']} kuratoitua "
+                "rikastusta (ei harvesterin tuottamaa)."
+            )
+        if args.apply:
+            print(f"\nPoistettu {stats['datasets']} datasettiä.")
+            for table, count in stats.items():
+                if table not in ("datasets", "curated_enrichments") and count:
+                    print(f"  {table}: {count} riviä")
+        else:
+            print(
+                f"\nKuiva-ajo: {stats['datasets']} datasettiä poistuisi. "
+                "Toteuta lisäämällä --apply."
+            )
 
     elif args.command == "prune-enrichments":
         from aura.database import (
