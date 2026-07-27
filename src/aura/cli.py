@@ -306,10 +306,7 @@ def main() -> None:
     )
 
     if args.command == "harvest":
-        from datetime import datetime
-
-        from aura.database import upsert_source
-        from aura.harvesters import get_all_harvesters, get_harvester
+        from aura.harvesters import get_all_harvesters
         from aura.harvesters.static import StaticHarvester
 
         if args.list_sources:
@@ -318,63 +315,11 @@ def main() -> None:
                 print(f"  {name:25s} {cls.description}{tag}")
             return
 
-        now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
-
-        if args.source == "all":
-            from aura.prune import check_count_regression
-
-            total = 0
-            skipped = []
-            warnings: list[str] = []
-            for name, cls in get_all_harvesters().items():
-                if issubclass(cls, StaticHarvester) and not args.include_static:
-                    skipped.append(name)
-                    continue
-                print(f"Harvestoidaan: {name}...")
-                harvester = cls()
-                count = asyncio.run(harvester.harvest())
-                print(f"  {name}: {count} datasettiä")
-                total += count
-                # Vertaa edelliseen ajoon ENNEN kuin sources-rivi ylikirjoitetaan
-                warning = check_count_regression(harvester.conn, name, count)
-                if warning:
-                    warnings.append(warning)
-                    print(f"  VAROITUS  {warning}")
-                # Päivitä sources-taulu (#125)
-                src_cfg = cls.source_config()
-                src_cfg["dataset_count"] = count
-                src_cfg["last_harvested_at"] = now
-                upsert_source(harvester.conn, src_cfg)
-                harvester.conn.commit()
-            if warnings:
-                print(f"\n{len(warnings)} lähdettä tuotti odotettua vähemmän:")
-                for warning in warnings:
-                    print(f"  - {warning}")
-            if skipped:
-                print(f"\nOhitettu staattiset: {', '.join(skipped)}")
-                print("  (käytä --include-static sisällyttääksesi)")
-            print(f"\nYhteensä: {total} datasettiä")
-            # Laske laatupisteet harvestoinnin jälkeen (#127)
-            from aura.quality import score_all_datasets
-
-            qcount = score_all_datasets(harvester.conn)
-            print(f"Laatupisteet laskettu {qcount} datasetille.")
-        else:
-            cls = get_harvester(args.source)
-            harvester = cls()
-            count = asyncio.run(harvester.harvest())
-            # Päivitä sources-taulu (#125)
-            src_cfg = cls.source_config()
-            src_cfg["dataset_count"] = count
-            src_cfg["last_harvested_at"] = now
-            upsert_source(harvester.conn, src_cfg)
-            harvester.conn.commit()
-            print(f"Haettu {count} datasettiä lähteestä {args.source}.")
-            # Laske laatupisteet harvestoinnin jälkeen (#127)
-            from aura.quality import score_all_datasets
-
-            qcount = score_all_datasets(harvester.conn, source=args.source)
-            print(f"Laatupisteet laskettu {qcount} datasetille.")
+        # `harvest` on `refresh`in lyhyt muoto: sama putki ilman valinnaisia
+        # vaiheita. Yksi toteutus, jotta reitit eivät enää eriydy.
+        asyncio.run(
+            _refresh(source=args.source, include_static=args.include_static)
+        )
 
     elif args.command == "serve":
         from aura.serve import resolve_serve_config
@@ -1028,69 +973,82 @@ async def _refresh(
     health_limit: int = 200,
     run_schemas: bool = False,
 ) -> None:
-    """Kokonaisvirkistys: harvest + quality + health + schemas (#123)."""
-    from datetime import datetime
+    """Kokonaisvirkistys: harvest + vanhentuneet + laatu + lemmat (+ health, schemas).
 
-    from aura.database import get_connection, init_db, upsert_source
-    from aura.harvesters import get_all_harvesters, get_harvester
-    from aura.harvesters.static import StaticHarvester
+    Vaiheiden järjestys ei ole mielivaltainen:
+
+    - **Vanhentuneiden raportti heti harvestoinnin jälkeen**, koska vasta silloin
+      tiedetään mitä lähde tällä kertaa palautti. Raportti on kuiva-ajo; poisto
+      vaatii aina erillisen komennon.
+    - **Lemmaindeksointi viimeisenä pakollisena vaiheena**, koska se lukee
+      harvestoinnin tuottamat rivit. Ilman sitä uudet aineistot ovat
+      näkymättömiä perusmuotohaulle — juuri tämä unohtui aiemmin, koska
+      lemmatize oli vain oma erillinen komentonsa.
+    """
+    from aura.database import get_connection, init_db
+    from aura.lemmatize import index_lemmas
+    from aura.pipeline import harvest_sources
+    from aura.prune import find_stale
     from aura.quality import score_all_datasets
 
     conn = get_connection()
     init_db(conn)
-    now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
-    # 1. Harvest
-    print("=" * 50)
-    print("VAIHE 1: Harvestointi")
-    print("=" * 50)
+    steps = ["Harvestointi", "Vanhentuneet rivit", "Laatupisteytys", "Lemmaindeksointi"]
+    if run_health:
+        steps.append("Health check")
+    if run_schemas:
+        steps.append("Schema introspection")
 
-    if source == "all":
-        total = 0
-        skipped = []
-        for name, cls in get_all_harvesters().items():
-            if issubclass(cls, StaticHarvester) and not include_static:
-                skipped.append(name)
-                continue
-            print(f"  Harvestoidaan: {name}...")
-            harvester = cls(conn=conn)
-            count = await harvester.harvest()
-            print(f"    {count} datasettiä")
-            total += count
-            src_cfg = cls.source_config()
-            src_cfg["dataset_count"] = count
-            src_cfg["last_harvested_at"] = now
-            upsert_source(conn, src_cfg)
-        conn.commit()
-        if skipped:
-            print(f"  Ohitettu staattiset: {', '.join(skipped)}")
-        print(f"  Yhteensä: {total} datasettiä\n")
-    else:
-        cls = get_harvester(source)
-        harvester = cls(conn=conn)
-        count = await harvester.harvest()
-        src_cfg = cls.source_config()
-        src_cfg["dataset_count"] = count
-        src_cfg["last_harvested_at"] = now
-        upsert_source(conn, src_cfg)
-        conn.commit()
-        print(f"  {count} datasettiä lähteestä {source}\n")
-
-    # 2. Laatupisteet
-    print("=" * 50)
-    print("VAIHE 2: Laatupisteytys")
-    print("=" * 50)
+    def otsikko(nimi: str) -> None:
+        print("=" * 50)
+        print(f"VAIHE {steps.index(nimi) + 1}/{len(steps)}: {nimi}")
+        print("=" * 50)
 
     src_filter = "" if source == "all" else source
+
+    # 1. Harvest
+    otsikko("Harvestointi")
+    outcome = await harvest_sources(
+        conn,
+        source=source,
+        include_static=include_static,
+        on_progress=lambda name, count: print(
+            f"  Harvestoidaan: {name}..." if count is None else f"    {count} datasettiä"
+        ),
+    )
+    if outcome.skipped:
+        print(f"  Ohitettu staattiset: {', '.join(outcome.skipped)}")
+        print("    (käytä --include-static sisällyttääksesi)")
+    print(f"  Yhteensä: {outcome.total} datasettiä\n")
+
+    # 2. Vanhentuneet rivit — vain raportti, ei poistoa
+    otsikko("Vanhentuneet rivit")
+    stale = find_stale(conn, source=src_filter)
+    if stale:
+        for report in stale:
+            print(f"  {report.source:<20} {report.stale:>6} vanhentunutta riviä")
+        print(
+            f"\n  Yhteensä {sum(r.stale for r in stale)} riviä ei ole nähty "
+            "lähteessä 30 päivään."
+        )
+        print("  Poista komennolla: aura prune --apply\n")
+    else:
+        print("  Ei vanhentuneita rivejä.\n")
+
+    # 3. Laatupisteet
+    otsikko("Laatupisteytys")
     qcount = score_all_datasets(conn, source=src_filter)
     print(f"  Laatupisteet laskettu {qcount} datasetille.\n")
 
-    # 3. Health check (valinnainen)
-    if run_health:
-        print("=" * 50)
-        print("VAIHE 3: Health check")
-        print("=" * 50)
+    # 4. Lemmat — pakollinen, ei valinnainen
+    otsikko("Lemmaindeksointi")
+    lcount = index_lemmas(conn)
+    print(f"  Perusmuodot indeksoitu {lcount} datasetille.\n")
 
+    # 5. Health check (valinnainen)
+    if run_health:
+        otsikko("Health check")
         from aura.health import check_all_resources
 
         summary = await check_all_resources(
@@ -1102,15 +1060,21 @@ async def _refresh(
         print(f"  Saatavilla:  {summary.available}")
         print(f"  Virheitä:    {summary.errors}\n")
 
-    # 4. Schema introspection (valinnainen)
+    # 6. Schema introspection (valinnainen)
     if run_schemas:
-        print("=" * 50)
-        print(f"VAIHE {'4' if run_health else '3'}: Schema introspection")
-        print("=" * 50)
-
+        otsikko("Schema introspection")
         await _infer_schemas(source=src_filter, limit=100)
 
-    print("\nRefresh valmis!")
+    # Varoitukset viimeisenä: pitkän ajon alussa tulostettu häviää vieritykseen.
+    if outcome.warnings:
+        print("=" * 50)
+        print(f"VAROITUKSET ({len(outcome.warnings)})")
+        print("=" * 50)
+        for warning in outcome.warnings:
+            print(f"  - {warning}")
+        print()
+
+    print("Refresh valmis!")
 
 
 def _gap_pct(n: int, total: int) -> str:

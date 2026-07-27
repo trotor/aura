@@ -214,14 +214,26 @@ class TestQualityAfterHarvest:
 
 
 class TestCliSourcesUpdate:
-    """CLI harvest päivittää sources-taulun (#125)."""
+    """Harvestointi päivittää sources-taulun (#125).
 
-    def test_cli_harvest_has_upsert_source_call(self) -> None:
-        """Verify that the CLI harvest code references upsert_source."""
-        from aura.cli import main
+    Väite kohdistuu nyt jaettuun putkeen eikä ``main``-funktion lähdekoodiin:
+    harvestointi siirtyi ``aura.pipeline``-moduuliin, jotta ``harvest`` ja
+    ``refresh`` eivät enää eriytyisi toisistaan. Käytös testataan
+    ``tests/test_pipeline.py``:ssä oikeaa kantaa vasten.
+    """
 
-        source_code = inspect.getsource(main)
+    def test_pipeline_updates_sources_table(self) -> None:
+        from aura.pipeline import harvest_sources
+
+        source_code = inspect.getsource(harvest_sources)
         assert "upsert_source" in source_code
+
+    def test_both_cli_paths_use_the_shared_pipeline(self) -> None:
+        """`harvest` ja `refresh` eivät saa harvestoida omin koodein."""
+        from aura.cli import _refresh, main
+
+        assert "_refresh" in inspect.getsource(main)
+        assert "harvest_sources" in inspect.getsource(_refresh)
 
 
 class TestSchemaInfer:
