@@ -482,10 +482,10 @@ def main() -> None:
 
         print(f"{'LÄHDE':<20} {'VIIMEISIN AJO':<21} {'POISTUU':>8} {'JÄÄ':>8}")
         print("-" * 60)
-        for report in reports:
+        for stale_report in reports:
             print(
-                f"{report.source:<20} {report.latest_harvest[:19]:<21} "
-                f"{report.stale:>8} {report.remaining:>8}"
+                f"{stale_report.source:<20} {stale_report.latest_harvest[:19]:<21} "
+                f"{stale_report.stale:>8} {stale_report.remaining:>8}"
             )
         print("-" * 60)
 

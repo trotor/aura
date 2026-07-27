@@ -4,6 +4,75 @@ Kaikki merkittävät muutokset dokumentoidaan tähän tiedostoon.
 
 Formaatti perustuu [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) -käytäntöön.
 
+## [Unreleased]
+
+Hakupinon perustason korjaus ja korpuksen siivous. Vaikutus mitattiin 30
+kyselyn setillä: recall@50 0,771 → 0,830, nDCG@10 0,563 → 0,624,
+MRR@10 0,767 → 0,818.
+
+### Added
+- **Suomen lemmatisointi hakuindeksiin** (`aura.lemmatize`): tokenisointi,
+  stopsanakarsinta, simplemma-perusmuotoistus ja FTS5-kyselynrakennin.
+  Ilman sitä `pyörätiet` ei löytänyt aineistoa `Pyörätie` — FTS5:n
+  unicode61 ei osaa suomen taivutusta. Sarake `datasets.lemmas` (migraatio 018)
+- `aura lemmatize` -komento perusmuotojen indeksointiin
+- **BM25-kenttäpainot ja asteittainen löysennys**: tiukka AND-haku ensin,
+  löysennys vasta jos osumia on liian vähän. Aiempi YSO-termien
+  OR-räjäytys tuhosi tarkkuuden — `metsänhakkuut Pirkanmaa` palautti
+  Tampereen bussipysäkit
+- **`aura prune`**: poistaa lähteestä kadonneet datasetit. Oletuksena
+  kuiva-ajo. Ikäraja 30 päivää lähteen omasta viimeisimmästä ajosta, jottei
+  yksittäinen epäonnistunut harvestointi poista mitään. Kuratoidut
+  rikastukset estävät poiston ilman `--force`
+- **Määrävertailu harvestointiin**: varoittaa jos lähde tuottaa nollan tai yli
+  20 % vähemmän kuin edellisellä ajolla. Harvesterit jotka nappaavat
+  fetch-poikkeuksen ja palauttavat tyhjän listan muuttavat ylävirran
+  rikkoutumisen hiljaiseksi nollaksi, joka näyttää onnistuneelta ajolta
+- **Hakutulosten deduplikointi** (`aura.dedup`): sama taulu esiintyy monella
+  tunnisteella (Tilastokeskuksen taulukoodit, katalogien peilaukset).
+  Duplikaatteja ei piiloteta vaan niputetaan, ja määrä näytetään
+  tuloksessa. Vaikutus: recall@50 +0,015
+- **Laatu- ja saatavuussignaalit hakujärjestykseen**: `quality_scores.overall`
+  ja `resource_health` säätävät bm25-pistettä ±10 %. Signaalit ovat
+  tarkoituksella heikkoja — ne ratkaisevat lähes tasaväkiset eivätkä voi
+  nostaa epärelevanttia relevantin ohi. Vaikutus: nDCG@10 +0,019, MRR@10 +0,022
+- Yksikkötestit lemmatisoinnille (45), prunelle (25), deduplikoinnille (20),
+  rankkaussignaaleille (8) ja harvestointiputkelle (9)
+
+### Changed
+- **Harvestointi yhdessä paikassa** (`aura.pipeline`): `aura harvest` ja
+  `aura refresh` olivat ehtineet eriytyä — määrävertailu oli vain toisessa
+  eikä kumpikaan indeksoinut lemmoja. `harvest` on nyt `refresh`in lyhyt muoto
+- **Virkistysputkeen kaksi uutta vaihetta**: vanhentuneiden rivien raportti
+  (kuiva-ajo) harvestoinnin jälkeen ja lemmaindeksointi pakollisena vaiheena
+- Harvestointivaroitukset tulostetaan myös ajon lopuksi, koska pitkän ajon
+  alussa tulostettu häviää vieritykseen
+
+### Fixed
+- **`enrichments_fts`-poistotriggeri** (migraatio 019): taulu on tavallinen
+  FTS5-taulu, mutta triggeri käytti ulkoisen sisällön tauluille tarkoitettua
+  `'delete'`-erikoiskomentoa. Minkä tahansa rikastuksen poisto epäonnistui,
+  jos sen kenttä oli `keywords`, `tags`, `description_extended` tai
+  `yso_concepts` — mikä esti myös `aura prune-enrichments` -komennon
+- **Valtiokonttorin harvesteri**: Azure APIM siirsi taustarajapinnan pois
+  portaalidomainilta ja API-tunnisteet muuttuivat. Osoite luetaan nyt
+  portaalin `/config.json`:sta ajonaikaisesti (0 → 48 datasettiä)
+- Tuoreustestit eivät enää riipu ajopäivästä (#147)
+- mypy strict: `quality.py`:n float/int-virheet (#148)
+
+### Data
+- **Korpus siivottu: 12 819 → 11 202 datasettiä.** Poistetuista 1 593 oli
+  Tilastokeskuksen vanhoja duplikaattitunnisteita, joiden osoitteet vastaavat
+  HTTP 400:lla — Tilastokeskus vaihtoi PxWeb-taulujen tunniste- ja
+  osoiteskeeman kesken vuoden. Loput 24 ovat lähteistä oikeasti poistuneita
+- Harvestointi 26.7.2026 kaikista lähteistä staattiset mukaan lukien
+
+## [0.3.1] - 2026-03-06
+
+### Added
+- Lajitietokeskus-harvesteri (lajihavaintoaineistot)
+- What's New -sivu (`docs/WHATSNEW.md`)
+
 ## [0.3.0] - 2026-02-25
 
 ### Added

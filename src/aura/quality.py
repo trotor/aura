@@ -321,7 +321,10 @@ def analyze_metadata_gaps(
     ).fetchall()
 
     sources: list[dict[str, Any]] = []
-    totals = {
+    # float eikä int: kentät ovat lukumääriä, mutta samaan dictiin kirjoitetaan
+    # myös completeness_pct, joka on desimaaliluku. Lukumäärät pysyvät
+    # ajonaikaisesti int-tyyppisinä.
+    totals: dict[str, float] = {
         "total": 0,
         "missing_desc": 0,
         "missing_keywords": 0,
