@@ -37,6 +37,15 @@ def format_dataset_summary(dataset: dict[str, Any]) -> str:
         parts.append(f"**Lisenssi:** {license_title}")
     if modified:
         parts.append(f"**Päivitetty:** {modified}")
+
+    # Duplikaatteja ei piiloteta vaan kerrotaan: sama taulu esiintyy usein
+    # monella tunnisteella (Tilastokeskuksen taulukoodit, katalogien
+    # peilaukset). Käyttäjän on voitava tietää että vaihtoehtoja on.
+    duplicates = int(dataset.get("duplicate_count", 0) or 0)
+    if duplicates:
+        muoto = "versio" if duplicates == 1 else "versiota"
+        parts.append(f"**Muita versioita:** {duplicates} {muoto} samasta aineistosta")
+
     parts.append(f"**ID:** {dataset.get('name', dataset.get('id', ''))}")
 
     return "\n".join(parts)

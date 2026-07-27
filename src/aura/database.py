@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aura.constants import parse_json_list
+from aura.dedup import deduplicate
 from aura.lemmatize import build_fts_query
 from aura.models import Dataset
 from aura.size_estimator import parse_file_size
@@ -429,6 +430,49 @@ _FTS_WEIGHTS_LEGACY: tuple[float, ...] = _FTS_WEIGHTS_WITH_LEMMAS[:-1]
 # Jos tiukka AND-haku tuottaa vähemmän kuin tämän, löysennetään asteittain.
 RELAX_THRESHOLD = 3
 
+# Kuinka moninkertaisesti haetaan ennen deduplikointia. Duplikaatteja on
+# mitattuna 5 % korpuksesta mutta ne kasautuvat yleisiin kyselyihin, joten
+# kaksinkertainen haku riittää täyttämään sivun eri aineistoilla.
+DEDUP_OVERFETCH = 2
+
+# Laatupisteiden neutraali taso: tämän saa datasetti jolle pisteitä ei ole
+# laskettu, jottei puuttuva tieto ole rangaistus.
+NEUTRAL_QUALITY = 50.0
+
+# Kuinka paljon laatu saa siirtää sijoitusta. 0,10 tarkoittaa että paras
+# mahdollinen laatu parantaa bm25-pistettä 10 % ja huonoin heikentää saman
+# verran — laatu ei siis voi nostaa epärelevanttia aineistoa relevantin ohi,
+# vaan ratkaisee lähes tasaväkiset.
+QUALITY_WEIGHT = 0.10
+
+# Rangaistus datasetille, jonka kaikki tarkistetut resurssit ovat rikki.
+# Huom: resource_health kattaa toistaiseksi vain ~1 % korpuksesta, joten
+# vaikutus on pieni kunnes health-ajoja on tehty enemmän.
+BROKEN_PENALTY = 0.25
+
+
+def _ranking_expr() -> str:
+    """Järjestyslauseke: bm25-piste laatu- ja saatavuussignaaleilla säädettynä.
+
+    bm25 palauttaa **negatiivisia** lukuja, joissa pienempi on parempi. Siksi
+    kerroin > 1 parantaa sijoitusta ja kerroin < 1 heikentää sitä.
+
+    Kertominen on tietoinen valinta yhteenlaskun sijaan: bm25-pisteiden
+    suuruusluokka vaihtelee kyselyn ja kenttäpainojen mukaan, joten kiinteä
+    lisäys dominoisi heikkoja osumia ja katoaisi vahvoista. Suhteellinen
+    säätö kohtelee molempia samoin.
+
+    Enrichment-osumilla rank on 0, jolloin säätö ei vaikuta — ne jäävät
+    listan häntään kuten ennenkin.
+    """
+    return (
+        "COALESCE(fts.rank, 0) * (1"
+        f" + {QUALITY_WEIGHT} * ((COALESCE(q.score, {NEUTRAL_QUALITY}) - "
+        f"{NEUTRAL_QUALITY}) / {NEUTRAL_QUALITY})"
+        f" - CASE WHEN h.any_available = 0 THEN {BROKEN_PENALTY} ELSE 0 END"
+        ")"
+    )
+
 
 def _has_lemma_column(conn: sqlite3.Connection) -> bool:
     """Onko migraatio 018 (lemmas-sarake) ajettu tähän kantaan?"""
@@ -514,13 +558,21 @@ def search_datasets(
 
     lemma_col = "lemmas" if _has_lemma_column(conn) else None
     sql = f"""
-        SELECT d.*, COALESCE(fts.rank, 0) as rank
+        SELECT d.*, COALESCE(fts.rank, 0) as rank,
+               COALESCE(q.score, {NEUTRAL_QUALITY}) AS quality_score,
+               h.any_available AS resources_available
         FROM datasets d
         LEFT JOIN (
             SELECT rowid, {_bm25_expr(conn)} AS rank
             FROM datasets_fts
             WHERE datasets_fts MATCH ?
         ) fts ON d.rowid = fts.rowid
+        LEFT JOIN quality_scores q
+               ON q.dataset_id = d.id AND q.dimension = 'overall'
+        LEFT JOIN (
+            SELECT dataset_id, MAX(is_available) AS any_available
+            FROM resource_health GROUP BY dataset_id
+        ) h ON h.dataset_id = d.id
         WHERE (
             fts.rowid IS NOT NULL
             OR d.id IN (
@@ -529,13 +581,17 @@ def search_datasets(
             )
         )
         {filter_where}
-        ORDER BY rank
+        ORDER BY {_ranking_expr()}
         LIMIT ? OFFSET ?
     """
 
     # Haetaan limit+offset riviä per vaihe; sivutus leikataan vasta yhdistämisen
     # jälkeen, koska eri vaiheiden tulosjoukot ovat sisäkkäisiä.
-    fetch = limit + offset
+    #
+    # Ylihaku: deduplikointi pudottaa rivejä, joten ilman tätä sivullinen
+    # tuloksia kutistuisi duplikaattien verran. Käyttäjän kuuluu saada
+    # `limit` *eri* aineistoa, ei limit paikkaa joista osa on samaa taulua.
+    fetch = (limit + offset) * DEDUP_OVERFETCH
 
     def _run(ds_query: str, enr_query: str) -> list[dict[str, Any]]:
         params: list[Any] = [ds_query, enr_query, *filter_params, fetch, 0]
@@ -580,7 +636,9 @@ def search_datasets(
         if len(merged) >= max(RELAX_THRESHOLD, fetch):
             break
 
-    return merged[offset : offset + limit]
+    # Deduplikointi vasta kasauksen jälkeen: sama taulu voi tulla eri
+    # vaiheista, ja ryhmän edustajaksi kuuluu parhaiten sijoittunut.
+    return deduplicate(merged)[offset : offset + limit]
 
 
 def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict[str, Any] | None:
