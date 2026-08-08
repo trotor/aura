@@ -11,6 +11,22 @@ kyselyn setillä: recall@50 0,771 → 0,830, nDCG@10 0,563 → 0,624,
 MRR@10 0,767 → 0,818.
 
 ### Added
+- **Poliittisen datan harvesterit**: eduskunnan avoin data (7 aineistoa,
+  16 taulua — äänestykset vuodesta 1996, puheenvuorot, kansanedustajat,
+  valtiopäiväasiakirjat), oikeusministeriön vaalitulospalvelu (11 vaalia)
+  ja POHTIVAn puolueohjelmat (1 583 ohjelmaa 1880–2025). Ennen tätä haku
+  `puolueohjelma` antoi nolla osumaa eikä eduskunnan omaan dataan
+  viitannut yksikään resurssi
+- Vaalirahoitukseen jälki-ilmoitukset (`E_JI`) neljälle vaalille joilla
+  tiedosto on olemassa
+- **Remote-instructions ilman local-FS-lupauksia** (#137): read-only-moodissa
+  palvelin ohjaa paikkatietotyökaluihin (`municipality_bbox`,
+  `find_map_sheets`, `map_sheet`) eikä lupaa pääsyä
+  `data/boundaries/*.gpkg`-tiedostoihin, joita kontissa ei ole
+- **`AURA_DB`-ympäristömuuttuja** kannan polulle (#149): pakettipolku ei
+  kelpaa konttiajossa, jossa kanta elää volumessa. Polku selvitetään
+  kutsuhetkellä, joten oletusargumenttiin sitoutuva importtihetki ei
+  kaappaa arvoa
 - **Suomen lemmatisointi hakuindeksiin** (`aura.lemmatize`): tokenisointi,
   stopsanakarsinta, simplemma-perusmuotoistus ja FTS5-kyselynrakennin.
   Ilman sitä `pyörätiet` ei löytänyt aineistoa `Pyörätie` — FTS5:n
@@ -66,6 +82,7 @@ MRR@10 0,767 → 0,818.
   HTTP 400:lla — Tilastokeskus vaihtoi PxWeb-taulujen tunniste- ja
   osoiteskeeman kesken vuoden. Loput 24 ovat lähteistä oikeasti poistuneita
 - Harvestointi 26.7.2026 kaikista lähteistä staattiset mukaan lukien
+- Korpus 11 202 → ~12 800 datasettiä: kolme uutta poliittisen datan lähdettä
 
 ## [0.3.1] - 2026-03-06
 

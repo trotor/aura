@@ -54,13 +54,16 @@ BaseHarvester (base.py)
 │   ├── StatfinGeoHarvester (statfin_geo.py)
 │   ├── StukHarvester (stuk.py) — Säteilyturvakeskus
 │   ├── TaustakartatHarvester (taustakartat.py)
+│   ├── TulospalveluHarvester (tulospalvelu.py) — oikeusministeriön vaalitulokset
 │   ├── VaalirahoitusHarvester (vaalirahoitus.py)
 │   └── VaylaHarvester (vayla.py) — Väylävirasto
 ├── DigitrafficHarvester (digitraffic.py) — OpenAPI-speksien parsinta
 ├── DigitransitHarvester (digitransit.py) — kansallinen joukkoliikenne (GTFS)
+├── EduskuntaHarvester (eduskunta.py) — eduskunnan avoin data
 ├── FinapHarvester (finap.py) — NAP-liikennepalvelukatalogi
 ├── FmiHarvester (fmi.py) — WFS stored queries XML
 ├── KoodistotHarvester (koodistot.py) — Suomi.fi-koodistot
+├── PohtivaHarvester (pohtiva.py) — puolueohjelmat (Tietoarkisto)
 ├── SanastotHarvester (sanastot.py) — Suomi.fi-sanastot
 ├── SotkanetHarvester (sotkanet.py) — THL Sotkanet REST API
 ├── TraficomHarvester (traficom.py) — OData v4
