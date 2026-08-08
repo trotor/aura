@@ -78,38 +78,97 @@ def apply_readonly_gating(
     return removed
 
 
+_INTRO = (
+    "Suomalaisen avoimen datan discovery-palvelu. "
+    "Hae ja ymmärrä Suomen avoimia datasettejä. "
+)
+
+# Löydösten kirjaus. log_finding/list_findings ovat session-muistia ja
+# toimivat molemmissa moodeissa; save_session_findings kirjoittaa kantaan
+# ja gataan pois read-only-moodissa (WRITE_TOOL_NAMES), joten remote-ohje
+# ei saa kehottaa kutsumaan sitä.
+_FINDINGS_LOCAL = (
+    "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
+    "(kenttiä, käyttöohjeita, laatuhuomioita), "
+    "kirjaa löydökset log_finding()-työkalulla tutkimuksen aikana. "
+    "Lopuksi tallenna ne enrichmenteiksi save_session_findings()-kutsulla.\n\n"
+)
+_FINDINGS_REMOTE = (
+    "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
+    "(kenttiä, käyttöohjeita, laatuhuomioita), "
+    "kirjaa löydökset log_finding()-työkalulla ja näytä ne "
+    "list_findings()-kutsulla. Tämä instanssi on read-only, joten "
+    "löydöksiä ei tallenneta pysyvästi — ne elävät vain session ajan.\n\n"
+)
+
+# Toimii molemmissa moodeissa: query_data hakee ulkoisista rajapinnoista
+# eikä nojaa paikalliseen tiedostojärjestelmään.
+_API_USAGE = (
+    "RAJAPINTOJEN SUORA KÄYTTÖ:\n"
+    "Voit hakea dataa suoraan rajapinnoista käyttäjän puolesta! "
+    "Etsi ensin Aurasta oikea datasetti (search/describe), "
+    "sitten kysy dataa query_data()-työkalulla tai hae suoraan "
+    "resurssin URL:sta. Tuettuja: REST/JSON, PxWeb, WFS, OData, CSV. "
+    "Esim. junien aikataulut: rata.digitraffic.fi/api/v1/trains/{pvm}/{numero}, "
+    "tilastot: query_data() PxWeb-suodattimilla, "
+    "sää: query_data() WFS-rajapinnasta. "
+    "Digitransit GraphQL vaatii API-avaimen (api.digitransit.fi).\n\n"
+)
+
+# Lokaali: agentilla on levyllä MML:n GeoPackaget, joita se voi kysellä suoraan.
+_BOUNDARIES_LOCAL = (
+    "RAJAUSAINEISTOT (data/boundaries/, EPSG:3067):\n"
+    "1) karttalehtijako.gpkg — MML:n TM35-ruutujako. "
+    "Tasot: utm200..utm5, utm1. Kenttä: lehtitunnus (esim. 'L4133A'). "
+    "Hierarkia: L4→L41→L413→L4133→L4133A→L4133A3. "
+    "Käytä bbox-rajauksia WFS/WCS-kyselyihin. "
+    "Mittakaava: utm50 maakunnille, utm25 kaupungeille, utm10 yksityiskohdille.\n"
+    "2) kuntajako_1000k.gpkg / kuntajako_10k.gpkg — MML:n hallinnolliset rajat. "
+    "Tasot: Kunta (308), Maakunta (19), Hyvinvointialue (23), Valtakunta (1). "
+    "Kentät: natcode (koodi), namefin (nimi fi), nameswe (nimi sv), landarea, totalarea. "
+    "Käytä kunnan/maakunnan bbox:ia aluerajauksiin: "
+    "SELECT MbrMinX(multipolygon),MbrMinY(multipolygon),"
+    "MbrMaxX(multipolygon),MbrMaxY(multipolygon) "
+    "FROM Kunta WHERE namefin='Helsinki'."
+)
+
+# Remote: levyllä ei ole mitään. Sama kyvykkyys tulee työkaluista, jotka
+# lukevat kannasta (ref_municipalities, map_sheets) eivätkä GPKG-tiedostoista.
+_BOUNDARIES_REMOTE = (
+    "ALUERAJAUKSET (EPSG:3067):\n"
+    "Tämä on etäpalvelu: sinulla ei ole pääsyä palvelimen tiedostojärjestelmään. "
+    "Käytä aluerajauksiin näitä työkaluja — ne palauttavat saman tiedon:\n"
+    "1) municipality_bbox(query) — kunnan rajauslaatikko valmiina WFS/WCS-kyselyyn. "
+    "Hyväksyy nimen (fi/sv) tai kuntakoodin, esim. 'Helsinki' tai '091'.\n"
+    "2) find_map_sheets(bbox=..., scale=...) — MML:n TM35-karttalehdet jotka "
+    "osuvat alueelle. Mittakaava: utm50 maakunnille, utm25 kaupungeille, "
+    "utm10 yksityiskohdille.\n"
+    "3) map_sheet(sheet_id) — yksittäisen karttalehden tiedot ja bbox, "
+    "esim. 'L4133A'. Hierarkia: L4→L41→L413→L4133→L4133A→L4133A3.\n"
+    "Ketjuta näin: municipality_bbox('Tampere') → find_map_sheets(bbox=...) → "
+    "syötä bbox tai lehtitunnus query_data()-kutsuun."
+)
+
+
+def build_instructions(readonly: bool = False) -> str:
+    """Rakenna server-instructions moodin mukaan (#137).
+
+    Read-only-moodi tarkoittaa käytännössä etäpalvelinta, jossa agentilla ei
+    ole pääsyä ``data/boundaries/*.gpkg``-tiedostoihin eikä kirjoittaviin
+    työkaluihin. Ohjeen on vastattava sitä todellisuutta: väärä lupaus
+    tuottaa virheellistä tietoa jokaiselle liittyvälle asiakkaalle.
+
+    Args:
+        readonly: True = etäpalvelin (ei local-FS:ää, ei kirjoittavia tooleja).
+    """
+    if readonly:
+        return _INTRO + _FINDINGS_REMOTE + _API_USAGE + _BOUNDARIES_REMOTE
+    return _INTRO + _FINDINGS_LOCAL + _API_USAGE + _BOUNDARIES_LOCAL
+
+
 mcp = FastMCP(
     "Aura",
-    instructions=(
-        "Suomalaisen avoimen datan discovery-palvelu. "
-        "Hae ja ymmärrä Suomen avoimia datasettejä. "
-        "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
-        "(kenttiä, käyttöohjeita, laatuhuomioita), "
-        "kirjaa löydökset log_finding()-työkalulla tutkimuksen aikana. "
-        "Lopuksi tallenna ne enrichmenteiksi save_session_findings()-kutsulla.\n\n"
-        "RAJAPINTOJEN SUORA KÄYTTÖ:\n"
-        "Voit hakea dataa suoraan rajapinnoista käyttäjän puolesta! "
-        "Etsi ensin Aurasta oikea datasetti (search/describe), "
-        "sitten kysy dataa query_data()-työkalulla tai hae suoraan "
-        "resurssin URL:sta. Tuettuja: REST/JSON, PxWeb, WFS, OData, CSV. "
-        "Esim. junien aikataulut: rata.digitraffic.fi/api/v1/trains/{pvm}/{numero}, "
-        "tilastot: query_data() PxWeb-suodattimilla, "
-        "sää: query_data() WFS-rajapinnasta. "
-        "Digitransit GraphQL vaatii API-avaimen (api.digitransit.fi).\n\n"
-        "RAJAUSAINEISTOT (data/boundaries/, EPSG:3067):\n"
-        "1) karttalehtijako.gpkg — MML:n TM35-ruutujako. "
-        "Tasot: utm200..utm5, utm1. Kenttä: lehtitunnus (esim. 'L4133A'). "
-        "Hierarkia: L4→L41→L413→L4133→L4133A→L4133A3. "
-        "Käytä bbox-rajauksia WFS/WCS-kyselyihin. "
-        "Mittakaava: utm50 maakunnille, utm25 kaupungeille, utm10 yksityiskohdille.\n"
-        "2) kuntajako_1000k.gpkg / kuntajako_10k.gpkg — MML:n hallinnolliset rajat. "
-        "Tasot: Kunta (308), Maakunta (19), Hyvinvointialue (23), Valtakunta (1). "
-        "Kentät: natcode (koodi), namefin (nimi fi), nameswe (nimi sv), landarea, totalarea. "
-        "Käytä kunnan/maakunnan bbox:ia aluerajauksiin: "
-        "SELECT MbrMinX(multipolygon),MbrMinY(multipolygon),"
-        "MbrMaxX(multipolygon),MbrMaxY(multipolygon) "
-        "FROM Kunta WHERE namefin='Helsinki'."
-    ),
+    instructions=build_instructions(is_readonly()),
     lifespan=_lifespan,
 )
 
