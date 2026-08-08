@@ -14,11 +14,36 @@ from aura.models import Resource
 logger = logging.getLogger(__name__)
 
 API = "https://avoindata.eduskunta.fi/api/v1/tables"
+
+# Sivutuksen oletuskoko rajapinnan normaalikäytössä (dokumentaatioarvo —
+# resurssien URL:t eivät sisällä sivutusparametreja).
 PAGE_SIZE = 100
 
-# Bisektoinnin yläraja. Suurin taulu (VaskiData) on ~348 000 riviä, joten
-# miljoona ylittää sen kolminkertaisesti. Raja on olemassa vain siltä
-# varalta että API alkaa palauttaa rivejä loputtomiin.
+# Koon mittauksessa haetaan pienin mahdollinen sivu. Kysymys on vain
+# "onko tällä sivulla rivejä", joten rivien sisältöä ei tarvita.
+#
+# Tämä ei ole mikro-optimointi. VaskiDatan rivit ovat kokonaisia
+# XML-asiakirjoja, ja mitattuna 2026-08-08:
+#     perPage=100 → 3,4 MB ja 5,6 s per pyyntö
+#     perPage=1   → 0,019 MB ja 0,1 s per pyyntö
+# Täysillä sivuilla bisektointi latasi satoja megatavuja asiakirjoja
+# pelkkään laskemiseen ja koko ajo kesti yli puoli tuntia.
+PROBE_SIZE = 1
+
+# Bisektoinnin yläraja riveinä.
+#
+# Speksi oletti VaskiDatan (~348 000 riviä) suurimmaksi tauluksi. Se oli
+# väärin: liitostauluissa rivit kertautuvat, ja mitattuna 2026-08-08
+# SaliDBAanestysAsiakirjalla on rivi vielä sivulla 5 000 000.
+#
+# Rajaa EI silti nosteta kattamaan niitä. Yksi koetin maksaa 2–7 s, joten
+# kymmenkertainen raja maksaisi ~7 lisäpyyntöä per taulu ja koko ajon
+# venyminen puoleen tuntiin — pelkän tarkkuuden vuoksi luvussa jota
+# katalogi ei tarvitse tarkkana.
+#
+# Ratkaisu on rehellisyys eikä tarkkuus: kattoon osunut mittaus kirjataan
+# muodossa "yli N riviä" (ks. harvest). Väärä tasaluku olisi ollut vika,
+# alarajaksi merkitty ei ole.
 MAX_ROWS = 1_000_000
 
 # Kuratoidut aineistot. Aineisto vastaa käyttötarkoitusta, ei API:n
@@ -199,10 +224,14 @@ class EduskuntaHarvester(BaseHarvester):
         return config
 
     async def _page_rows(
-        self, client: httpx.AsyncClient, table: str, page: int
+        self,
+        client: httpx.AsyncClient,
+        table: str,
+        page: int,
+        per_page: int = PROBE_SIZE,
     ) -> int:
         """Palauta rivimäärä yhdeltä sivulta."""
-        url = f"{API}/{table}/rows?perPage={PAGE_SIZE}&page={page}"
+        url = f"{API}/{table}/rows?perPage={per_page}&page={page}"
         response = await self._fetch(client, url)
         data = response.json()
         rows = data.get("rowData") or []
@@ -211,22 +240,22 @@ class EduskuntaHarvester(BaseHarvester):
     async def _measure_rows(self, client: httpx.AsyncClient, table: str) -> int:
         """Mittaa taulun rivimäärä bisektoimalla sivunumeroa.
 
+        Koetin käyttää ``PROBE_SIZE``-kokoista sivua, jolloin sivunumero
+        vastaa rivin indeksiä ja rivimäärä on suurin löytynyt indeksi + 1.
+
         ÄLÄ korvaa tätä /api/v1/tables/counts -kutsulla. Se on yksi pyyntö
-        272:n sijaan, mutta se ei palauta taulun rivimäärää: se väitti
-        SaliDBAanestys-taulun kooksi 96 (todellinen ~43 500) ja
+        parinkymmenen sijaan, mutta se ei palauta taulun rivimäärää: se
+        väitti SaliDBAanestys-taulun kooksi 96 (todellinen ~43 500) ja
         SeatingOfParliament-taulua tyhjäksi (todellisuudessa rivejä on).
         Todennäköisesti se kertoo viimeksi tuoduista riveistä.
         """
-        first = await self._page_rows(client, table, 0)
-        if first == 0:
+        if await self._page_rows(client, table, 0) == 0:
             return 0
-        if first < PAGE_SIZE:
-            return first
 
-        # Etsi suurin sivu jolla on rivejä. Invariantti: lo:lla on rivejä,
-        # hi:llä ei.
+        # Etsi suurin rivi-indeksi jolla on rivi. Invariantti: lo:lla on
+        # rivejä, hi:llä ei.
         lo = 0
-        hi = MAX_ROWS // PAGE_SIZE
+        hi = MAX_ROWS
         while hi - lo > 1:
             mid = (lo + hi) // 2
             if await self._page_rows(client, table, mid) > 0:
@@ -234,8 +263,7 @@ class EduskuntaHarvester(BaseHarvester):
             else:
                 hi = mid
 
-        last = await self._page_rows(client, table, lo)
-        return lo * PAGE_SIZE + last
+        return lo + 1
 
     async def harvest(self) -> int:
         count = 0
@@ -266,9 +294,24 @@ class EduskuntaHarvester(BaseHarvester):
                     for table in cfg["tables"]
                 ]
 
-                measured = ", ".join(
-                    f"{t}: {n:,} riviä".replace(",", " ") for t, n in sizes.items()
-                )
+                # Kattoon osunut mittaus on alaraja, ei mittaus. Se on
+                # sanottava ääneen: uskottavan näköinen tasaluku olisi
+                # juuri se hiljainen väärä tulos jota vastaan tässä
+                # projektissa on rakennettu check_count_regression.
+                parts = []
+                for t, n in sizes.items():
+                    if n >= MAX_ROWS:
+                        logger.warning(
+                            "[%s] Taulun %s koko osui bisektoinnin kattoon "
+                            "(%d) — todellinen määrä on suurempi",
+                            self.name,
+                            t,
+                            MAX_ROWS,
+                        )
+                        parts.append(f"{t}: yli {n:,} riviä".replace(",", " "))
+                    else:
+                        parts.append(f"{t}: {n:,} riviä".replace(",", " "))
+                measured = ", ".join(parts)
                 notes = cfg["notes_fi"]
                 if measured:
                     notes = f"{notes} Mitatut rivimäärät: {measured}."

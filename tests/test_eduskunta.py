@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aura.database import init_db
-from aura.harvesters.eduskunta import PAGE_SIZE, EduskuntaHarvester
+from aura.harvesters.eduskunta import MAX_ROWS, EduskuntaHarvester
 
 
 def _memory_db() -> sqlite3.Connection:
@@ -35,11 +35,14 @@ def _mock_client(sizes: dict[str, int]) -> AsyncMock:
         resp.raise_for_status = MagicMock()
 
         table = url.split("/tables/")[1].split("/")[0]
+        # Kunnioita pyydettyä sivukokoa: mittaus käyttää pientä koetinta,
+        # ja mockin pitää käyttäytyä kuten oikea API.
+        per_page = int(url.split("perPage=")[1].split("&")[0])
         page = int(url.split("page=")[1].split("&")[0])
         total = sizes.get(table, 0)
 
-        start = page * PAGE_SIZE
-        n = max(0, min(PAGE_SIZE, total - start))
+        start = page * per_page
+        n = max(0, min(per_page, total - start))
         resp.json.return_value = {
             "columnNames": ["a", "b"],
             "rowData": [["x", "y"] for _ in range(n)],
@@ -83,6 +86,58 @@ class TestMeasureRows:
         client = _mock_client({"T": 347655})
         await h._measure_rows(client, "T")
         assert client.get.call_count < 40
+
+    async def test_probe_uses_smallest_possible_page(self) -> None:
+        """Mittaus ei saa ladata sivullista dataa pelkkään laskemiseen.
+
+        VaskiDatan rivit ovat kokonaisia XML-asiakirjoja. Mitattuna
+        2026-08-08 perPage=100 painoi 3,4 MB ja kesti 5,6 s, perPage=1
+        painoi 0,019 MB ja kesti 0,1 s — samaan kysymykseen "onko rivejä".
+        Täysillä sivuilla koko ajo kesti yli puoli tuntia.
+        """
+        h = _harvester(_memory_db())
+        client = _mock_client({"T": 347655})
+        await h._measure_rows(client, "T")
+        called = [c.args[0] for c in client.get.call_args_list]
+        assert called, "mittaus ei tehnyt yhtään pyyntöä"
+        assert all("perPage=1&" in u for u in called), called[:3]
+
+
+class TestCeiling:
+    """Kattoon osunut mittaus on alaraja, ei mittaus — sen on näyttävä."""
+
+    async def test_capped_measurement_is_marked_as_lower_bound(self) -> None:
+        conn = _memory_db()
+        h = _harvester(conn)
+        # Taulu joka on suurempi kuin bisektoinnin katto.
+        client = _mock_client({"MemberOfParliament": MAX_ROWS * 2})
+
+        patcher = _patched(h, client)
+        try:
+            await h.harvest()
+        finally:
+            patcher.stop()  # type: ignore[attr-defined]
+
+        row = conn.execute(
+            "SELECT notes_fi FROM datasets WHERE id = 'eduskunta-kansanedustajat'"
+        ).fetchone()
+        assert "yli" in row["notes_fi"], row["notes_fi"]
+
+    async def test_normal_measurement_is_not_marked(self) -> None:
+        conn = _memory_db()
+        h = _harvester(conn)
+        client = _mock_client({"MemberOfParliament": 2677})
+
+        patcher = _patched(h, client)
+        try:
+            await h.harvest()
+        finally:
+            patcher.stop()  # type: ignore[attr-defined]
+
+        row = conn.execute(
+            "SELECT notes_fi FROM datasets WHERE id = 'eduskunta-kansanedustajat'"
+        ).fetchone()
+        assert "yli" not in row["notes_fi"]
 
 
 class TestDatasets:
