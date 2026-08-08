@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -17,12 +19,38 @@ from aura.size_estimator import parse_file_size
 
 logger = logging.getLogger(__name__)
 
+#: Kanta paketin sijaintiin nähden. Käytetään kun ``AURA_DB`` ei ole asetettu.
 DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "aura.db"
 MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "scripts" / "migrations"
 
+#: Ympäristömuuttuja jolla kannan polku ohitetaan.
+DB_PATH_ENV = "AURA_DB"
+
+
+def resolve_db_path(env: Mapping[str, str] | None = None) -> Path:
+    """Selvitä tarjoiltavan kannan polku.
+
+    Pakettipolku ei kelpaa konttiajossa: image asennetaan ``/app``:iin mutta
+    kanta halutaan erilliseen volumeen, eikä johdettua pro-kantaa voi tarjoilla
+    lainkaan ilman ohitusta.
+
+    Tyhjä tai pelkkää tyhjämerkkiä sisältävä arvo tulkitaan asettamattomaksi.
+    Se on yleinen vahinko (``AURA_DB=$UNSET``), ja tyhjänä polkuna se avaisi
+    yhteyden hakemistoon ``.`` ja kaatuisi hämärästi paljon myöhemmin.
+
+    Args:
+        env: Ympäristö josta luetaan. Oletuksena ``os.environ``.
+    """
+    if env is None:
+        env = os.environ
+    raw = env.get(DB_PATH_ENV, "").strip()
+    if not raw:
+        return DEFAULT_DB_PATH
+    return Path(raw).expanduser()
+
 
 def get_connection(
-    db_path: Path = DEFAULT_DB_PATH,
+    db_path: Path | None = None,
     *,
     check_same_thread: bool = True,
     readonly: bool = False,
@@ -30,12 +58,20 @@ def get_connection(
     """Avaa tietokantayhteys.
 
     Args:
-        db_path: Polku tietokantatiedostoon.
+        db_path: Polku tietokantatiedostoon. ``None`` = selvitä ``AURA_DB``:stä
+            tai käytä pakettipolkua. Eksplisiittinen arvo voittaa aina
+            ympäristömuuttujan.
         check_same_thread: Jos False, sallii yhteyden käytön eri threadeista.
             Turvallista WAL-moden kanssa read-heavy käytössä (esim. MCP-server).
         readonly: Jos True, avaa yhteys vain luettavaksi (``mode=ro``). Estää
             kaikki kirjoitukset jo SQLite-tasolla (remote read-only -moodi).
     """
+    # Selvitetään kutsuhetkellä, ei oletusargumentissa: oletusargumentti
+    # sidottaisiin importtihetkeen, jolloin muuttujan asettaminen sen jälkeen
+    # ei vaikuttaisi mihinkään ja vika näkyisi vasta väärän kannan sisältönä.
+    if db_path is None:
+        db_path = resolve_db_path()
+
     if readonly:
         # mode=ro: ei mkdiriä eikä WAL-pragmaa (ne kirjoittaisivat levylle).
         uri = f"file:{db_path}?mode=ro"
