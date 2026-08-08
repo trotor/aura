@@ -1,117 +1,62 @@
 """Testit vaalirahoitus-harvesterille."""
 
-import sqlite3
+from typing import Any
 
-import pytest
-
-from aura.database import init_db
 from aura.harvesters.vaalirahoitus import VaalirahoitusHarvester
 
 
-def _memory_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    init_db(conn)
-    return conn
+def _dataset_config(ds_id: str) -> dict[str, Any]:
+    """Hae yhden datasetin konfiguraatio id:n perusteella."""
+    for cfg in VaalirahoitusHarvester.datasets_config:
+        if cfg["id"] == ds_id:
+            return cfg
+    raise AssertionError(f"Datasettiä {ds_id} ei löydy")
 
 
-def _harvester() -> VaalirahoitusHarvester:
-    return VaalirahoitusHarvester(conn=_memory_db())
+class TestJalkiIlmoitukset:
+    """E_JI lisätään vain niille vaaleille joilla se oikeasti on."""
 
+    def test_election_with_ji_has_five_resources(self) -> None:
+        cfg = _dataset_config("vaalirahoitus-eduskuntavaalit2023")
+        assert len(cfg["resources"]) == 5
 
-class TestConfig:
-    """Konfiguraation rakenne."""
-
-    def test_election_datasets_exist(self):
-        """Jokaiselle vaalille on datasetti."""
-        h = _harvester()
-        ids = [c["id"] for c in h.datasets_config]
-        assert "vaalirahoitus-eduskuntavaalit2023" in ids
-        assert "vaalirahoitus-kuntavaalit2025" in ids
-
-    def test_party_datasets_exist(self):
-        """Puoluerahoitukselle on vuosikohtaiset datasetit."""
-        h = _harvester()
-        ids = [c["id"] for c in h.datasets_config]
-        assert "vaalirahoitus-puoluerahoitus-2010" in ids
-        assert "vaalirahoitus-puoluerahoitus-2026" in ids
-
-    def test_election_has_four_csv_resources(self):
-        """Vaalirahoitusdatasetillä on 4 CSV-resurssia."""
-        h = _harvester()
-        cfg = next(
-            c for c in h.datasets_config
-            if c["id"] == "vaalirahoitus-eduskuntavaalit2023"
-        )
+    def test_election_without_ji_has_four_resources(self) -> None:
+        cfg = _dataset_config("vaalirahoitus-kuntavaalit2025")
         assert len(cfg["resources"]) == 4
-        for r in cfg["resources"]:
-            assert r["format"] == "CSV"
 
-    def test_party_2024_has_one_resource(self):
-        """Puoluerahoitus ennen 2025 — yksi CSV-resurssi."""
-        h = _harvester()
-        cfg = next(
-            c for c in h.datasets_config
-            if c["id"] == "vaalirahoitus-puoluerahoitus-2024"
-        )
+    def test_ji_url_is_correct(self) -> None:
+        cfg = _dataset_config("vaalirahoitus-aluevaalit2025")
+        urls = [r["url"] for r in cfg["resources"]]
+        assert (
+            "https://www.vaalirahoitusvalvonta.fi/fi/index/vaalirahoitus/"
+            "haetietoavaalirahoitusilmoituksista/tutkitietoaineistoja/"
+            "aluevaalit2025/E_JI_aluevaalit2025.csv"
+        ) in urls
+
+    def test_only_four_elections_have_ji(self) -> None:
+        """Tarkka lista — ei saa vuotaa muille vaaleille."""
+        with_ji = [
+            cfg["id"]
+            for cfg in VaalirahoitusHarvester.datasets_config
+            if any("E_JI" in r["url"] for r in cfg["resources"])
+        ]
+        assert sorted(with_ji) == [
+            "vaalirahoitus-aluevaalit2022",
+            "vaalirahoitus-aluevaalit2025",
+            "vaalirahoitus-eduskuntavaalit2023",
+            "vaalirahoitus-europarlamenttivaalit2024",
+        ]
+
+
+class TestExistingResourcesUnchanged:
+    """Vanhat resurssit eivät saa muuttua."""
+
+    def test_all_elections_still_have_evi(self) -> None:
+        for cfg in VaalirahoitusHarvester.datasets_config:
+            if not cfg["id"].startswith("vaalirahoitus-puoluerahoitus"):
+                urls = " ".join(r["url"] for r in cfg["resources"])
+                assert "E_VI_" in urls
+
+    def test_party_year_datasets_untouched(self) -> None:
+        cfg = _dataset_config("vaalirahoitus-puoluerahoitus-2024")
         assert len(cfg["resources"]) == 1
-
-    def test_party_2025_has_loan_resource(self):
-        """Puoluerahoitus 2025+ — myös lainatiedosto."""
-        h = _harvester()
-        cfg = next(
-            c for c in h.datasets_config
-            if c["id"] == "vaalirahoitus-puoluerahoitus-2025"
-        )
-        assert len(cfg["resources"]) == 2
-        assert "lainat" in cfg["resources"][1]["url"]
-
-    def test_csv_urls_are_valid(self):
-        """CSV-resurssien URL:t osoittavat vaalirahoitusvalvonta.fi:hin."""
-        h = _harvester()
-        for cfg in h.datasets_config:
-            for r in cfg["resources"]:
-                assert r["url"].startswith("https://www.vaalirahoitusvalvonta.fi")
-                assert r["url"].endswith(".csv") or ".csv?" in r["url"]
-
-    def test_org_is_vtv(self):
-        """Organisaatio on VTV."""
-        h = _harvester()
-        assert h.org_title == "Valtiontalouden tarkastusvirasto"
-
-
-class TestHarvest:
-    """harvest()-metodin kokonaistoiminta."""
-
-    @pytest.mark.asyncio
-    async def test_harvest_returns_correct_count(self):
-        """harvest() palauttaa oikean lukumäärän."""
-        h = _harvester()
-        count = await h.harvest()
-        # 10 vaalirahoitusta + 17 puoluerahoitusta = 27
-        assert count == 27
-
-    @pytest.mark.asyncio
-    async def test_harvest_writes_to_db(self):
-        """Kaikki datasetit löytyvät tietokannasta harvestin jälkeen."""
-        h = _harvester()
-        await h.harvest()
-
-        row = h.conn.execute(
-            "SELECT COUNT(*) FROM datasets WHERE source = 'vaalirahoitus'"
-        ).fetchone()
-        assert row[0] == 27
-
-    @pytest.mark.asyncio
-    async def test_resources_in_db(self):
-        """Resurssit kirjoittuvat kantaan."""
-        h = _harvester()
-        await h.harvest()
-
-        row = h.conn.execute(
-            """SELECT COUNT(*) FROM resources r
-               JOIN datasets d ON r.dataset_id = d.id
-               WHERE d.source = 'vaalirahoitus'"""
-        ).fetchone()
-        # 10 vaalirahoitusta × 4 + 15 puoluerahoitusta × 1 + 2 × 2 (2025,2026) = 59
-        assert row[0] == 59

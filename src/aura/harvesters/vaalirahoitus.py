@@ -51,12 +51,14 @@ _ELECTIONS: list[dict[str, Any]] = [
         "title": "Aluevaalit 2022",
         "year": 2022,
         "keywords": ["aluevaalit", "hyvinvointialue", "2022"],
+        "has_ji": True,
     },
     {
         "slug": "eduskuntavaalit2023",
         "title": "Eduskuntavaalit 2023",
         "year": 2023,
         "keywords": ["eduskuntavaalit", "2023"],
+        "has_ji": True,
     },
     {
         "slug": "presidentinvaali2024",
@@ -69,12 +71,14 @@ _ELECTIONS: list[dict[str, Any]] = [
         "title": "Europarlamenttivaalit 2024",
         "year": 2024,
         "keywords": ["europarlamenttivaalit", "EU-vaalit", "2024"],
+        "has_ji": True,
     },
     {
         "slug": "aluevaalit2025",
         "title": "Aluevaalit 2025",
         "year": 2025,
         "keywords": ["aluevaalit", "hyvinvointialue", "2025"],
+        "has_ji": True,
     },
     {
         "slug": "kuntavaalit2025",
@@ -103,6 +107,20 @@ def _election_dataset(election: dict[str, Any]) -> dict[str, Any]:
         }
         for prefix, label in _CSV_TYPES
     ]
+    # Jälki-ilmoitukset julkaistaan vain osalle vaaleista. Varmennettu
+    # 2026-07-29: E_JI vastaa 200:lla neljälle vaalille, muille 404.
+    # Älä lisää tätä _CSV_TYPES-listaan — se loisi kuolleita linkkejä
+    # kuudelle vaalille.
+    if election.get("has_ji"):
+        resources.append(
+            {
+                "id": f"vaalirahoitus-{slug}-e-ji",
+                "name": f"{title} — Jälki-ilmoitukset",
+                "name_fi": f"{title} — Jälki-ilmoitukset",
+                "format": "CSV",
+                "url": f"{VR_BASE}/{slug}/E_JI_{slug}.csv",
+            }
+        )
     return {
         "id": f"vaalirahoitus-{slug}",
         "title": f"Vaalirahoitus: {title}",
