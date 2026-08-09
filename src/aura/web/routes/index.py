@@ -11,6 +11,27 @@ from aura.web.app import get_db
 router = APIRouter()
 
 
+def public_base_url(request: Request) -> str:
+    """Palauta julkinen juuriosoite kauttaviivoineen.
+
+    ``request.base_url`` kertoo skeeman jolla pyyntö saapui *sovellukseen*,
+    ei sitä jolla käyttäjä saapui. Käänteisproxyn takana se on aina http,
+    joten ländärin kopioitava MCP-konfiguraatio olisi väärä: asiakas
+    yrittäisi http:tä ja päätyisi uudelleenohjaukseen.
+
+    Luetaan siis ``X-Forwarded-Proto`` jos proxy sen asetti. Tämä ei nojaa
+    uvicornin ``--forwarded-allow-ips``-asetukseen, joten se toimii myös
+    silloin kun proxy näkyy kontista muuna kuin 127.0.0.1:nä.
+    """
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    base = str(request.base_url)
+    if forwarded in ("http", "https"):
+        scheme, _, rest = base.partition("://")
+        if scheme != forwarded:
+            base = f"{forwarded}://{rest}"
+    return base
+
+
 @router.get("/")
 async def index(request: Request) -> object:
     """Dashboard-etusivu tilastoineen."""
@@ -31,5 +52,9 @@ async def index(request: Request) -> object:
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"stats": stats, "sources": [dict(s) for s in sources]},
+        {
+            "stats": stats,
+            "sources": [dict(s) for s in sources],
+            "base_url": public_base_url(request),
+        },
     )

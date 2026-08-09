@@ -59,6 +59,17 @@ class TestLandingPage:
     def test_landing_shows_mcp_endpoint(self, client: TestClient) -> None:
         assert "/mcp" in client.get("/").text
 
+    def test_landing_honours_forwarded_proto(self, client: TestClient) -> None:
+        """Käänteisproxyn takana kopioitavan osoitteen on oltava https.
+
+        ``request.base_url`` kertoo skeeman jolla pyyntö saapui sovellukseen,
+        eli nginxin takana aina http. Väärä skeema ohjaisi asiakkaan
+        uudelleenohjauksen taakse.
+        """
+        body = client.get("/", headers={"X-Forwarded-Proto": "https"}).text
+        assert "https://testserver/mcp" in body
+        assert "http://testserver/mcp" not in body
+
 
 class TestMcpMount:
     def test_mcp_initialize_works(self, client: TestClient) -> None:
