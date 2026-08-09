@@ -325,9 +325,24 @@ def main() -> None:
         from aura.serve import resolve_serve_config
         from aura.server import apply_readonly_gating, mcp
 
-        apply_readonly_gating(mcp)
         cfg = resolve_serve_config(http=args.http, host=args.host, port=args.port)
-        mcp.run(**cfg.run_args())
+
+        if cfg.transport == "stdio":
+            apply_readonly_gating(mcp)
+            mcp.run(**cfg.run_args())
+        else:
+            # HTTP-moodissa tarjoillaan web-UI ja MCP samasta prosessista:
+            # juuri on ländärisivu, /mcp on endpoint. create_asgi_app()
+            # hoitaa gateyksen ja lifespanien ketjutuksen.
+            import uvicorn
+
+            from aura.asgi import create_asgi_app
+
+            uvicorn.run(
+                create_asgi_app(stateless_http=cfg.stateless_http),
+                host=cfg.host or "127.0.0.1",
+                port=cfg.port or 8000,
+            )
 
     elif args.command == "search":
         from aura.database import get_connection, init_db, search_datasets

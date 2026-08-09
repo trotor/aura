@@ -5,8 +5,58 @@
 {% block content %}
 <hgroup>
     <h1>Aura</h1>
-    <p>Suomalaisen avoimen datan selain</p>
+    <p>Suomalaisen avoimen datan hakupalvelu — {{ stats.total_datasets }} aineistoa
+       {{ sources|length }} lähteestä, yhdestä paikasta haettuna.</p>
 </hgroup>
+
+<p>
+    Aura kerää Suomen avoimen datan aineistojen metatiedot samaan hakemistoon:
+    Tilastokeskus, THL, Luke, SYKE, Ilmatieteen laitos, kunnat, eduskunta ja
+    kymmenet muut. Voit selata niitä täällä tai liittää Auran suoraan
+    tekoälyavustajaasi.
+</p>
+
+<div class="grid">
+    <article>
+        <header><h3>Liitä tekoälyavustajaan (MCP)</h3></header>
+        <p>
+            Aura puhuu <a href="https://modelcontextprotocol.io" target="_blank"
+            rel="noopener">Model Context Protocolia</a>. Lisää tämä asiakkaasi
+            asetuksiin, niin avustaja osaa hakea ja lukea aineistoja puolestasi:
+        </p>
+<pre><code>{
+  "mcpServers": {
+    "aura": { "url": "{{ request.base_url }}mcp" }
+  }
+}</code></pre>
+        <p><small>
+            Endpoint: <code>{{ request.base_url }}mcp</code> — ei vaadi
+            tunnuksia. Palvelu on <strong>vain luku</strong>: hakutyökalut ovat
+            käytössä, kantaa muokkaavat eivät.
+        </small></p>
+    </article>
+
+    <article>
+        <header><h3>Avointa lähdekoodia — aja itse</h3></header>
+        <p>
+            Aura on MIT-lisensoitu ja koodi on kokonaan julkista. Voit ajaa oman
+            instanssin omalla koneellasi tai palvelimellasi — myös tämä sivu ja
+            MCP-endpoint tulevat samasta repositoriosta.
+        </p>
+<pre><code>git clone https://github.com/trotor/aura
+cd aura &amp;&amp; python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+aura serve --http</code></pre>
+        <p><small>
+            Lähdekoodi ja ohjeet:
+            <a href="https://github.com/trotor/aura" target="_blank" rel="noopener">
+            github.com/trotor/aura</a>. Tietokanta on osa repositoriota, joten
+            aineistot ovat mukana heti kloonauksen jälkeen — harvestointia ei
+            tarvitse ajaa itse.
+        </small></p>
+    </article>
+</div>
 
 <div class="grid">
     <article>

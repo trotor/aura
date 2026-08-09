@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from aura.config import is_readonly
 from aura.database import get_connection, init_db
 
 WEB_DIR = Path(__file__).parent
@@ -23,10 +24,17 @@ _db_conn: sqlite3.Connection | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Hallitse tietokantayhteyttä sovelluksen elinkaaren ajan."""
+    """Hallitse tietokantayhteyttä sovelluksen elinkaaren ajan.
+
+    Read-only-moodissa yhteys avataan ``mode=ro`` eikä migraatioita ajeta.
+    Ilman tätä sovellus ei nouse etäpalvelimella lainkaan: ``init_db()``
+    kirjoittaa skeemaa, ja kanta on siellä kirjoitussuojattu.
+    """
     global _db_conn
-    _db_conn = get_connection(check_same_thread=False)
-    init_db(_db_conn)
+    readonly = is_readonly()
+    _db_conn = get_connection(check_same_thread=False, readonly=readonly)
+    if not readonly:
+        init_db(_db_conn)
     try:
         yield
     finally:
@@ -41,12 +49,17 @@ def get_db(request: Request) -> sqlite3.Connection:
     return _db_conn
 
 
-def create_app() -> FastAPI:
-    """Luo ja konfiguroi FastAPI-sovellus."""
+def create_app(lifespan: object = lifespan) -> FastAPI:
+    """Luo ja konfiguroi FastAPI-sovellus.
+
+    Args:
+        lifespan: Ohitettavissa, jotta yhdistetty ASGI-sovellus voi ketjuttaa
+            tämän ja FastMCP:n lifespanin (ks. ``aura.asgi``).
+    """
     app = FastAPI(
         title="Aura",
         description="Suomalaisen avoimen datan selain",
-        lifespan=lifespan,
+        lifespan=lifespan,  # type: ignore[arg-type]
     )
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))

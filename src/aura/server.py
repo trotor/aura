@@ -73,7 +73,13 @@ def apply_readonly_gating(
         return []
     removed: list[str] = []
     for name in WRITE_TOOL_NAMES:
-        server.local_provider.remove_tool(name)
+        try:
+            server.local_provider.remove_tool(name)
+        except KeyError:
+            # Jo poistettu. Gateys on idempotentti, koska ``mcp`` on
+            # moduulitason singleton: sovellus voidaan rakentaa useammin
+            # kuin kerran samassa prosessissa (testit, uudelleenlataus).
+            continue
         removed.append(name)
     return removed
 
