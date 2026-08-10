@@ -235,3 +235,51 @@ class TestSotkanetHarvester:
             count = await harvester.harvest()
 
         assert count == 0
+
+
+class TestDataUrlsAreFetchable:
+    """Resurssi-URL:ien on oltava ladattavia, ei URL-malleja.
+
+    Mitattu 2026-08-10: ``/rest/1.1/csv?indicator=N`` palautti HTTP 400
+    kuudella otannalla kuudesta, samoin ``/json?indicator=N``. Rajapinta
+    vaatii **sekä** ``years`` että ``genders``; ``regions`` on valinnainen.
+    Ilman niitä katalogissa oli 3 772 kuollutta CSV-linkkiä ja yhtä monta
+    rikkinäistä JSON-linkkiä — 13 % kaikista resursseista.
+    """
+
+    def test_csv_url_has_required_params(self) -> None:
+        h = SotkanetHarvester(conn=_memory_db())
+        ds = h._build_dataset(INDICATOR_LIST_ITEM, INDICATOR_DETAIL)
+        csv = next(r for r in ds.resources if r.format == "CSV")
+        assert "genders=total" in csv.url
+        assert "years=" in csv.url
+
+    def test_json_url_has_required_params(self) -> None:
+        h = SotkanetHarvester(conn=_memory_db())
+        ds = h._build_dataset(INDICATOR_LIST_ITEM, INDICATOR_DETAIL)
+        js = next(r for r in ds.resources if r.format == "JSON")
+        assert "genders=total" in js.url
+        assert "years=" in js.url
+
+    def test_uses_indicator_own_year_range(self) -> None:
+        """Vuodet tulevat indikaattorin omasta range-kentästä."""
+        h = SotkanetHarvester(conn=_memory_db())
+        ds = h._build_dataset(INDICATOR_LIST_ITEM, INDICATOR_DETAIL)
+        csv = next(r for r in ds.resources if r.format == "CSV")
+        assert "years=1996" in csv.url
+        assert "years=2024" in csv.url
+
+    def test_missing_range_still_produces_usable_url(self) -> None:
+        """Ilman range-tietoa URL ei saa jäädä ladattavaksi kelpaamattomaksi."""
+        h = SotkanetHarvester(conn=_memory_db())
+        ds = h._build_dataset(INDICATOR_LIST_ITEM, {"range": {}})
+        csv = next(r for r in ds.resources if r.format == "CSV")
+        assert "genders=total" in csv.url
+        assert "years=" in csv.url
+
+    def test_web_url_is_unchanged(self) -> None:
+        """Selainsivu toimii pelkällä indikaattoritunnuksella."""
+        h = SotkanetHarvester(conn=_memory_db())
+        ds = h._build_dataset(INDICATOR_LIST_ITEM, INDICATOR_DETAIL)
+        web = next(r for r in ds.resources if r.format == "HTML")
+        assert web.url.endswith("taulukko?indicator=4")

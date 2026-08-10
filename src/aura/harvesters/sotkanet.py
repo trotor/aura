@@ -33,6 +33,38 @@ MAX_CONCURRENT = 20
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
+# Sotkanetin data-endpointit vaativat SEKÄ vuodet ETTÄ sukupuolen.
+# Pelkkä ``?indicator=N`` palauttaa HTTP 400 — mitattu 2026-08-10, kuusi
+# otantaa kuudesta. Ilman näitä parametreja katalogissa oli 3 772 kuollutta
+# CSV-linkkiä ja yhtä monta rikkinäistä JSON-linkkiä.
+#
+# ``regions`` on valinnainen: ilman sitä palautuvat kaikki aluetasot, mikä
+# on katalogilinkille oikea oletus.
+_DEFAULT_GENDER = "total"
+
+# Käytetään kun indikaattorin metatiedoissa ei ole vuosiväliä. Sotkanetin
+# vanhimmat sarjat alkavat 1990-luvulta; liian laaja väli on harmiton
+# (puuttuvat vuodet jäävät pois vastauksesta), liian kapea kadottaisi dataa.
+_FALLBACK_YEARS = (1990, 2026)
+
+
+def _data_query(
+    indicator_id: int | str,
+    start_year: int | str | None,
+    end_year: int | str | None,
+) -> str:
+    """Rakenna ladattava kyselymerkkijono indikaattorin data-endpointille."""
+    try:
+        start, end = int(start_year or ""), int(end_year or "")
+    except (TypeError, ValueError):
+        start, end = _FALLBACK_YEARS
+    if end < start:
+        start, end = _FALLBACK_YEARS
+
+    years = "".join(f"&years={y}" for y in range(start, end + 1))
+    return f"indicator={indicator_id}{years}&genders={_DEFAULT_GENDER}"
+
+
 def _strip_html(text: str) -> str:
     """Poista HTML-tägit ja dekoodaa entiteetit."""
     if not text:
@@ -189,13 +221,14 @@ class SotkanetHarvester(BaseHarvester):
         update_frequency = "vuosittain"  # Sotkanet päivittyy tyypillisesti vuosittain
 
         # Resurssit
+        data_query = _data_query(ind_id, start_year, end_year)
         resources = [
             Resource(
                 id=f"sotkanet-{ind_id}-json",
                 name=f"{title_fi} (JSON API)",
                 name_fi=f"{title_fi} (JSON API)",
                 format="JSON",
-                url=f"{API_BASE}/json?indicator={ind_id}",
+                url=f"{API_BASE}/json?{data_query}",
                 description=f"Sotkanet REST API — indikaattori {ind_id}",
             ),
             Resource(
@@ -203,7 +236,7 @@ class SotkanetHarvester(BaseHarvester):
                 name=f"{title_fi} (CSV)",
                 name_fi=f"{title_fi} (CSV)",
                 format="CSV",
-                url=f"{API_BASE}/csv?indicator={ind_id}",
+                url=f"{API_BASE}/csv?{data_query}",
                 description=f"Sotkanet CSV-lataus — indikaattori {ind_id}",
             ),
             Resource(
