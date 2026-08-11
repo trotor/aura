@@ -19,8 +19,8 @@ def test_ilman_muuttujaa_kaytetaan_pakettipolkua() -> None:
 
 
 def test_muuttuja_ohittaa_pakettipolun() -> None:
-    assert resolve_db_path(env={"AURA_DB": "/data/aura-pro.db"}) == Path(
-        "/data/aura-pro.db"
+    assert resolve_db_path(env={"AURA_DB": "/data/oma.db"}) == Path(
+        "/data/oma.db"
     )
 
 

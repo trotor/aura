@@ -18,8 +18,8 @@ RUN pip install -e .
 
 # 2) Kopioi tietokanta (ajonaikainen riippuvuus). Boundaries jätetään pois.
 #    Tämä on oletus. Ohita AURA_DB-ympäristömuuttujalla kun kanta tulee
-#    volumesta eikä imagesta — esim. johdettu pro-kanta:
-#      docker run -v aura-data:/data -e AURA_DB=/data/aura-pro.db ...
+#    volumesta eikä imagesta:
+#      docker run -v aura-data:/data -e AURA_DB=/data/aura.db ...
 COPY data/aura.db ./data/aura.db
 
 # 3) Read-only remote on oletus tälle imagelle.
