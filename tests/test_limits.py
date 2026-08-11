@@ -95,10 +95,16 @@ class TestLemmatisoijanEsilataus:
     paljastuu vasta ensimmäisellä käyttäjän haulla.
     """
 
-    def test_warm_lemmatizer_on_kutsuttavissa(self) -> None:
-        from aura.server import warm_lemmatizer
+    def test_warm_caches_on_kutsuttavissa(self) -> None:
+        import sqlite3
 
-        warm_lemmatizer()
+        from aura.database import init_db
+        from aura.server import warm_caches
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        init_db(conn)
+        warm_caches(conn)
 
     def test_lifespan_lampimittaa_mallin(self) -> None:
         """Vartija: jos kutsu poistetaan lifespanista, muistipiikki palaa."""
@@ -106,4 +112,4 @@ class TestLemmatisoijanEsilataus:
 
         from aura.server import _lifespan
 
-        assert "warm_lemmatizer()" in inspect.getsource(_lifespan)
+        assert "warm_caches(conn)" in inspect.getsource(_lifespan)

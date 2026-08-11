@@ -22,8 +22,8 @@ from aura.yso import YsoClient, build_fts5_query
 logger = logging.getLogger(__name__)
 
 
-def warm_lemmatizer() -> None:
-    """Lataa suomen kielimalli muistiin heti käynnistyksessä.
+def warm_caches(conn: sqlite3.Connection) -> None:
+    """Lataa laiskat rakenteet muistiin heti käynnistyksessä.
 
     ``simplemma`` lataa mallinsa laiskasti ensimmäisellä kutsulla, ja lataus
     maksaa satoja megatavuja: mitattuna prosessin RSS nousi 23 MB → 745 MB
@@ -34,11 +34,18 @@ def warm_lemmatizer() -> None:
     käyttäjän haku osuu — eli juuri silloin kun sitä ei odota. Jaetulla
     palvelimella se on huono tapa yllättää naapuri.
 
+    Sama koskee yhdyssanasanastoa (``aura.decompound``): se rakennetaan
+    kannasta ensimmäisellä haulla ja vie noin 13 MB. Pienempi kuin
+    kielimalli, mutta sama periaate — mitattavan profiilin on vastattava
+    todellista.
+
     Sivuhyöty: ensimmäinen haku ei ole enää muita hitaampi.
     """
+    from aura.decompound import load_lexicon
     from aura.lemmatize import lemmatize_text
 
     lemmatize_text("lämmitys")
+    load_lexicon(conn)
 
 
 @asynccontextmanager
@@ -49,7 +56,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if not readonly:
         # init_db kirjoittaa (migraatiot/skeema) → ohitetaan read-only-moodissa.
         init_db(conn)
-    warm_lemmatizer()
+    warm_caches(conn)
     yso = YsoClient()
     try:
         yield {"db": conn, "findings": [], "yso": yso}
