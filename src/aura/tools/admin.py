@@ -9,6 +9,7 @@ from fastmcp import Context
 import aura.server as _server
 from aura.constants import format_date
 from aura.database import get_all_sources, get_stats, upsert_source
+from aura.limits import MAX_LIST_LIMIT, clamp
 from aura.search import format_stats
 from aura.server import mcp
 
@@ -27,6 +28,7 @@ def list_organizations(limit: int = 20, ctx: Context | None = None) -> str:
     Args:
         limit: Näytettävien organisaatioiden enimmäismäärä
     """
+    limit = clamp(limit, MAX_LIST_LIMIT)
     conn = _server._get_conn(ctx)
     rows = conn.execute(
         """
@@ -67,6 +69,7 @@ def list_formats(limit: int = 20, ctx: Context | None = None) -> str:
     Args:
         limit: Näytettävien formaattien enimmäismäärä
     """
+    limit = clamp(limit, MAX_LIST_LIMIT)
     conn = _server._get_conn(ctx)
     rows = conn.execute(
         """

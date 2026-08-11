@@ -12,6 +12,7 @@ from typing import Any
 from fastmcp import Context
 
 import aura.server as _server
+from aura.limits import MAX_LIST_LIMIT, clamp
 from aura.server import mcp
 
 
@@ -117,6 +118,7 @@ def find_map_sheets(
         prefix: Tunnusprefiksi (esim. 'L413') — hierarkkinen rajaus.
         limit: Tulosten enimmäismäärä (oletus 50).
     """
+    limit = clamp(limit, MAX_LIST_LIMIT)
     if not (bbox or point or prefix):
         return (
             "Anna vähintään yksi suodatin: bbox ('minx,miny,maxx,maxy'), "

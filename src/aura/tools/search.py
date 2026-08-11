@@ -15,6 +15,7 @@ from aura.database import (
     get_dataset,
     search_datasets,
 )
+from aura.limits import MAX_SEARCH_LIMIT, clamp
 from aura.search import format_dataset_summary
 from aura.server import mcp
 
@@ -39,7 +40,7 @@ async def search(
 
     Args:
         query: Hakusanat (esim. "helsingin väestö", "ilmanlaatu", "joukkoliikenne")
-        limit: Tulosten enimmäismäärä (oletus 10)
+        limit: Tulosten enimmäismäärä (oletus 10, katto 100)
         offset: Ohita ensimmäiset N tulosta (sivutus)
         source: Suodata lähteen mukaan (esim. "avoindata.fi", "hri.fi", "statfin")
         format: Suodata formaatin mukaan (esim. "CSV", "JSON", "GeoJSON")
@@ -47,6 +48,7 @@ async def search(
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
         region: Suodata alueellisesti (kunnan nimi, maakunta tai postinumero)
     """
+    limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
 
     # YSO-hakulaajennus
@@ -95,7 +97,7 @@ async def search_structured(
 
     Args:
         query: Hakusanat (esim. "väestö", "ilmanlaatu")
-        limit: Tulosten enimmäismäärä (oletus 10)
+        limit: Tulosten enimmäismäärä (oletus 10, katto 100)
         offset: Ohita ensimmäiset N tulosta (sivutus)
         source: Suodata lähteen mukaan (esim. "avoindata.fi")
         format: Suodata formaatin mukaan (esim. "CSV")
@@ -105,6 +107,7 @@ async def search_structured(
     """
     import json
 
+    limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
     expanded_query = await _server._expand_query(query, ctx)
 
@@ -165,6 +168,7 @@ async def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> s
         topic: Aihe tai teema (esim. "liikenne Helsinki", "ilmastonmuutos")
         limit: Suositusten enimmäismäärä (oletus 5)
     """
+    limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
     expanded_query = await _server._expand_query(topic, ctx)
     # Hae enemmän tuloksia kuin limit, jotta voidaan järjestää uudelleen
@@ -255,6 +259,7 @@ def find_related(dataset_id: str, limit: int = 5, ctx: Context | None = None) ->
         dataset_id: Datasetin ID tai nimi
         limit: Tulosten enimmäismäärä (oletus 5)
     """
+    limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
     dataset = get_dataset(conn, dataset_id)
     if dataset is None:
@@ -296,6 +301,7 @@ async def search_by_region(
         query: Valinnainen lisähakutermi
         limit: Tulosten enimmäismäärä
     """
+    limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
     region = region.strip()
 

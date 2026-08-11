@@ -6,6 +6,7 @@ from fastmcp import Context
 
 import aura.server as _server
 from aura.constants import format_date
+from aura.limits import MAX_LIST_LIMIT, clamp
 from aura.server import mcp
 
 
@@ -20,9 +21,10 @@ async def health_check(
 
     Args:
         source: Rajaa lähteeseen (esim. "avoindata.fi")
-        limit: Tarkistettavien resurssien enimmäismäärä (oletus 50)
+        limit: Tarkistettavien resurssien enimmäismäärä (oletus 50, katto 200)
         stale_days: Tarkista uudelleen vain N päivää vanhat (oletus 7)
     """
+    limit = clamp(limit, MAX_LIST_LIMIT)
     from aura.health import check_all_resources as _check_all
 
     conn = _server._get_conn(ctx)

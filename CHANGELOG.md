@@ -15,6 +15,13 @@ datasettiin. Lisäksi korjattiin 7 544 kuollutta resurssilinkkiä — noin
 neljännes koko katalogista.
 
 ### Added
+- **Katot työkaluparametreille** (`aura.limits`): hakupinnalla ei ollut
+  ylärajaa, joten `search(limit=1000000)` olisi rakentanut vastauksen kaikista
+  osumista. `query_data` oli rajattu alusta asti, haku ei. Katot: haku 100,
+  listaukset ja raportit 200, vertailu 5 datasettiä. Negatiivinen arvo
+  nostetaan minimiin, koska SQLite tulkitsee negatiivisen `LIMIT`in
+  rajattomaksi. Katot on kirjattu myös työkalujen kuvauksiin, ja testi lukee
+  ne MCP:n työkalulistalta — kuvaus ja toteutus eivät pääse eriytymään
 - **Web-UI ja MCP samasta prosessista** (`aura.asgi`): `aura serve --http`
   tarjoilee nyt FastAPIn juuressa ja FastMCP:n polussa `/mcp`. Aiemmin se ajoi
   pelkkää MCP:tä, joten juuri palautti 404 vaikka web-templatet olivat olemassa

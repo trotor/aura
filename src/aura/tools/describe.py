@@ -17,6 +17,7 @@ from aura.database import (
     get_source,
     get_stale_enrichments,
 )
+from aura.limits import MAX_COMPARE_DATASETS
 from aura.quality import get_quality_scores
 from aura.search import format_dataset_detail
 from aura.server import mcp
@@ -97,12 +98,12 @@ def compare(dataset_ids: list[str], ctx: Context | None = None) -> str:
     """Vertaile datasettejä rinnakkain.
 
     Args:
-        dataset_ids: Lista datasetin ID:istä tai nimistä (2–5 kpl)
+        dataset_ids: Lista datasetin ID:istä tai nimistä (2–5 kpl, katto 5)
     """
     if len(dataset_ids) < 2:
         return "Anna vähintään 2 datasetin ID:tä vertailua varten."
-    if len(dataset_ids) > 5:
-        return "Vertaile korkeintaan 5 datasettiä kerrallaan."
+    if len(dataset_ids) > MAX_COMPARE_DATASETS:
+        return f"Vertaile korkeintaan {MAX_COMPARE_DATASETS} datasettiä kerrallaan."
 
     conn = _server._get_conn(ctx)
     datasets = get_datasets_by_ids(conn, dataset_ids)

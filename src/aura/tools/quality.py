@@ -6,6 +6,7 @@ from fastmcp import Context
 
 import aura.server as _server
 from aura.database import get_dataset
+from aura.limits import MAX_LIST_LIMIT, clamp
 from aura.quality import get_quality_scores
 from aura.server import mcp
 
@@ -174,6 +175,7 @@ def quality_ranking(
         source: Rajaa lähteeseen (tyhjä = kaikki)
         limit: Tulosten enimmäismäärä (oletus 10)
     """
+    limit = clamp(limit, MAX_LIST_LIMIT)
     conn = _server._get_conn(ctx)
 
     valid_dims = {
@@ -246,6 +248,7 @@ def quality_gaps(
         source: Rajaa lähteeseen (esim. "avoindata.fi")
         limit: Parannusehdotusten enimmäismäärä (oletus 10)
     """
+    limit = clamp(limit, MAX_LIST_LIMIT)
     from aura.quality import analyze_metadata_gaps, suggest_improvements
 
     conn = _server._get_conn(ctx)
