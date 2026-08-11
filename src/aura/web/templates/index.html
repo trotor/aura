@@ -38,11 +38,25 @@
 
     <article>
         <header><h3>Avointa lähdekoodia — aja itse</h3></header>
+        {% if instance.is_extended %}
+        <p>
+            Aura on MIT-lisensoitu ja koodi on kokonaan julkista. Voit ajaa oman
+            instanssin omalla koneellasi tai palvelimellasi.
+        </p>
+        <p>
+            <strong>Tämä palvelin ajaa laajennettua versiota{% if instance.name %}
+            ({{ instance.name }}){% endif %}.</strong>
+            {% if instance.note %}{{ instance.note }}{% endif %}
+            Avoin versio sisältää saman aineiston ja saman hakukoneen; laajennus
+            on lisäkerros sen päällä.
+        </p>
+        {% else %}
         <p>
             Aura on MIT-lisensoitu ja koodi on kokonaan julkista. Voit ajaa oman
             instanssin omalla koneellasi tai palvelimellasi — myös tämä sivu ja
             MCP-endpoint tulevat samasta repositoriosta.
         </p>
+        {% endif %}
 <pre><code>git clone https://github.com/trotor/aura
 cd aura &amp;&amp; python -m venv .venv
 source .venv/bin/activate

@@ -164,3 +164,31 @@ class TestReadonly:
 
     def test_readonly_serves_landing(self, readonly_client: TestClient) -> None:
         assert readonly_client.get("/").status_code == 200
+
+
+class TestInstanssikuvaus:
+    """Ländärin on kerrottava totuus siitä mitä palvelin ajaa.
+
+    Sivu väitti aiemmin ehdoitta että "tämä sivu ja MCP-endpoint tulevat
+    samasta repositoriosta". Väite lakkaa olemasta totta heti kun instanssi
+    ajaa laajennettua kerrosta, ja väärä väite julkisella sivulla on pahempi
+    kuin puuttuva.
+    """
+
+    def test_oletuksena_kertoo_olevansa_sama_kuin_repositorio(
+        self, client: TestClient
+    ) -> None:
+        assert "tulevat samasta repositoriosta" in client.get("/").text
+
+    def test_laajennettu_instanssi_kertoo_siita(
+        self, db_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AURA_DB", str(db_path))
+        monkeypatch.setenv("AURA_INSTANCE_NAME", "Aura Pro")
+        monkeypatch.setenv("AURA_INSTANCE_NOTE", "Kenttätason indeksi mukana.")
+        with TestClient(create_asgi_app()) as c:
+            body = c.get("/").text
+        assert "laajennettua versiota" in body
+        assert "Aura Pro" in body
+        assert "Kenttätason indeksi mukana." in body
+        assert "tulevat samasta repositoriosta" not in body

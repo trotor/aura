@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 
 from aura.database import get_stats
+from aura.instance import describe_instance
 from aura.web.app import get_db
 
 router = APIRouter()
@@ -56,5 +57,6 @@ async def index(request: Request) -> object:
             "stats": stats,
             "sources": [dict(s) for s in sources],
             "base_url": public_base_url(request),
+            "instance": describe_instance(),
         },
     )
