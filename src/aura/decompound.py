@@ -81,8 +81,12 @@ class Lexicon(NamedTuple):
         return self.counts.get(word, 0) / self.total < MAX_PART_SHARE
 
 
-_lexicon: Lexicon | None = None
-_split_cache: dict[str, list[str] | None] = {}
+# Välimuisti on avainnettu kannan tiedostopolkuun. Ilman avainta ensimmäinen
+# ladattu kanta määräisi sanaston kaikille — ja se on aito vika eikä vain
+# testihäiriö: sama prosessi voi avata kaksi kantaa (esim. avoimen ja
+# johdetun vertailu), jolloin toinen saisi väärän sanaston.
+_lexicons: dict[str, Lexicon] = {}
+_split_caches: dict[str, dict[str, list[str] | None]] = {}
 
 
 def build_lexicon(
@@ -116,20 +120,30 @@ def build_lexicon(
     return Lexicon(kept, total)
 
 
+def _db_key(conn: sqlite3.Connection) -> str:
+    """Tunniste kannalle, jotta välimuisti ei mene ristiin kantojen välillä."""
+    try:
+        for _, name, file in conn.execute("PRAGMA database_list"):
+            if name == "main":
+                return str(file or ":memory:")
+    except sqlite3.Error:
+        pass
+    return ":memory:"
+
+
 def load_lexicon(conn: sqlite3.Connection) -> Lexicon:
-    """Rakenna sanasto kerran prosessia kohti ja pidä se muistissa."""
-    global _lexicon
-    if _lexicon is None:
-        _lexicon = build_lexicon(conn)
-        _split_cache.clear()
-    return _lexicon
+    """Rakenna sanasto kerran kantaa kohti ja pidä se muistissa."""
+    key = _db_key(conn)
+    if key not in _lexicons:
+        _lexicons[key] = build_lexicon(conn)
+        _split_caches[key] = {}
+    return _lexicons[key]
 
 
 def reset_lexicon() -> None:
-    """Unohda välimuistiin jäänyt sanasto (testit, uudelleenindeksointi)."""
-    global _lexicon
-    _lexicon = None
-    _split_cache.clear()
+    """Unohda välimuistiin jääneet sanastot (testit, uudelleenindeksointi)."""
+    _lexicons.clear()
+    _split_caches.clear()
 
 
 def split_compound(word: str, lexicon: Lexicon) -> list[str] | None:
@@ -165,16 +179,17 @@ def expand(word: str, lexicon: Lexicon) -> list[str]:
 
     Tämä on se muoto jota sekä indeksointi että kysely käyttävät.
     """
-    cached = _split_cache.get(word)
-    if cached is None and word in _split_cache:
-        return [word]
+    cache = _split_caches.setdefault(id(lexicon.counts).__str__(), {})
+    if word in cache:
+        parts = cache[word]
+        return [word, *parts] if parts else [word]
 
     parts = split_compound(word, lexicon)
     if parts:
         # Yleiset osat pudotetaan: ne eivät erottele, mutta laajentavat
         # tulosjoukon hallitsemattomaksi löysässä vaiheessa.
         parts = [p for p in parts if lexicon.is_informative(p)]
-    _split_cache[word] = parts or None
+    cache[word] = parts or None
     if not parts:
         return [word]
     return [word, *parts]
