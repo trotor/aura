@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from aura.database import init_db
-from aura.harvesters.finap import FinapHarvester, NAP_CATEGORIES
+from aura.harvesters.finap import NAP_CATEGORIES, FinapHarvester
 
 
 def _memory_db() -> sqlite3.Connection:

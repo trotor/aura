@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from aura.database import init_db
-from aura.harvesters.mml import MML_BASE, MmlHarvester
+from aura.harvesters.mml import MmlHarvester
 
 
 def _memory_db() -> sqlite3.Connection:

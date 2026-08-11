@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import uuid
 
-import pytest
-
 from aura.search import (
     _enrichment_age_warning,
     _format_enrichment_value,
@@ -16,7 +14,6 @@ from aura.search import (
     format_enrichments,
     format_stats,
 )
-
 
 # --- format_dataset_summary ---
 

@@ -6,10 +6,6 @@ import pytest
 
 from aura.database import init_db
 from aura.harvesters.luke_kartta import (
-    GEOSERVER,
-    INSPIRE_WFS,
-    LUKE_WMS,
-    MVMI_WMS,
     LukeKarttaHarvester,
 )
 from aura.harvesters.static import StaticHarvester

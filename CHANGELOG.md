@@ -15,6 +15,16 @@ datasettiin. Lisäksi korjattiin 7 544 kuollutta resurssilinkkiä — noin
 neljännes koko katalogista.
 
 ### Added
+- **Yhdyssanojen pilkkominen** (`aura.decompound`): evaluaation suurin
+  yksittäinen hakupuute. Lemmatisointi tuottaa koko yhdyssanan perusmuodon
+  (`satotilastot` → `satotilasto`), mutta korpuksessa on osat — kysely
+  `maatalouden satotilastot` sai recall 0,00 vaikka Lukella on kuusi
+  satoaineistoa. Sanasto rakennetaan korpuksesta itsestään, ei ulkoisesta
+  sanakirjasta: sana kelpaa sananrajaksi jos se esiintyy itsenäisenä
+  useammassa kuin yhdessä datasetissä. Osat annetaan **vain löysään
+  hakuvaiheeseen** ja saman tokenin OR-haaraan, joten ne eivät voi syrjäyttää
+  tiukan vaiheen osumia. Mitattu 30 kyselyn setillä: recall@50 0,830 → 0,861,
+  nDCG@10 0,624 → 0,628, gap_precision pysyi 1,00
 - **Katot työkaluparametreille** (`aura.limits`): hakupinnalla ei ollut
   ylärajaa, joten `search(limit=1000000)` olisi rakentanut vastauksen kaikista
   osumista. `query_data` oli rajattu alusta asti, haku ei. Katot: haku 100,

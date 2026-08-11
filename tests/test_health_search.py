@@ -6,10 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from aura.database import add_enrichment, init_db, upsert_dataset
-from aura.models import Dataset, Resource
-
 import aura.server  # noqa: F401 — resolve circular import before tools
+from aura.database import init_db, upsert_dataset
+from aura.models import Dataset, Resource
 from aura.tools.enrichment import VALID_ENRICHMENT_FIELDS
 
 

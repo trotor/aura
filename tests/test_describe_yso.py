@@ -8,7 +8,7 @@ import pytest
 from aura.database import add_enrichment, init_db, upsert_dataset
 from aura.models import Dataset
 from aura.server import describe
-from aura.yso import YsoConcept, YsoClient
+from aura.yso import YsoClient, YsoConcept
 
 
 def _memory_db() -> sqlite3.Connection:

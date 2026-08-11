@@ -6,9 +6,9 @@ import pytest
 
 from aura.database import init_db
 from aura.harvesters.digitransit import (
-    DigitransitHarvester,
     GTFS_FEEDS,
     ROUTERS,
+    DigitransitHarvester,
 )
 
 

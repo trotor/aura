@@ -2,6 +2,8 @@
 
 import sqlite3
 
+# Import server first to avoid circular import when importing from tools
+import aura.server  # noqa: F401
 from aura.database import (
     get_resource_schema,
     init_db,
@@ -9,9 +11,6 @@ from aura.database import (
     upsert_resource_schema,
 )
 from aura.models import Dataset, Resource
-
-# Import server first to avoid circular import when importing from tools
-import aura.server  # noqa: F401
 from aura.tools.schema import infer_type, parse_md_table, save_schema_from_markdown
 
 

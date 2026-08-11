@@ -10,7 +10,6 @@ import pytest
 
 from aura.yso import YsoClient, build_fts5_query
 
-
 # --- build_fts5_query ---
 
 

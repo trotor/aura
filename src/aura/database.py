@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aura.constants import parse_json_list
+from aura.decompound import load_lexicon
 from aura.dedup import deduplicate
 from aura.lemmatize import build_fts_query
 from aura.models import Dataset
@@ -635,16 +636,29 @@ def search_datasets(
 
     # Rakenna yritykset tiukimmasta löysimpään. enrichments_fts:ssä ei ole
     # lemmas-saraketta, joten se saa oman lauseke­varianttinsa.
+    # Yhdyssanojen osat annetaan VAIN löysään vaiheeseen. Tiukan vaiheen
+    # osumat menevät aina kärkeen, joten osajako siellä nostaisi heikon
+    # signaalin aitojen osumien ohi — sama virhe joka mitattiin
+    # dimensioarvoilla. Löysässä vaiheessa se voi vain täydentää.
+    lexicon = load_lexicon(conn) if _has_lemma_column(conn) else None
+
     attempts: list[tuple[str, str]] = []
     strict_ds = build_fts_query(query, strict=True, lemma_column=lemma_col)
     if strict_ds:
         attempts.append(
             (strict_ds, build_fts_query(query, strict=True, lemma_column=None))
         )
-        loose_ds = build_fts_query(query, strict=False, lemma_column=lemma_col)
+        loose_ds = build_fts_query(
+            query, strict=False, lemma_column=lemma_col, lexicon=lexicon
+        )
         if loose_ds != strict_ds:
             attempts.append(
-                (loose_ds, build_fts_query(query, strict=False, lemma_column=None))
+                (
+                    loose_ds,
+                    build_fts_query(
+                        query, strict=False, lemma_column=None, lexicon=lexicon
+                    ),
+                )
             )
     if expanded_query:
         attempts.append((expanded_query, expanded_query))

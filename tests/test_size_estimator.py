@@ -1,6 +1,5 @@
 """Testit size_estimator-moduulille."""
 
-import pytest
 
 from aura.size_estimator import (
     DEFAULT_SIZE_ESTIMATE,
@@ -9,7 +8,6 @@ from aura.size_estimator import (
     format_size,
     parse_file_size,
 )
-
 
 # -- parse_file_size ----------------------------------------------------------
 

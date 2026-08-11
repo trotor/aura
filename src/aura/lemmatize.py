@@ -17,6 +17,9 @@ import logging
 import re
 import sqlite3
 
+from aura.decompound import Lexicon
+from aura.decompound import expand as decompound_expand
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -125,7 +128,11 @@ def _quote(term: str) -> str:
 
 
 def build_fts_query(
-    query: str, *, strict: bool = True, lemma_column: str | None = "lemmas"
+    query: str,
+    *,
+    strict: bool = True,
+    lemma_column: str | None = "lemmas",
+    lexicon: Lexicon | None = None,
 ) -> str:
     """Rakenna FTS5-hakulauseke, joka osuu sekä pinta- että perusmuotoon.
 
@@ -148,6 +155,11 @@ def build_fts_query(
         lemma_column: Sarake, johon perusmuoto rajataan. ``None`` hakee
             perusmuotoa kaikista sarakkeista — tarpeen tauluille joissa ei ole
             lemma-saraketta (esim. ``enrichments_fts``).
+        lexicon: Yhdyssanasanasto (``aura.decompound``). Jos annettu, yhdyssanan
+            osat lisätään **saman tokenin OR-haaraan** — ei erillisiksi
+            AND-termeiksi, mikä vaatisi kaikkien osien esiintyvän eikä toisi
+            mitään. Sama periaate kuin pinta- ja perusmuodolla: kyse on samasta
+            sanasta eri muodossa.
 
     Returns:
         FTS5 MATCH -lauseke, tai tyhjä merkkijono jos kysely on tyhjä
@@ -160,13 +172,20 @@ def build_fts_query(
     branches: list[str] = []
     for token in tokens:
         base = lemma(token)
-        if base == token:
-            branches.append(_quote(token))
-        elif lemma_column:
-            # Pintamuoto mistä tahansa sarakkeesta, perusmuoto lemma-sarakkeesta
-            branches.append(f"({_quote(token)} OR {lemma_column} : {_quote(base)})")
-        else:
-            branches.append(f"({_quote(token)} OR {_quote(base)})")
+        alts: list[str] = [_quote(token)]
+        if base != token:
+            if lemma_column:
+                # Pintamuoto mistä tahansa sarakkeesta, perusmuoto lemmasta
+                alts.append(f"{lemma_column} : {_quote(base)}")
+            else:
+                alts.append(_quote(base))
+
+        if lexicon:
+            # Yhdyssanan osat perusmuodosta: satotilasto → sato, tilasto
+            for part in decompound_expand(base, lexicon)[1:]:
+                alts.append(_quote(part))
+
+        branches.append(alts[0] if len(alts) == 1 else "(" + " OR ".join(alts) + ")")
 
     operator = " AND " if strict else " OR "
     return operator.join(branches)

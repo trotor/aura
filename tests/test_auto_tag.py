@@ -102,7 +102,6 @@ class TestAutoTagDryRun:
         _seed(conn, "ds-1")
 
         # Patchaa get_connection palauttamaan muisti-db
-        import aura.cli as cli_mod
 
         original_get_conn = None
 

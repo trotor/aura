@@ -12,8 +12,7 @@ from aura.tagger import (
     format_suggestions,
     suggest_tags,
 )
-from aura.yso import YsoConcept, YsoClient
-
+from aura.yso import YsoClient, YsoConcept
 
 # --- _tokenize ---
 
