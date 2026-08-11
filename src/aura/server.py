@@ -22,6 +22,25 @@ from aura.yso import YsoClient, build_fts5_query
 logger = logging.getLogger(__name__)
 
 
+def warm_lemmatizer() -> None:
+    """Lataa suomen kielimalli muistiin heti käynnistyksessä.
+
+    ``simplemma`` lataa mallinsa laiskasti ensimmäisellä kutsulla, ja lataus
+    maksaa satoja megatavuja: mitattuna prosessin RSS nousi 23 MB → 745 MB
+    ensimmäisellä ``lemmatize_text``-kutsulla, toinen kutsu ei lisännyt mitään.
+
+    Ilman esilatausta muistiprofiili valehtelee. Tuore kontti näyttää noin
+    75 megatavulta, ja todellinen työjoukko paljastuu vasta kun ensimmäinen
+    käyttäjän haku osuu — eli juuri silloin kun sitä ei odota. Jaetulla
+    palvelimella se on huono tapa yllättää naapuri.
+
+    Sivuhyöty: ensimmäinen haku ei ole enää muita hitaampi.
+    """
+    from aura.lemmatize import lemmatize_text
+
+    lemmatize_text("lämmitys")
+
+
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Hallitse tietokantayhteyttä serverin elinkaaren ajan."""
@@ -30,6 +49,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if not readonly:
         # init_db kirjoittaa (migraatiot/skeema) → ohitetaan read-only-moodissa.
         init_db(conn)
+    warm_lemmatizer()
     yso = YsoClient()
     try:
         yield {"db": conn, "findings": [], "yso": yso}

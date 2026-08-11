@@ -85,3 +85,25 @@ class TestKatotOvatJarkevat:
     def test_katot_ovat_positiivisia(self) -> None:
         for value in (MAX_SEARCH_LIMIT, MAX_LIST_LIMIT, MAX_COMPARE_DATASETS):
             assert value > 0
+
+
+class TestLemmatisoijanEsilataus:
+    """Muistiprofiilin on oltava rehellinen heti käynnistyksestä.
+
+    simplemma lataa mallinsa laiskasti, ja lataus maksaa satoja megatavuja.
+    Ilman esilatausta tuore kontti näyttää pieneltä ja todellinen työjoukko
+    paljastuu vasta ensimmäisellä käyttäjän haulla.
+    """
+
+    def test_warm_lemmatizer_on_kutsuttavissa(self) -> None:
+        from aura.server import warm_lemmatizer
+
+        warm_lemmatizer()
+
+    def test_lifespan_lampimittaa_mallin(self) -> None:
+        """Vartija: jos kutsu poistetaan lifespanista, muistipiikki palaa."""
+        import inspect
+
+        from aura.server import _lifespan
+
+        assert "warm_lemmatizer()" in inspect.getsource(_lifespan)
