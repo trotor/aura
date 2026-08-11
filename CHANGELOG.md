@@ -103,6 +103,13 @@ neljännes koko katalogista.
   `enrichments_fts` indeksoi vain neljä kenttää — mutta `describe()` ja
   `get_enrichments_tool()` esittivät agentille bbox-koordinaatteja otsikolla
   "data_fields"
+- **Tarjoiltava kanta jäi WAL-tilaan**: repon kanta on WAL, mikä on oikein
+  kehityksessä missä harvestointi kirjoittaa, mutta imagessa kirjoittajaa ei
+  ole. WAL-kanta ei aukea edes lukutilassa tiedostojärjestelmästä johon ei voi
+  kirjoittaa, ja WAL-tilassa SQLite loi `-shm`- ja `-wal`-tiedostot kontin
+  kirjoituskerrokseen. Kanta käännetään nyt buildissa `journal_mode=DELETE`:ksi;
+  kontti toimii tämän jälkeen myös täysin kirjoitussuojatulla
+  tiedostojärjestelmällä (`--read-only`)
 - **Sotkanetin data-URLit olivat kuolleita linkkejä**: kaikki 3 772 CSV- ja
   3 772 JSON-resurssia osoittivat muotoon `/rest/1.1/csv?indicator=N`, joka
   palauttaa HTTP 400 — noin neljännes koko katalogin resursseista. Rajapinta
