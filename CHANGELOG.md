@@ -87,6 +87,15 @@ neljännes koko katalogista.
   alussa tulostettu häviää vieritykseen
 
 ### Fixed
+- **`data_fields`-rikastuskenttä oli päätynyt kaatoluokaksi** (migraatio 020):
+  1 864 rivistä vain 7 oli aineiston sarakenimiä. Loput olivat
+  bbox-koordinaatteja (1 207) ja koordinaatistotunnuksia (650) — jälkimmäisille
+  oli jo oma `crs`-kenttänsä, eli sama tieto oli kahdessa paikassa eri nimellä.
+  bbox sai oman kenttänsä, koordinaatistot siirtyivät `crs`:ään (93 täsmällistä
+  duplikaattia poistettiin). Nämä rivit eivät olleet hakupolussa —
+  `enrichments_fts` indeksoi vain neljä kenttää — mutta `describe()` ja
+  `get_enrichments_tool()` esittivät agentille bbox-koordinaatteja otsikolla
+  "data_fields"
 - **Sotkanetin data-URLit olivat kuolleita linkkejä**: kaikki 3 772 CSV- ja
   3 772 JSON-resurssia osoittivat muotoon `/rest/1.1/csv?indicator=N`, joka
   palauttaa HTTP 400 — noin neljännes koko katalogin resursseista. Rajapinta
