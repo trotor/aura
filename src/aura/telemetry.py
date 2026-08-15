@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -51,6 +52,19 @@ CREATE TABLE IF NOT EXISTS zero_results (
 # määrän henkilötietoa joka voi vahingossa päätyä kenttään.
 MAX_QUERY_LENGTH = 200
 
+# Ohjausmerkit pois. **Tämä on turvallisuuskorjaus, ei siistimistä.**
+#
+# Kysely tulee etäkäyttäjältä ja päätyy ylläpitäjän terminaaliin komennolla
+# ``aura gaps``. Ilman suodatusta hakuun voi upottaa ANSI-koodeja, jotka
+# terminaali tottelee: rivin voi pyyhkiä, tekstiä voi väärentää (``\x1b[2K``
+# + oma teksti näyttää työkalun omalta tulosteelta) ja joissakin
+# terminaaleissa pahempaakin. Whitespace-normalisointi ei riitä, koska ESC
+# ei ole whitespacea.
+#
+# Suodatus tehdään **kirjoitettaessa**, jotta kanta ei koskaan sisällä
+# ohjausmerkkejä — silloin mikään lukija ei voi vahingossa tulostaa niitä.
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
 
 def telemetry_path(env: Mapping[str, str] | None = None) -> Path | None:
     """Telemetriakannan polku, tai None jos kirjaus ei ole käytössä.
@@ -70,7 +84,7 @@ def record_zero_result(query: str, env: Mapping[str, str] | None = None) -> bool
 
     Ei koskaan nosta poikkeusta: kutsuja on hakupolulla.
     """
-    cleaned = " ".join(query.split())[:MAX_QUERY_LENGTH]
+    cleaned = " ".join(_CONTROL_CHARS.sub(" ", query).split())[:MAX_QUERY_LENGTH]
     if not cleaned:
         return False
 
@@ -116,7 +130,13 @@ def zero_result_gaps(
                 "ORDER BY count DESC, last_seen DESC LIMIT ?",
                 (limit,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        # Vanhat rivit on voitu kirjata ennen suodatusta, joten siivotaan
+        # myös luettaessa. Kaksi kertaa siivottu ei ole haitaksi; kerran
+        # siivoamatta jäänyt on.
+        return [
+            {**dict(row), "query": _CONTROL_CHARS.sub(" ", str(row["query"]))}
+            for row in rows
+        ]
     except sqlite3.Error as exc:
         logger.debug("[telemetry] Aukkolistan luku epäonnistui: %s", exc)
         return []

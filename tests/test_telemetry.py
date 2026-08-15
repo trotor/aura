@@ -93,6 +93,49 @@ class TestKirjaus:
         assert record_zero_result("kysely", env) is True
 
 
+class TestOhjausmerkit:
+    """Kysely tulee etäkäyttäjältä ja päätyy ylläpitäjän terminaaliin.
+
+    Ilman suodatusta hakuun voi upottaa ANSI-koodeja, jotka terminaali
+    tottelee: ``\\x1b[2K`` pyyhkii rivin ja sen perään kirjoitettu teksti
+    näyttää työkalun omalta tulosteelta.
+    """
+
+    def test_escape_sequences_are_stripped_on_write(self, tmp_path: Path) -> None:
+        env = _env(tmp_path / "t.db")
+        record_zero_result("aito\x1b[2K\x1b[1;31mVÄÄRENNÖS\x1b[0m", env)
+        stored = zero_result_gaps(env=env)[0]["query"]
+        assert "\x1b" not in str(stored)
+        assert "aito" in str(stored)
+
+    def test_control_characters_never_reach_the_database(
+        self, tmp_path: Path
+    ) -> None:
+        """Suodatus tehdään kirjoitettaessa, joten kanta on aina puhdas."""
+        path = tmp_path / "t.db"
+        record_zero_result("rivinvaihto\r\nja\x00nolla", _env(path))
+        with sqlite3.connect(path) as conn:
+            raw = conn.execute("SELECT query FROM zero_results").fetchone()[0]
+        assert all(ord(ch) >= 0x20 and ord(ch) != 0x7F for ch in raw)
+
+    def test_old_rows_are_sanitised_on_read(self, tmp_path: Path) -> None:
+        """Ennen korjausta kirjatut rivit eivät saa vuotaa tulosteeseen."""
+        path = tmp_path / "t.db"
+        record_zero_result("siisti", _env(path))
+        with sqlite3.connect(path) as conn:
+            conn.execute(
+                "INSERT INTO zero_results (query, count, first_seen, last_seen) "
+                "VALUES (?, 9, '2026-01-01', '2026-01-01')",
+                ("vanha\x1b[31mrivi",),
+            )
+        assert all("\x1b" not in str(r["query"]) for r in zero_result_gaps(env=_env(path)))
+
+    def test_query_of_only_control_characters_is_not_recorded(
+        self, tmp_path: Path
+    ) -> None:
+        assert record_zero_result("\x1b\x00\x07", _env(tmp_path / "t.db")) is False
+
+
 class TestVikasietoisuus:
     """Telemetria ei ole syy jonka takia haku saa kaatua."""
 
