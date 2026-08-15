@@ -23,6 +23,8 @@ FORMAT_LABELS_FI: dict[str, str] = {
     "ZIP": "tiedostolataus",
     "GPKG": "GeoPackage-lataus",
     "GeoParquet": "GeoParquet",
+    "XLSX": "Excel-taulukko",
+    "CSV": "CSV-tiedosto",
 }
 
 

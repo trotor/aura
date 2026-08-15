@@ -40,8 +40,10 @@ BaseHarvester (base.py)
 │   └── LukeOpendataHarvester (luke_opendata.py)
 ├── PxWebHarvester (pxweb.py) — rekursiivinen puunavigaatio
 │   ├── StatfinHarvester (statfin.py)
-│   └── LukeHarvester (luke.py)
+│   ├── LukeHarvester (luke.py)
+│   └── TraficomTilastotHarvester (traficom_tilastot.py) — liikennetilastot
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
+│   ├── FinaviaHarvester (finavia.py) — lentoliikennetilastot (XLSX)
 │   ├── GtkHarvester (gtk.py)
 │   ├── KunnatHarvester (kunnat.py) — 36 kunnan WMS/WFS/ArcGIS
 │   ├── LipasHarvester (lipas.py) — Jyväskylän yliopisto liikuntapaikat

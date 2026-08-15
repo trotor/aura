@@ -90,6 +90,42 @@ class TestTableToDataset:
         assert ds.organization_title == "Tilastokeskus"
 
 
+class TestWebUrl:
+    """Selainkäyttöliittymän osoitteen muoto.
+
+    PxWeb koodaa kansiopolun kaksoisalaviivoilla, ei kauttaviivoilla.
+    Kauttaviivamuoto vastaa 404:llä, ja se oli tuotannossa 2 186 datasetin
+    HTML-resurssissa — mikään mittari ei huomannut, koska haku ja query_data
+    käyttävät PXWEB-resurssia.
+    """
+
+    def _web_url(self, harvester, path: str, table: str) -> str:
+        item = {"id": table, "text": "Taulu", "updated": ""}
+        ds = harvester._table_to_dataset(item, path, "https://example.com/api/")
+        return next(r.url for r in ds.resources if r.format == "HTML")
+
+    def test_statfin_uses_double_underscore(self):
+        h = StatfinHarvester(conn=_memory_db())
+        url = self._web_url(h, "StatFin/adopt", "11lv.px")
+        assert url.endswith("/fi/StatFin/StatFin__adopt/11lv.px")
+
+    def test_deep_path_joins_all_levels(self):
+        h = LukeHarvester(conn=_memory_db())
+        url = self._web_url(h, "LUKE/maa/elalan", "0100_elalan.px")
+        assert url.endswith("/fi/LUKE/LUKE__maa__elalan/0100_elalan.px")
+
+    def test_root_level_table_has_no_separator(self):
+        h = StatfinHarvester(conn=_memory_db())
+        url = self._web_url(h, "StatFin", "11lv.px")
+        assert url.endswith("/fi/StatFin/StatFin/11lv.px")
+
+    def test_no_slash_inside_folder_segment(self):
+        """Vanha muoto tuotti .../StatFin/StatFin/adopt/… — se on 404."""
+        h = StatfinHarvester(conn=_memory_db())
+        url = self._web_url(h, "StatFin/adopt", "11lv.px")
+        assert "/StatFin/StatFin/adopt/" not in url
+
+
 class TestPathToKeywords:
     """_path_to_keywords()-metodin testit."""
 

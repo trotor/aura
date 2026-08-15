@@ -8,6 +8,7 @@ from aura.harvesters.digitraffic import DigitrafficHarvester
 from aura.harvesters.digitransit import DigitransitHarvester
 from aura.harvesters.eduskunta import EduskuntaHarvester
 from aura.harvesters.finap import FinapHarvester
+from aura.harvesters.finavia import FinaviaHarvester
 from aura.harvesters.fluentoutdoors import FluentOutdoorsHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
@@ -39,6 +40,7 @@ from aura.harvesters.stuk import StukHarvester
 from aura.harvesters.syke import SykeHarvester
 from aura.harvesters.taustakartat import TaustakartatHarvester
 from aura.harvesters.traficom import TraficomHarvester
+from aura.harvesters.traficom_tilastot import TraficomTilastotHarvester
 from aura.harvesters.tulospalvelu import TulospalveluHarvester
 from aura.harvesters.vaalirahoitus import VaalirahoitusHarvester
 from aura.harvesters.valtiokonttori import ValtiokonttoriHarvester
@@ -56,9 +58,11 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "digitransit": DigitransitHarvester,
     "eduskunta": EduskuntaHarvester,
     "finap": FinapHarvester,
+    "finavia": FinaviaHarvester,
     "fmi": FmiHarvester,
     "gtk": GtkHarvester,
     "traficom": TraficomHarvester,
+    "traficom-tilastot": TraficomTilastotHarvester,
     "tulospalvelu": TulospalveluHarvester,
     "metsakeskus": MetsakeskusHarvester,
     "taustakartat": TaustakartatHarvester,
