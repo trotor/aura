@@ -9,6 +9,7 @@ from aura.harvesters.digitransit import DigitransitHarvester
 from aura.harvesters.eduskunta import EduskuntaHarvester
 from aura.harvesters.finap import FinapHarvester
 from aura.harvesters.finavia import FinaviaHarvester
+from aura.harvesters.finlex import FinlexHarvester
 from aura.harvesters.fluentoutdoors import FluentOutdoorsHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
@@ -59,6 +60,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "eduskunta": EduskuntaHarvester,
     "finap": FinapHarvester,
     "finavia": FinaviaHarvester,
+    "finlex": FinlexHarvester,
     "fmi": FmiHarvester,
     "gtk": GtkHarvester,
     "traficom": TraficomHarvester,
