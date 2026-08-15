@@ -43,6 +43,27 @@ _PROGRAMME_RE = re.compile(
 )
 
 
+# Puolueiden vakiintuneet lyhenteet, joita POHTIVAn oma koodi ei anna.
+#
+# **Vain mitatut puutteet, ei kattava aliaslista.** POHTIVAn koodi ja
+# puolueen nimi menevät avainsanoihin sellaisenaan, ja useimmille puolueille
+# se riittää: "Kokoomus" löytää 100/100, "vasemmistoliitto" 97/97. Tähän on
+# kirjattu ne tapaukset joissa mittaus näytti vajaan tuloksen:
+#
+#     RKP                  9/167   koodi on SFP, ei RKP
+#     sosialidemokraatit   3/196   avainsanana on adjektiivi
+#                                  "Sosialidemokraattinen", ei substantiivi
+#
+# Puhekieliset nimet (demarit, kepu, persut) antavat nollan, mutta niitä ei
+# lisätä: ne eivät ole puolueiden omia nimiä, ja niiden ylläpito olisi
+# päättymätön. Käyttäjän puhekieli kuuluu kyselyn laajennukseen, ei
+# katalogin metatietoon.
+PARTY_ALIASES: dict[str, list[str]] = {
+    "SFP": ["RKP"],
+    "SDP": ["sosialidemokraatit"],
+}
+
+
 def parse_party_codes(page: str) -> list[str]:
     """Poimi puoluekoodit listasivulta, järjestettynä ja uniikkeina."""
     return sorted(set(_PARTY_RE.findall(page)))
@@ -126,6 +147,7 @@ class PohtivaHarvester(BaseHarvester):
         url = f"{LIST_URL}/{party}/{pid}"
 
         keywords = ["puolueohjelma", "politiikka", party]
+        keywords.extend(PARTY_ALIASES.get(party.upper(), []))
         if prog.get("party_name"):
             keywords.append(prog["party_name"])
         if prog.get("ptype"):
