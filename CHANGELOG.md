@@ -15,6 +15,26 @@ datasettiin. Lisäksi korjattiin 7 544 kuollutta resurssilinkkiä — noin
 neljännes koko katalogista.
 
 ### Added
+- **Nollatuloskirjaus** (`aura.telemetry`, `aura gaps`): mitä haettiin kun
+  mitään ei löytynyt. Katalogin aukkoja on tähän asti arvattu käsin — tämän
+  julkaisun Finavia, Traficomin tilastot ja Finlex löytyivät siksi että joku
+  *epäili* niiden puuttuvan, ei siksi että joku olisi etsinyt turhaan ja se
+  olisi jäänyt talteen. Tallennetaan vain hakusana ja laskuri: ei istuntoa,
+  ei tunnistetta, ei IP:tä, ei tapahtumakohtaista aikaleimaa. Sama kysely on
+  yksi rivi jonka `count` kasvaa. Oma kanta, ei katalogi — katalogi on
+  tuotannossa lukutilassa. **Oletuksena pois päältä**, kytketään
+  `AURA_TELEMETRY_DB`-muuttujalla, koska kyselytekstin tallentaminen on
+  tietosuojapäätös. Kirjoituksen epäonnistuminen ohitetaan hiljaisesti:
+  telemetria ei ole syy jonka takia haku saa kaatua
+- **Finlex kyselykelpoisena rajapintana** (`finlex`): viisi
+  aineistokokonaisuutta — ajantasainen lainsäädäntö, säädöskokoelma,
+  valtiosopimukset, hallituksen esitykset ja viranomaisten määräyskokoelmat.
+  Aiemmin katalogissa oli yksi rivi, jonka resurssilla ei ollut formaattia ja
+  osoitteena oli pelkkä palvelun juuri; `query_data` ei voinut tehdä sille
+  mitään. Säädöksiä ei tuoda datasetteinä: pelkän vuoden 2024 säädöksiä on
+  yli 600 dokumenttia ja rajapinta antaa enintään kymmenen riviä sivulta,
+  joten koko säädöskanta olisi enemmän kuin nykyinen katalogi. Rajapinnan
+  `titleContains` hoitaa saman elävänä
 - **Traficomin tilastotietokanta** (`traficom-tilastot`): 81 taulua
   liikenteen viranomaistilastoa, jota ei ole StatFinissä — ajokortit,
   ensirekisteröinnit, henkilöliikennetutkimus, ilmailulupakirjat, julkisen

@@ -18,6 +18,7 @@ from aura.database import (
 from aura.limits import MAX_SEARCH_LIMIT, clamp
 from aura.search import format_dataset_summary
 from aura.server import mcp
+from aura.telemetry import record_zero_result
 
 
 @mcp.tool()
@@ -68,6 +69,10 @@ async def search(
     )
 
     if not results:
+        # Nollatulos on ainoa signaali jossa käyttäjä kertoo suoraan mitä
+        # katalogista puuttuu. Kirjaus on oletuksena pois päältä ja ohitetaan
+        # hiljaisesti jos se ei onnistu — ks. aura.telemetry.
+        record_zero_result(query)
         return f"Ei tuloksia haulle '{query}'. Kokeile eri hakusanoja tai suodattimia."
 
     parts = [f"Löytyi {len(results)} datasettiä haulle '{query}':\n"]

@@ -280,6 +280,15 @@ def main() -> None:
         help="Indeksoi suomen perusmuodot hakua varten (datasets.lemmas)",
     )
 
+    # gaps
+    gaps_p = subparsers.add_parser(
+        "gaps", help="Näytä nollatulokselliset haut (mitä etsittiin turhaan)"
+    )
+    gaps_p.add_argument("--limit", type=int, default=50, help="Rivien määrä")
+    gaps_p.add_argument(
+        "--clear", action="store_true", help="Tyhjennä kertymä (säilytysaika)"
+    )
+
     # prune
     prune_ds = subparsers.add_parser(
         "prune", help="Poista lähteestä kadonneet datasetit (oletuksena kuiva-ajo)"
@@ -482,6 +491,41 @@ def main() -> None:
             total_imported += count
 
         print(f"\nTuotu yhteensä {total_imported} rikastusta.")
+
+    elif args.command == "gaps":
+        from aura.telemetry import (
+            TELEMETRY_DB_ENV,
+            clear_zero_results,
+            telemetry_path,
+            zero_result_gaps,
+        )
+
+        if telemetry_path() is None:
+            print(
+                "Nollatuloskirjaus ei ole käytössä.\n"
+                f"Kytke päälle asettamalla {TELEMETRY_DB_ENV}, esim.\n"
+                f"  export {TELEMETRY_DB_ENV}=data/telemetry.db\n\n"
+                "Huom: kirjaus tallentaa hakusanat. Se on tietosuojapäätös, "
+                "siksi oletus on pois päältä."
+            )
+            return
+
+        if args.clear:
+            removed = clear_zero_results()
+            print(f"Poistettu {removed} riviä.")
+            return
+
+        rows = zero_result_gaps(limit=args.limit)
+        if not rows:
+            print("Ei nollatuloksellisia hakuja kirjattuna.")
+            return
+
+        print(f"\n{'kpl':>5}  {'viimeksi':<21} kysely")
+        print("-" * 72)
+        for row in rows:
+            print(f"{row['count']:>5}  {str(row['last_seen'])[:19]:<21} {row['query']}")
+        print(f"\n{len(rows)} eri kyselyä, yhteensä "
+              f"{sum(int(str(r['count'])) for r in rows)} nollatulosta.")
 
     elif args.command == "prune":
         from aura.database import get_connection, init_db
