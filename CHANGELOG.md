@@ -121,6 +121,17 @@ neljännes koko katalogista.
   alussa tulostettu häviää vieritykseen
 
 ### Fixed
+- **Taulukkoformaatit puuttuivat koneluettavien listalta**: 402 datasettiä sai
+  `format_score` 40/100 samalla kun WMS-kuvapalvelu sai täydet sata, vaikka
+  openpyxl lukee XLSX:n ja OOXML on ISO/IEC 29500 -standardi. Lista ohjasi
+  myös hakutulosten järjestystä ja alueprofiilin koneluettavuusosuutta.
+  Samalla erotettiin kaksi eri kysymystä, jotka olivat olleet yhdessä
+  joukossa: *koneluettavuus* (laatu, järjestys) ja *kyseltävyys*
+  (`query_data`). XLSX on koneluettava mutta esikatselu ei osaa avata sitä,
+  ja ilman erottelua sen lisääminen olisi saanut esikatselun valitsemaan
+  XLSX:n silloinkin kun samalla datasetillä on luettava CSV. Ero näkyi jo
+  koodissa poikkeuksena `fmt not in ("WMS", "WCS")`. Katalogin
+  accessibility-keskiarvo 86,3 → 86,7
 - **PxWeb-taulujen verkkosivulinkit olivat 404** kaikilla PxWeb-lähteillä:
   2 195 datasetin HTML-resurssi osoitti sivulle jota ei ole. PxWebin
   selainkäyttöliittymä koodaa kansiopolun kaksoisalaviivoilla, ei

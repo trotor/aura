@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from aura.constants import MACHINE_READABLE_FORMATS, user_agent
+from aura.constants import PREVIEWABLE_FORMATS, user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,10 @@ def _pick_resource(
         for r in resources:
             if (r.get("format") or "").upper() == hint:
                 return r
-    # Suosi koneluettavia formaatteja
+    # Suosi formaatteja joille kysely osaa tehdä jotain. Koneluettavuus on
+    # eri asia: XLSX on koneluettava mutta esikatselu ei osaa avata sitä.
     for r in resources:
-        fmt = (r.get("format") or "").upper()
-        if fmt in MACHINE_READABLE_FORMATS and fmt not in ("WMS", "WCS"):
+        if (r.get("format") or "").upper() in PREVIEWABLE_FORMATS:
             return r
     return resources[0]
 

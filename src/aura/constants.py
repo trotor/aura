@@ -2,10 +2,30 @@
 
 from aura import __version__
 
+# Formaatit joita ohjelma osaa lukea. Käytetään laatupisteytyksessä,
+# hakutulosten järjestyksessä ja alueprofiilin koneluettavuusosuudessa.
+#
+# Taulukkolaskentaformaatit ovat mukana, koska ne ovat koneluettavia:
+# openpyxl lukee XLSX:n ja OOXML on ISO/IEC 29500 -standardi. Ilman niitä
+# 422 datasettiä sai format_score 40/100 samalla kun WMS-kuvapalvelu sai
+# täydet sata — Finavian lentoliikennetilastot ovat pelkkää XLSX:ää.
 MACHINE_READABLE_FORMATS: frozenset[str] = frozenset({
     "CSV", "JSON", "GeoJSON", "WFS", "WMS", "WCS", "OData",
     "XML", "API", "Parquet", "GeoParquet", "GPKG", "SQLite",
-    "PXWEB",
+    "PXWEB", "XLSX", "XLS", "ODS",
+})
+
+# Formaatit joille ``query_data`` osaa tehdä kyselyn. Tämä on **eri kysymys**
+# kuin koneluettavuus: XLSX on koneluettava mutta esikatselu ei osaa avata
+# sitä, ja WMS on listalla vaikka se palauttaa kuvia.
+#
+# Aiemmin sama joukko vastasi molempiin kysymyksiin, ja ero näkyi jo
+# koodissa poikkeuksena ``fmt not in ("WMS", "WCS")``. Ilman erottelua
+# XLSX:n lisääminen olisi saanut esikatselun valitsemaan tiedoston jota se
+# ei osaa lukea — datasetissä jolla on sekä XLSX että CSV, jälkimmäinen on
+# oikea valinta.
+PREVIEWABLE_FORMATS: frozenset[str] = frozenset({
+    "CSV", "JSON", "GeoJSON", "API", "WFS", "OData", "PXWEB",
 })
 
 
