@@ -4,9 +4,9 @@
 
 [**Dokumentaatio**](https://trotor.github.io/aura/) · [**What's New**](docs/WHATSNEW.md) · [**Datasettikatalogi**](docs/CATALOG.md) · [**Dataformaatit**](docs/formats.md) · [**Datalähteet**](docs/SOURCES.md)
 
-> **7 200+ datasettiä** · **17 000+ resurssia** · **370+ organisaatiota** · **~2 TB** avointa dataa
+> **12 900+ datasettiä** · **31 000+ resurssia** · **340+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 30 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, Kuntien paikkatiedot (36 kuntaa) ym.
+> 41 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -23,6 +23,33 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 - **Tunnistaa skeemoja** — päättelee kenttänimet ja tyypit esikatselusta
 - **Palvelee tekoälyjä** MCP-serverin kautta (Claude, GPT, jne.)
 - **Mahdollistaa reaaliaikakyselyt** — agentti voi hakea dataa suoraan rajapinnoista (Digitraffic, PxWeb, WFS, OData ym.)
+
+## Kokeile ilman asennusta
+
+Aurasta on ylläpidetty julkinen instanssi. Liitä se tekoälyavustajaasi ilman
+asennusta ja kloonausta:
+
+```json
+{
+  "mcpServers": {
+    "aura": { "url": "https://aura.futuai.fi/mcp" }
+  }
+}
+```
+
+Aineistoja voi myös selata selaimessa: **[aura.futuai.fi](https://aura.futuai.fi/)**
+
+Muutama asia joka kannattaa tietää instanssista:
+
+- **Ei vaadi tunnuksia.** Endpoint on avoin.
+- **Vain luku.** Hakutyökalut ovat käytössä, kantaa muokkaavat eivät —
+  rikastukset ja tutkimuslöydökset tallentuvat vain omassa instanssissa.
+- **Ylläpidetään erikseen.** Instanssi ei seuraa tämän repon `main`-haaraa
+  automaattisesti, joten sen aineistomäärä voi poiketa siitä mitä saat
+  ajamalla itse.
+
+Oma instanssi on silti se täysi versio: sen kanta on kirjoitettavissa ja
+kaikki työkalut ovat käytössä. Jatka lukemista alta.
 
 ## Vaatimukset
 
