@@ -123,10 +123,7 @@ def run_migrations(conn: sqlite3.Connection) -> int:
 
         # Hae jo sovelletut versiot
         applied = {
-            row[0]
-            for row in conn.execute(
-                "SELECT version FROM schema_migrations"
-            ).fetchall()
+            row[0] for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
         }
 
         applied_count = 0
@@ -280,8 +277,14 @@ def upsert_organization(
                 THEN excluded.homepage ELSE organizations.homepage END
         """,
         (
-            org_id, name, title, title_fi, title_en,
-            description, image_url, homepage,
+            org_id,
+            name,
+            title,
+            title_fi,
+            title_en,
+            description,
+            image_url,
+            homepage,
         ),
     )
 
@@ -384,18 +387,32 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
             harvested_at=datetime('now')
         """,
         (
-            dataset.id, dataset.name, dataset.title,
-            dataset.title_fi, dataset.title_en, dataset.title_sv,
-            dataset.notes, dataset.notes_fi, dataset.notes_en, dataset.notes_sv,
-            dataset.license_id, dataset.license_title,
-            dataset.organization_id, dataset.organization_name, dataset.organization_title,
-            dataset.metadata_created, dataset.metadata_modified,
+            dataset.id,
+            dataset.name,
+            dataset.title,
+            dataset.title_fi,
+            dataset.title_en,
+            dataset.title_sv,
+            dataset.notes,
+            dataset.notes_fi,
+            dataset.notes_en,
+            dataset.notes_sv,
+            dataset.license_id,
+            dataset.license_title,
+            dataset.organization_id,
+            dataset.organization_name,
+            dataset.organization_title,
+            dataset.metadata_created,
+            dataset.metadata_modified,
             json.dumps(dataset.keywords_fi, ensure_ascii=False),
             json.dumps(dataset.keywords_en, ensure_ascii=False),
             json.dumps(dataset.geographical_coverage, ensure_ascii=False),
-            dataset.update_frequency, dataset.collection_type,
-            num_resources, dataset.source,
-            dataset.access_level, dataset.estimated_size_bytes,
+            dataset.update_frequency,
+            dataset.collection_type,
+            num_resources,
+            dataset.source,
+            dataset.access_level,
+            dataset.estimated_size_bytes,
         ),
     )
 
@@ -434,9 +451,19 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
                 last_modified=excluded.last_modified
             """,
             (
-                r.id, dataset.id, r.name, r.name_fi, r.name_en,
-                r.description, r.description_fi, r.description_en,
-                r.format, r.url, r.file_size, r.file_size_bytes, r.last_modified,
+                r.id,
+                dataset.id,
+                r.name,
+                r.name_fi,
+                r.name_en,
+                r.description,
+                r.description_fi,
+                r.description_en,
+                r.format,
+                r.url,
+                r.file_size,
+                r.file_size_bytes,
+                r.last_modified,
             ),
         )
 
@@ -448,19 +475,19 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
 # "asuntojen hinnat" nosti kärkeen sianlihan hinnat, koska sana "hinnat"
 # esiintyi kuvaustekstissä yhtä painavasti kuin otsikossa.
 _FTS_WEIGHTS_WITH_LEMMAS: tuple[float, ...] = (
-    3.0,   # name
-    8.0,   # title
+    3.0,  # name
+    8.0,  # title
     10.0,  # title_fi
-    4.0,   # title_en
-    2.0,   # title_sv
-    1.5,   # notes
-    2.0,   # notes_fi
-    1.0,   # notes_en
-    0.5,   # notes_sv
-    6.0,   # keywords_fi
-    3.0,   # keywords_en
-    1.0,   # organization_title
-    5.0,   # lemmas
+    4.0,  # title_en
+    2.0,  # title_sv
+    1.5,  # notes
+    2.0,  # notes_fi
+    1.0,  # notes_en
+    0.5,  # notes_sv
+    6.0,  # keywords_fi
+    3.0,  # keywords_en
+    1.0,  # organization_title
+    5.0,  # lemmas
 )
 _FTS_WEIGHTS_LEGACY: tuple[float, ...] = _FTS_WEIGHTS_WITH_LEMMAS[:-1]
 
@@ -519,9 +546,7 @@ def _has_lemma_column(conn: sqlite3.Connection) -> bool:
 
 def _bm25_expr(conn: sqlite3.Connection) -> str:
     """Rakenna painotettu bm25()-lauseke kannan sarakemäärän mukaan."""
-    weights = (
-        _FTS_WEIGHTS_WITH_LEMMAS if _has_lemma_column(conn) else _FTS_WEIGHTS_LEGACY
-    )
+    weights = _FTS_WEIGHTS_WITH_LEMMAS if _has_lemma_column(conn) else _FTS_WEIGHTS_LEGACY
     return "bm25(datasets_fts, " + ", ".join(str(w) for w in weights) + ")"
 
 
@@ -585,10 +610,16 @@ def search_datasets(
         )
         filter_params.append(fmt)
     if region_names:
-        coverage_conditions = " OR ".join(
-            "d.geographical_coverage LIKE ?" for _ in region_names
+        # Kaksi tapaa olla alueellisesti relevantti. Ensimmäinen on
+        # aineiston oma aluerajaus. Toinen on koko maan kattava aineisto
+        # jossa kunta on dimensioarvo — se puuttui, ja siksi
+        # "Kuopio + väestö" palautti tyhjän vaikka Kuopion väkiluku on
+        # sekä StatFinissä että Sotkanetissa. Ks. aura.region_levels.
+        coverage_conditions = " OR ".join("d.geographical_coverage LIKE ?" for _ in region_names)
+        filter_conditions.append(
+            f"(({coverage_conditions}) OR d.id IN ("
+            "SELECT dataset_id FROM enrichments WHERE field = 'region_level'))"
         )
-        filter_conditions.append(f"({coverage_conditions})")
         filter_params.extend(f"%{name}%" for name in region_names)
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
@@ -645,19 +676,13 @@ def search_datasets(
     attempts: list[tuple[str, str]] = []
     strict_ds = build_fts_query(query, strict=True, lemma_column=lemma_col)
     if strict_ds:
-        attempts.append(
-            (strict_ds, build_fts_query(query, strict=True, lemma_column=None))
-        )
-        loose_ds = build_fts_query(
-            query, strict=False, lemma_column=lemma_col, lexicon=lexicon
-        )
+        attempts.append((strict_ds, build_fts_query(query, strict=True, lemma_column=None)))
+        loose_ds = build_fts_query(query, strict=False, lemma_column=lemma_col, lexicon=lexicon)
         if loose_ds != strict_ds:
             attempts.append(
                 (
                     loose_ds,
-                    build_fts_query(
-                        query, strict=False, lemma_column=None, lexicon=lexicon
-                    ),
+                    build_fts_query(query, strict=False, lemma_column=None, lexicon=lexicon),
                 )
             )
     if expanded_query:
@@ -709,9 +734,7 @@ def get_dataset(conn: sqlite3.Connection, dataset_id: str) -> dict[str, Any] | N
     return result
 
 
-def get_datasets_by_ids(
-    conn: sqlite3.Connection, dataset_ids: list[str]
-) -> list[dict[str, Any]]:
+def get_datasets_by_ids(conn: sqlite3.Connection, dataset_ids: list[str]) -> list[dict[str, Any]]:
     """Hae useita datasettejä ID:llä tai nimellä."""
     if not dataset_ids:
         return []
@@ -825,9 +848,7 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
 # --- Organizations ---
 
 
-def get_organization(
-    conn: sqlite3.Connection, org_id: str
-) -> dict[str, Any] | None:
+def get_organization(conn: sqlite3.Connection, org_id: str) -> dict[str, Any] | None:
     """Hae organisaatio ID:llä tai nimellä."""
     row = conn.execute(
         "SELECT * FROM organizations WHERE id = ? OR name = ?",
@@ -858,9 +879,7 @@ def get_organizations(
 # --- Enrichments ---
 
 
-def _resolve_dataset_ids(
-    conn: sqlite3.Connection, dataset_id: str
-) -> list[str]:
+def _resolve_dataset_ids(conn: sqlite3.Connection, dataset_id: str) -> list[str]:
     """Palauta kaikki datasetin tunnisteet (id ja name).
 
     Enrichments voivat olla tallennettu joko UUID:llä tai slug-nimellä,
@@ -900,8 +919,13 @@ def add_enrichment(
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            enrichment_id, dataset_id, field, value,
-            confidence, source_type, source_detail,
+            enrichment_id,
+            dataset_id,
+            field,
+            value,
+            confidence,
+            source_type,
+            source_detail,
         ),
     )
     conn.commit()
@@ -1056,9 +1080,7 @@ def get_datasets_without_enrichment(
     params: list[Any] = [field]
 
     # Myös name-kentällä tallennetut enrichmentit (slug-pohjainen id)
-    conditions.append(
-        "d.name NOT IN (SELECT dataset_id FROM enrichments WHERE field = ?)"
-    )
+    conditions.append("d.name NOT IN (SELECT dataset_id FROM enrichments WHERE field = ?)")
     params.append(field)
 
     if source:
@@ -1157,9 +1179,7 @@ def get_source(
     name: str,
 ) -> dict[str, Any] | None:
     """Hae yksittäinen datalähde nimellä."""
-    row = conn.execute(
-        "SELECT * FROM sources WHERE name = ?", (name,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM sources WHERE name = ?", (name,)).fetchone()
     return dict(row) if row else None
 
 
@@ -1167,9 +1187,7 @@ def get_all_sources(
     conn: sqlite3.Connection,
 ) -> list[dict[str, Any]]:
     """Hae kaikki datalähteet."""
-    rows = conn.execute(
-        "SELECT * FROM sources ORDER BY dataset_count DESC, name"
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM sources ORDER BY dataset_count DESC, name").fetchall()
     return [dict(r) for r in rows]
 
 
@@ -1188,9 +1206,7 @@ def upsert_resource_schema(
     """
     if not fields:
         return
-    conn.execute(
-        "DELETE FROM resource_schema WHERE resource_id = ?", (resource_id,)
-    )
+    conn.execute("DELETE FROM resource_schema WHERE resource_id = ?", (resource_id,))
     conn.executemany(
         """
         INSERT INTO resource_schema (resource_id, dataset_id, field_name, field_type)
@@ -1235,9 +1251,7 @@ def export_enrichments(
             (source_type,),
         ).fetchall()
     else:
-        rows = conn.execute(
-            "SELECT * FROM enrichments ORDER BY created_at"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM enrichments ORDER BY created_at").fetchall()
     return [dict(r) for r in rows]
 
 
@@ -1261,20 +1275,19 @@ def import_enrichments(
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    e["id"], e["dataset_id"], e["field"], e["value"],
+                    e["id"],
+                    e["dataset_id"],
+                    e["field"],
+                    e["value"],
                     e.get("confidence", "medium"),
                     e["source_type"],
                     e.get("source_detail", ""),
                     e.get("created_at", ""),
                 ),
             )
-            if conn.execute(
-                "SELECT changes()"
-            ).fetchone()[0] > 0:
+            if conn.execute("SELECT changes()").fetchone()[0] > 0:
                 imported += 1
         except (KeyError, sqlite3.Error) as exc:
-            logger.warning(
-                "[enrichments] Ohitetaan virheellinen rivi: %s", exc
-            )
+            logger.warning("[enrichments] Ohitetaan virheellinen rivi: %s", exc)
     conn.commit()
     return imported

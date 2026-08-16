@@ -32,26 +32,33 @@ def main() -> None:
         help="Lähde tai 'all' kaikille (oletus: all)",
     )
     harvest_parser.add_argument(
-        "--list", action="store_true", dest="list_sources",
+        "--list",
+        action="store_true",
+        dest="list_sources",
         help="Listaa saatavilla olevat lähteet",
     )
     harvest_parser.add_argument(
-        "--include-static", action="store_true",
+        "--include-static",
+        action="store_true",
         help="Sisällytä staattiset harvesterit (oletuksena ohitetaan)",
     )
 
     # serve
     serve_parser = subparsers.add_parser("serve", help="Käynnistä MCP-server")
     serve_parser.add_argument(
-        "--http", action="store_true",
+        "--http",
+        action="store_true",
         help="Aja streamable HTTP -transportilla (remote MCP) stdion sijaan",
     )
     serve_parser.add_argument(
-        "--host", default=None,
+        "--host",
+        default=None,
         help="HTTP-host (oletus: AURA_HTTP_HOST tai 127.0.0.1)",
     )
     serve_parser.add_argument(
-        "--port", type=int, default=None,
+        "--port",
+        type=int,
+        default=None,
         help="HTTP-portti (oletus: AURA_HTTP_PORT tai 8000)",
     )
 
@@ -93,7 +100,9 @@ def main() -> None:
         "export-enrichments", help="Vie rikastukset JSON-tiedostoon"
     )
     export_parser.add_argument(
-        "--output", "-o", default="enrichments.json",
+        "--output",
+        "-o",
+        default="enrichments.json",
         help="Tulostiedoston polku (oletus: enrichments.json)",
     )
     export_parser.add_argument(
@@ -106,14 +115,10 @@ def main() -> None:
     import_parser = subparsers.add_parser(
         "import-enrichments", help="Tuo rikastukset JSON-tiedostosta"
     )
-    import_parser.add_argument(
-        "files", nargs="+", help="JSON-tiedostot"
-    )
+    import_parser.add_argument("files", nargs="+", help="JSON-tiedostot")
 
     # prune-enrichments
-    prune_parser = subparsers.add_parser(
-        "prune-enrichments", help="Poista vanhat rikastukset"
-    )
+    prune_parser = subparsers.add_parser("prune-enrichments", help="Poista vanhat rikastukset")
     prune_parser.add_argument(
         "--older-than",
         type=int,
@@ -122,30 +127,35 @@ def main() -> None:
     )
 
     # health
-    health_parser = subparsers.add_parser(
-        "health", help="Tarkista resurssien saatavuus"
-    )
+    health_parser = subparsers.add_parser("health", help="Tarkista resurssien saatavuus")
     health_parser.add_argument(
-        "--source", default="",
+        "--source",
+        default="",
         help="Rajaa lähteeseen (esim. avoindata.fi)",
     )
     health_parser.add_argument(
-        "--stale-days", type=int, default=7,
+        "--stale-days",
+        type=int,
+        default=7,
         help="Tarkista uudelleen N päivän jälkeen (oletus: 7)",
     )
     health_parser.add_argument(
-        "--limit", type=int, default=100,
+        "--limit",
+        type=int,
+        default=100,
         help="Tarkistettavien resurssien enimmäismäärä (oletus: 100)",
     )
 
     # quality
     quality_parser = subparsers.add_parser("quality", help="Laske datasettien laatupisteet")
     quality_parser.add_argument(
-        "--source", default="",
+        "--source",
+        default="",
         help="Rajaa lähteeseen (esim. avoindata.fi)",
     )
     quality_parser.add_argument(
-        "--gaps", action="store_true",
+        "--gaps",
+        action="store_true",
         help="Näytä metatiedon puuteanalyysi",
     )
 
@@ -154,30 +164,39 @@ def main() -> None:
         "populate", help="Lataa viiteaineistot (kunnat, postinumerot ym.)"
     )
     populate_parser.add_argument(
-        "name", nargs="?", default="all",
+        "name",
+        nargs="?",
+        default="all",
         help="Populaattorin nimi tai 'all' kaikille (oletus: all)",
     )
     populate_parser.add_argument(
-        "--list", action="store_true", dest="list_populators",
+        "--list",
+        action="store_true",
+        dest="list_populators",
         help="Listaa saatavilla olevat populaattorit",
     )
     populate_parser.add_argument(
-        "--status", action="store_true",
+        "--status",
+        action="store_true",
         help="Näytä populaattoreiden tila",
     )
     populate_parser.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Pakota uudelleenlataus vaikka data on tuore",
     )
 
     # web
     web_parser = subparsers.add_parser("web", help="Käynnistä paikallinen web-palvelin")
     web_parser.add_argument(
-        "--port", type=int, default=8080,
+        "--port",
+        type=int,
+        default=8080,
         help="Portti (oletus: 8080)",
     )
     web_parser.add_argument(
-        "--host", default="127.0.0.1",
+        "--host",
+        default="127.0.0.1",
         help="Osoite (oletus: 127.0.0.1)",
     )
 
@@ -186,7 +205,9 @@ def main() -> None:
         "build-site", help="Generoi staattinen GitHub Pages -sivu"
     )
     build_site_parser.add_argument(
-        "--output", "-o", default="docs/site",
+        "--output",
+        "-o",
+        default="docs/site",
         help="Tuloshakemisto (oletus: docs/site)",
     )
 
@@ -195,19 +216,25 @@ def main() -> None:
         "auto-tag", help="Tagita datasetit automaattisesti YSO-käsitteillä"
     )
     auto_tag_parser.add_argument(
-        "--source", default="",
+        "--source",
+        default="",
         help="Rajaa lähteeseen (esim. avoindata.fi)",
     )
     auto_tag_parser.add_argument(
-        "--limit", type=int, default=100,
+        "--limit",
+        type=int,
+        default=100,
         help="Käsiteltävien datasettien enimmäismäärä (oletus: 100)",
     )
     auto_tag_parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Näytä mitä tagitettaisiin, mutta älä tallenna",
     )
     auto_tag_parser.add_argument(
-        "--delay", type=float, default=0.2,
+        "--delay",
+        type=float,
+        default=0.2,
         help="Viive sekunteina datasettien välissä (oletus: 0.2)",
     )
 
@@ -223,7 +250,9 @@ def main() -> None:
         help="PxWeb-lähde (statfin, luke) tai 'all' (oletus: all)",
     )
     enrich_pxweb_parser.add_argument(
-        "--limit", type=int, default=0,
+        "--limit",
+        type=int,
+        default=0,
         help="Enimmäismäärä tauluja per lähde (0 = kaikki)",
     )
 
@@ -233,15 +262,20 @@ def main() -> None:
         help="Päättele datasettien kenttätiedot (schema introspection)",
     )
     infer_schema_parser.add_argument(
-        "--source", default="",
+        "--source",
+        default="",
         help="Rajaa lähteeseen (esim. avoindata.fi)",
     )
     infer_schema_parser.add_argument(
-        "--limit", type=int, default=50,
+        "--limit",
+        type=int,
+        default=50,
         help="Käsiteltävien datasettien enimmäismäärä (oletus: 50)",
     )
     infer_schema_parser.add_argument(
-        "--delay", type=float, default=0.3,
+        "--delay",
+        type=float,
+        default=0.3,
         help="Viive sekunteina pyyntöjen välissä (oletus: 0.3)",
     )
 
@@ -251,23 +285,29 @@ def main() -> None:
         help="Kokonaisvirkistys: harvest + laatu + health (valinnainen)",
     )
     refresh_parser.add_argument(
-        "--source", default="all",
+        "--source",
+        default="all",
         help="Lähde tai 'all' (oletus: all)",
     )
     refresh_parser.add_argument(
-        "--include-static", action="store_true",
+        "--include-static",
+        action="store_true",
         help="Sisällytä staattiset harvesterit",
     )
     refresh_parser.add_argument(
-        "--health", action="store_true",
+        "--health",
+        action="store_true",
         help="Suorita myös health check",
     )
     refresh_parser.add_argument(
-        "--health-limit", type=int, default=200,
+        "--health-limit",
+        type=int,
+        default=200,
         help="Health checkin resurssiraja (oletus: 200)",
     )
     refresh_parser.add_argument(
-        "--schemas", action="store_true",
+        "--schemas",
+        action="store_true",
         help="Päättele myös skeematiedot",
     )
 
@@ -280,14 +320,18 @@ def main() -> None:
         help="Indeksoi suomen perusmuodot hakua varten (datasets.lemmas)",
     )
 
+    # region-levels
+    subparsers.add_parser(
+        "region-levels",
+        help="Merkitse aineistot joissa kunta on dimensioarvo (aluehaku)",
+    )
+
     # gaps
     gaps_p = subparsers.add_parser(
         "gaps", help="Näytä nollatulokselliset haut (mitä etsittiin turhaan)"
     )
     gaps_p.add_argument("--limit", type=int, default=50, help="Rivien määrä")
-    gaps_p.add_argument(
-        "--clear", action="store_true", help="Tyhjennä kertymä (säilytysaika)"
-    )
+    gaps_p.add_argument("--clear", action="store_true", help="Tyhjennä kertymä (säilytysaika)")
 
     # prune
     prune_ds = subparsers.add_parser(
@@ -326,9 +370,7 @@ def main() -> None:
 
         # `harvest` on `refresh`in lyhyt muoto: sama putki ilman valinnaisia
         # vaiheita. Yksi toteutus, jotta reitit eivät enää eriydy.
-        asyncio.run(
-            _refresh(source=args.source, include_static=args.include_static)
-        )
+        asyncio.run(_refresh(source=args.source, include_static=args.include_static))
 
     elif args.command == "serve":
         from aura.serve import resolve_serve_config
@@ -413,9 +455,7 @@ def main() -> None:
     elif args.command == "probe-sizes":
         from aura.spatial_probe import format_probe_report, probe_all
 
-        probe_results = asyncio.run(
-            probe_all(source=args.source, timeout=args.timeout)
-        )
+        probe_results = asyncio.run(probe_all(source=args.source, timeout=args.timeout))
         print()
         print(format_probe_report(probe_results))
         print()
@@ -447,9 +487,7 @@ def main() -> None:
 
         conn = get_connection()
         init_db(conn)
-        enrichments = export_enrichments(
-            conn, source_type=args.source_type
-        )
+        enrichments = export_enrichments(conn, source_type=args.source_type)
         if not enrichments:
             print("Ei rikastuksia vietäväksi.")
             sys.exit(0)
@@ -460,10 +498,7 @@ def main() -> None:
         }
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
-        print(
-            f"Viety {len(enrichments)} rikastusta "
-            f"tiedostoon {args.output}."
-        )
+        print(f"Viety {len(enrichments)} rikastusta tiedostoon {args.output}.")
 
     elif args.command == "import-enrichments":
         import json
@@ -524,8 +559,10 @@ def main() -> None:
         print("-" * 72)
         for row in rows:
             print(f"{row['count']:>5}  {str(row['last_seen'])[:19]:<21} {row['query']}")
-        print(f"\n{len(rows)} eri kyselyä, yhteensä "
-              f"{sum(int(str(r['count'])) for r in rows)} nollatulosta.")
+        print(
+            f"\n{len(rows)} eri kyselyä, yhteensä "
+            f"{sum(int(str(r['count'])) for r in rows)} nollatulosta."
+        )
 
     elif args.command == "prune":
         from aura.database import get_connection, init_db
@@ -599,12 +636,14 @@ def main() -> None:
         init_db(conn)
 
         print(f"Tarkistetaan resurssien saatavuus (max {args.limit})...")
-        summary = asyncio.run(check_all_resources(
-            conn,
-            source=args.source,
-            stale_days=args.stale_days,
-            limit=args.limit,
-        ))
+        summary = asyncio.run(
+            check_all_resources(
+                conn,
+                source=args.source,
+                stale_days=args.stale_days,
+                limit=args.limit,
+            )
+        )
 
         print("\nTulokset:")
         print(f"  Tarkistettu:   {summary.total}")
@@ -637,8 +676,10 @@ def main() -> None:
             sources = report.get("sources", [])
 
             print("Metatiedon puutteet lähteittäin:\n")
-            print(f"  {'Lähde':25s} {'Yht':>5s} {'Kuvaus':>8s} "
-                  f"{'Avains':>8s} {'Päiv.':>8s} {'Lis.':>8s} {'Täyd.':>6s}")
+            print(
+                f"  {'Lähde':25s} {'Yht':>5s} {'Kuvaus':>8s} "
+                f"{'Avains':>8s} {'Päiv.':>8s} {'Lis.':>8s} {'Täyd.':>6s}"
+            )
             print("  " + "-" * 70)
             for s in sources:
                 t = s["total"]
@@ -652,11 +693,12 @@ def main() -> None:
                 )
 
             totals = report.get("totals", {})
-            print(f"\n  Kokonaismetatiedon täydellisyys: "
-                  f"{totals.get('completeness_pct', 0):.0f}%")
+            print(f"\n  Kokonaismetatiedon täydellisyys: {totals.get('completeness_pct', 0):.0f}%")
 
             suggestions = suggest_improvements(
-                conn, source=args.source, limit=10,
+                conn,
+                source=args.source,
+                limit=10,
             )
             if suggestions:
                 print(f"\nHelpoimmin parannettavat ({len(suggestions)} kpl):")
@@ -773,20 +815,21 @@ def main() -> None:
         build_static_site(output_dir=args.output)
 
     elif args.command == "auto-tag":
-        asyncio.run(_auto_tag(
-            source=args.source,
-            limit=args.limit,
-            dry_run=args.dry_run,
-            delay=args.delay,
-        ))
+        asyncio.run(
+            _auto_tag(
+                source=args.source,
+                limit=args.limit,
+                dry_run=args.dry_run,
+                delay=args.delay,
+            )
+        )
 
     elif args.command == "enrich-pxweb":
         from aura.harvesters import HARVESTERS
         from aura.harvesters.pxweb import PxWebHarvester
 
         pxweb_sources = {
-            name: cls for name, cls in HARVESTERS.items()
-            if issubclass(cls, PxWebHarvester)
+            name: cls for name, cls in HARVESTERS.items() if issubclass(cls, PxWebHarvester)
         }
 
         if args.source == "all":
@@ -807,20 +850,24 @@ def main() -> None:
         print(f"\nYhteensä: {total} taulua rikastettu dimensiotiedoilla.")
 
     elif args.command == "infer-schemas":
-        asyncio.run(_infer_schemas(
-            source=args.source,
-            limit=args.limit,
-            delay=args.delay,
-        ))
+        asyncio.run(
+            _infer_schemas(
+                source=args.source,
+                limit=args.limit,
+                delay=args.delay,
+            )
+        )
 
     elif args.command == "refresh":
-        asyncio.run(_refresh(
-            source=args.source,
-            include_static=args.include_static,
-            run_health=args.health,
-            health_limit=args.health_limit,
-            run_schemas=args.schemas,
-        ))
+        asyncio.run(
+            _refresh(
+                source=args.source,
+                include_static=args.include_static,
+                run_health=args.health,
+                health_limit=args.health_limit,
+                run_schemas=args.schemas,
+            )
+        )
 
     elif args.command == "migrate":
         from aura.database import get_connection, run_migrations
@@ -844,6 +891,38 @@ def main() -> None:
         run_migrations(conn)
         count = index_lemmas(conn)
         print(f"Lemmat indeksoitu {count} datasetille.")
+
+    elif args.command == "region-levels":
+        import httpx
+
+        from aura.constants import user_agent
+        from aura.database import get_connection, run_migrations
+        from aura.populators.municipalities import SOTKANET_REGIONS_URL
+        from aura.region_levels import refresh
+
+        conn = get_connection()
+        run_migrations(conn)
+
+        # Sotkanetin aluetasot yhdellä kutsulla. Jos se ei vastaa,
+        # PxWeb-puoli merkitään silti — puolikas kate on parempi kuin
+        # ei mitään, ja epäonnistuminen on sanottava ääneen.
+        indicators = None
+        try:
+            resp = httpx.get(
+                SOTKANET_REGIONS_URL.replace("/regions", "/indicators"),
+                timeout=120,
+                headers={"User-Agent": user_agent("region-levels")},
+                follow_redirects=True,
+            )
+            resp.raise_for_status()
+            indicators = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            print(f"VAROITUS: Sotkanetin indikaattoreita ei saatu ({exc}).")
+            print("Merkitään vain PxWeb-taulut.")
+
+        count = refresh(conn, indicators)
+        print(f"Kuntatasoisiksi merkitty {count} datasettiä.")
+        print("Aluehaku palauttaa ne omana ryhmänään valtakunnallisina aineistoina.")
 
     else:
         parser.print_help()
@@ -869,7 +948,10 @@ async def _auto_tag(
     init_db(conn)
 
     datasets = get_datasets_without_enrichment(
-        conn, field="yso_concepts", source=source, limit=limit,
+        conn,
+        field="yso_concepts",
+        source=source,
+        limit=limit,
     )
 
     if not datasets:
@@ -913,7 +995,8 @@ async def _auto_tag(
                 import json
 
                 concepts_json = json.dumps(
-                    [s.to_dict() for s in suggestions], ensure_ascii=False,
+                    [s.to_dict() for s in suggestions],
+                    ensure_ascii=False,
                 )
                 add_enrichment(
                     conn,
@@ -986,7 +1069,8 @@ async def _infer_schemas(
         title = ds["title"] or ds["name"]
 
         resources = conn.execute(
-            "SELECT * FROM resources WHERE dataset_id = ?", (ds_id,),
+            "SELECT * FROM resources WHERE dataset_id = ?",
+            (ds_id,),
         ).fetchall()
         resources = [dict(r) for r in resources]
 
@@ -1088,8 +1172,7 @@ async def _refresh(
         for report in stale:
             print(f"  {report.source:<20} {report.stale:>6} vanhentunutta riviä")
         print(
-            f"\n  Yhteensä {sum(r.stale for r in stale)} riviä ei ole nähty "
-            "lähteessä 30 päivään."
+            f"\n  Yhteensä {sum(r.stale for r in stale)} riviä ei ole nähty lähteessä 30 päivään."
         )
         print("  Poista komennolla: aura prune --apply\n")
     else:

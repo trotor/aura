@@ -29,7 +29,8 @@ _DIM_LABELS = {
 
 
 def _batch_dimension_scores(
-    conn: sqlite3.Connection, dataset_ids: list[str],
+    conn: sqlite3.Connection,
+    dataset_ids: list[str],
 ) -> dict[str, dict[str, float]]:
     """Hae laatudimensioiden pisteet dataseteille yhdellä kyselyllä.
 
@@ -53,9 +54,11 @@ def _batch_dimension_scores(
         result.setdefault(row["dataset_id"], {})[row["dimension"]] = row["score"]
     return result
 
+
 # Regex: vuosiluvut (2000–2099), kvartaalit, vuodenajat
 _TEMPORAL_RE = re.compile(
-    r"\b(20\d{2}|q[1-4]|kevät|kesä|syksy|talvi|vuosi|kuukausi)\b", re.IGNORECASE,
+    r"\b(20\d{2}|q[1-4]|kevät|kesä|syksy|talvi|vuosi|kuukausi)\b",
+    re.IGNORECASE,
 )
 # Regex: välimerkit ja ylimääräinen whitespace
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
@@ -63,18 +66,52 @@ _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 # Aihekategoriat: (label, source-prefixes, keyword-patterns)
 _TOPIC_CATEGORIES: list[tuple[str, set[str], set[str]]] = [
     ("Tilastot", {"statfin", "luke"}, {"väestö", "tilasto", "talous", "työ"}),
-    ("Paikkatieto", {"kunnat", "gtk", "metsakeskus", "taustakartat"}, {
-        "kartta", "WFS", "WMS", "paikkatieto", "kiinteistö", "kaava",
-    }),
-    ("Liikenne", {"digitraffic", "traficom"}, {
-        "liikenne", "tie", "rata", "joukkoliikenne", "pysäköinti",
-    }),
-    ("Ympäristö", {"syke", "fmi"}, {
-        "ympäristö", "ilma", "sää", "vesi", "luonto", "metsä",
-    }),
-    ("Hallinto", {"avoindata.fi", "hri.fi"}, {
-        "hallinto", "päätös", "budjetti", "talousarvio", "organisaatio",
-    }),
+    (
+        "Paikkatieto",
+        {"kunnat", "gtk", "metsakeskus", "taustakartat"},
+        {
+            "kartta",
+            "WFS",
+            "WMS",
+            "paikkatieto",
+            "kiinteistö",
+            "kaava",
+        },
+    ),
+    (
+        "Liikenne",
+        {"digitraffic", "traficom"},
+        {
+            "liikenne",
+            "tie",
+            "rata",
+            "joukkoliikenne",
+            "pysäköinti",
+        },
+    ),
+    (
+        "Ympäristö",
+        {"syke", "fmi"},
+        {
+            "ympäristö",
+            "ilma",
+            "sää",
+            "vesi",
+            "luonto",
+            "metsä",
+        },
+    ),
+    (
+        "Hallinto",
+        {"avoindata.fi", "hri.fi"},
+        {
+            "hallinto",
+            "päätös",
+            "budjetti",
+            "talousarvio",
+            "organisaatio",
+        },
+    ),
 ]
 
 # Aihepiirit joita kunnalta odotetaan
@@ -127,10 +164,7 @@ def _categorize_datasets(
 
 def _detect_gaps(datasets: list[dict[str, Any]]) -> list[str]:
     """Tunnista puuttuvat aihepiirit vertaamalla odotettuihin."""
-    all_titles = " ".join(
-        (ds.get("title_fi") or ds.get("title") or "").lower()
-        for ds in datasets
-    )
+    all_titles = " ".join((ds.get("title_fi") or ds.get("title") or "").lower() for ds in datasets)
     all_keywords: set[str] = set()
     for ds in datasets:
         kw = parse_json_list(ds.get("keywords_fi", "[]"))
@@ -193,28 +227,22 @@ def _compute_area_stats(
 
     # Tilastot
     total = len(datasets)
-    avg_quality = (
-        sum(quality_scores.values()) / len(quality_scores)
-        if quality_scores
-        else 0.0
-    )
+    avg_quality = sum(quality_scores.values()) / len(quality_scores) if quality_scores else 0.0
 
     # Dimensioiden keskiarvot
     dimension_avgs: dict[str, float] = {}
     for dim in _QUALITY_DIMENSIONS:
-        values = [
-            ds_dims[dim]
-            for ds_dims in dim_scores.values()
-            if dim in ds_dims
-        ]
+        values = [ds_dims[dim] for ds_dims in dim_scores.values() if dim in ds_dims]
         dimension_avgs[dim] = sum(values) / len(values) if values else 0.0
 
     # Organisaatioiden lukumäärä
-    org_count = len({
-        d.get("organization_title") or d.get("organization_name", "")
-        for d in datasets
-        if d.get("organization_title") or d.get("organization_name")
-    })
+    org_count = len(
+        {
+            d.get("organization_title") or d.get("organization_name", "")
+            for d in datasets
+            if d.get("organization_title") or d.get("organization_name")
+        }
+    )
 
     # Koneluettavuus
     machine_readable_count = 0
@@ -262,16 +290,21 @@ def area_profile(region: str, ctx: Context | None = None) -> str:
         municipality_names = [region_clean]
 
     # Näyttönimi: yksittäinen kunta tai alkuperäinen aluenimi
-    display_name = (
-        municipality_names[0]
-        if len(municipality_names) == 1
-        else region_clean
-    )
+    display_name = municipality_names[0] if len(municipality_names) == 1 else region_clean
 
     # 2. Hae datasetit (ilman FTS, limit=500)
     sql, params = _build_region_query(municipality_names, fts_query=None, limit=500)
     rows = conn.execute(sql, params).fetchall()
-    datasets = [dict(row) for row in rows]
+    kaikki = [dict(row) for row in rows]
+
+    # Profiili kuvaa *aluetta*, joten sen luvut lasketaan vain alueelle
+    # rajatuista aineistoista. Valtakunnalliset kuntatasoiset aineistot
+    # raportoidaan erikseen: ne ovat käyttökelpoisia mutta eivät kerro
+    # mitään tämän alueen omasta datatarjonnasta, ja otsikkolukuun
+    # laskettuina ne nostaisivat Kuopion yhdeksästä viiteensataan
+    # ilman että yksikään uusi rivi koskee Kuopiota.
+    datasets = [d for d in kaikki if not d.get("on_aluetaso")]
+    valtakunnallisia = len(kaikki) - len(datasets)
 
     if not datasets:
         return (
@@ -294,9 +327,7 @@ def area_profile(region: str, ctx: Context | None = None) -> str:
     parts: list[str] = []
     parts.append(f"# {display_name} — avoin data\n")
     parts.append(
-        f"**{total} datasettiä** | "
-        f"Laatu: {avg_quality:.0f}/100 | "
-        f"Koneluettavia: {mr_pct}%\n"
+        f"**{total} datasettiä** | Laatu: {avg_quality:.0f}/100 | Koneluettavia: {mr_pct}%\n"
     )
 
     # Aiheittain
@@ -337,10 +368,28 @@ def area_profile(region: str, ctx: Context | None = None) -> str:
 
     # Puutteet
     if gaps:
-        parts.append("## Puutteet\n")
+        # Sanamuoto oli "Ei avointa väestö-dataa". Se ei pitänyt
+        # paikkaansa: profiili katsoo vain aineistoja jotka on rajattu
+        # tälle alueelle, eikä näe valtakunnallisia aineistoja joissa
+        # kunta on dimensioarvo. Kuopion väkiluku on sekä StatFinissä
+        # että Sotkanetissa, joten väite ohjasi lukijan harhaan juuri
+        # siinä kohdassa jossa hän luotti työkaluun eniten.
+        parts.append("## Puutteet alueelle rajatuissa aineistoissa\n")
         for gap in gaps:
-            parts.append(f"- Ei avointa {gap.lower()}-dataa")
+            parts.append(f"- Ei {gap.lower()}-dataa jonka aluerajaus on tämä alue")
         parts.append("")
+        if valtakunnallisia:
+            parts.append(
+                f"Nämä aiheet voivat silti löytyä {valtakunnallisia}"
+                f" valtakunnallisesta aineistosta joissa kunta on dimensiona"
+                f" — kokeile `search_by_region('{display_name}', aihe)`.\n"
+            )
+        else:
+            parts.append(
+                "Nämä aiheet voivat silti löytyä valtakunnallisista aineistoista"
+                " joissa kunta on dimensiona — kokeile"
+                " `search_by_region(alue, aihe)`.\n"
+            )
 
     return "\n".join(parts)
 
@@ -365,9 +414,7 @@ def _normalize_title(ds: dict[str, Any], municipality_names: list[str] | None = 
     return " ".join(title.split())
 
 
-def _filter_by_theme(
-    datasets: list[dict[str, Any]], theme: str
-) -> list[dict[str, Any]]:
+def _filter_by_theme(datasets: list[dict[str, Any]], theme: str) -> list[dict[str, Any]]:
     """Suodata datasetit teeman mukaan.
 
     Käyttää domain-sanastoja laajentamaan teemaa, jotta esim.
@@ -467,16 +514,19 @@ def compare_municipalities(
     parts.append(_row("Organisaatioita", [str(muni_data[n]["org_count"]) for n in names_list]))
     parts.append(_row("Koneluettavia", [f"{muni_data[n]['mr_pct']}%" for n in names_list]))
     parts.append(_row("Tuoreita (< 1v)", [f"{muni_data[n]['fresh_pct']}%" for n in names_list]))
-    parts.append(_row("Laatu (ka.)", [
-        f"{muni_data[n]['avg_quality']:.0f}/100" for n in names_list
-    ]))
+    parts.append(
+        _row("Laatu (ka.)", [f"{muni_data[n]['avg_quality']:.0f}/100" for n in names_list])
+    )
 
     # Dimensiokohtaiset pisteet
     for dim in _QUALITY_DIMENSIONS:
         label = _DIM_LABELS[dim]
-        parts.append(_row(f"  {label}", [
-            f"{muni_data[n]['dimension_avgs'].get(dim, 0):.0f}" for n in names_list
-        ]))
+        parts.append(
+            _row(
+                f"  {label}",
+                [f"{muni_data[n]['dimension_avgs'].get(dim, 0):.0f}" for n in names_list],
+            )
+        )
     parts.append("")
 
     # Erojen tunnistus: mitä toisella on mutta toisella ei

@@ -10,6 +10,10 @@ import aura.server as _server
 from aura.constants import format_date
 from aura.server import mcp
 
+#: Sotkanetin indikaattorirajapinta. Tulostetaan kuntahaun yhteydessä
+#: valmiina kutsuna, ks. :func:`_sotkanet_lines`.
+SOTKANET_JSON = "https://sotkanet.fi/rest/1.1/json"
+
 
 @mcp.tool()
 def reference_status(ctx: Context | None = None) -> str:
@@ -102,17 +106,12 @@ def lookup_municipality(query: str, ctx: Context | None = None) -> str:
         "SELECT record_count FROM ref_metadata WHERE name = 'municipalities'"
     ).fetchone()
     if not meta or meta["record_count"] == 0:
-        return (
-            "Kuntatietoja ei ole ladattu. "
-            "Kutsu ensin: `populate_reference('municipalities')`"
-        )
+        return "Kuntatietoja ei ole ladattu. Kutsu ensin: `populate_reference('municipalities')`"
 
     # Tunnista tyyppi
     if query.isdigit() and len(query) == 5:
         # Postinumero → hae kunta
-        postal = conn.execute(
-            "SELECT * FROM ref_postal_codes WHERE code = ?", (query,)
-        ).fetchone()
+        postal = conn.execute("SELECT * FROM ref_postal_codes WHERE code = ?", (query,)).fetchone()
         if not postal:
             return f"Postinumeroa '{query}' ei löytynyt."
         muni_code = postal["municipality_code"]
@@ -126,9 +125,7 @@ def lookup_municipality(query: str, ctx: Context | None = None) -> str:
     if query.isdigit() and len(query) <= 3:
         # Kuntakoodi
         code = query.zfill(3)
-        muni = conn.execute(
-            "SELECT * FROM ref_municipalities WHERE code = ?", (code,)
-        ).fetchone()
+        muni = conn.execute("SELECT * FROM ref_municipalities WHERE code = ?", (code,)).fetchone()
         if not muni:
             return f"Kuntakoodilla '{code}' ei löytynyt kuntaa."
         return _format_municipality(muni)
@@ -171,4 +168,44 @@ def _format_municipality(
         lines.append(f"- **ELY-keskus:** {muni['ely_name_fi']}")
     if muni["wellbeing_area_name_fi"]:
         lines.append(f"- **Hyvinvointialue:** {muni['wellbeing_area_name_fi']}")
+    lines.extend(_sotkanet_lines(muni))
     return "\n".join(lines)
+
+
+def _sotkanet_lines(muni: Any) -> list[str]:
+    """Sotkanet-kysely valmiina, jos aluetunnus on populoitu.
+
+    Pelkkä tunnusluku ei auttaisi ketään: Sotkanetin oma tunnus on eri
+    kuin kuntakoodi (Kuopio 297 → alue 161), ja ilman valmista osoitetta
+    kysyjän olisi silti pääteltävä parametrien nimet.
+
+    **Aluesuodatinta ei ole.** Mitattuna 16.8.2026 rajapinta palauttaa
+    467 riviä riippumatta siitä annetaanko ``regions``, ``region``,
+    ``areas`` vai ei mitään — kaikki alueet aina. Tunnus on siis
+    vastauksen suodattamista varten, ei kyselyn. Tämä on kerrottava
+    ääneen: ``regions=161`` näyttää suodattimelta ja tuottaisi
+    hiljaisen virheen, jossa Kuopion sijaan luetaan ensimmäisen rivin
+    alue.
+    """
+    try:
+        sid = muni["sotkanet_id"]
+    except (IndexError, KeyError):
+        # Migraatio 021 ajamatta — vanha kanta, ei virhe.
+        return []
+    if sid is None:
+        return []
+
+    lines = [
+        f"- **Sotkanet-alue:** {sid} (eri kuin kuntakoodi {muni['code']})",
+        f"  - Haku: `{SOTKANET_JSON}?indicator=<id>&years=<v>&genders=total`",
+        f"  - Rajapinta palauttaa **kaikki alueet**; poimi vastauksesta rivi"
+        f" jolla `region == {sid}`. Aluesuodatinparametria ei ole.",
+    ]
+    for otsikko, avain in (
+        ("Maakunta", "sotkanet_region_id"),
+        ("Hyvinvointialue", "sotkanet_wellbeing_area_id"),
+    ):
+        arvo = muni[avain]
+        if arvo is not None:
+            lines.append(f"  - {otsikko}tason rivi: `region == {arvo}`")
+    return lines

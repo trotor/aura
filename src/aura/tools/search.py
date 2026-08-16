@@ -61,8 +61,13 @@ async def search(
         region_names = _resolve_region(conn, region.strip()) or [region.strip()]
 
     results = search_datasets(
-        conn, query, limit=limit, offset=offset,
-        source=source, fmt=format, organization=organization,
+        conn,
+        query,
+        limit=limit,
+        offset=offset,
+        source=source,
+        fmt=format,
+        organization=organization,
         access_level=access_level,
         expanded_query=expanded_query,
         region_names=region_names,
@@ -122,8 +127,13 @@ async def search_structured(
         region_names = _resolve_region(conn, region.strip()) or [region.strip()]
 
     results = search_datasets(
-        conn, query, limit=limit, offset=offset,
-        source=source, fmt=format, organization=organization,
+        conn,
+        query,
+        limit=limit,
+        offset=offset,
+        source=source,
+        fmt=format,
+        organization=organization,
         access_level=access_level,
         expanded_query=expanded_query,
         region_names=region_names,
@@ -138,23 +148,25 @@ async def search_structured(
         keywords = parse_json_list(d.get("keywords_fi", "[]"))
 
         ds_id = d.get("id", "")
-        structured.append({
-            "id": ds_id,
-            "name": d.get("name", ""),
-            "title": d.get("title_fi") or d.get("title", ""),
-            "description": d.get("notes_fi") or d.get("notes", ""),
-            "organization": d.get("organization_title", ""),
-            "source": d.get("source", ""),
-            "license": d.get("license_title", ""),
-            "keywords": keywords,
-            "modified": d.get("metadata_modified", ""),
-            "num_resources": d.get("num_resources", 0),
-            "estimated_size_bytes": d.get("estimated_size_bytes", 0),
-            "access_level": d.get("access_level", "open"),
-            "harvested_at": d.get("harvested_at", ""),
-            "enrichment_count": enrichment_counts.get(ds_id, 0),
-            "health": health_map.get(ds_id),
-        })
+        structured.append(
+            {
+                "id": ds_id,
+                "name": d.get("name", ""),
+                "title": d.get("title_fi") or d.get("title", ""),
+                "description": d.get("notes_fi") or d.get("notes", ""),
+                "organization": d.get("organization_title", ""),
+                "source": d.get("source", ""),
+                "license": d.get("license_title", ""),
+                "keywords": keywords,
+                "modified": d.get("metadata_modified", ""),
+                "num_resources": d.get("num_resources", 0),
+                "estimated_size_bytes": d.get("estimated_size_bytes", 0),
+                "access_level": d.get("access_level", "open"),
+                "harvested_at": d.get("harvested_at", ""),
+                "enrichment_count": enrichment_counts.get(ds_id, 0),
+                "health": health_map.get(ds_id),
+            }
+        )
 
     return json.dumps(
         {"query": query, "count": len(structured), "offset": offset, "results": structured},
@@ -205,9 +217,7 @@ async def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> s
         modified = d.get("metadata_modified", "")
         if modified:
             try:
-                mod_dt = datetime.fromisoformat(modified).replace(
-                    tzinfo=UTC
-                )
+                mod_dt = datetime.fromisoformat(modified).replace(tzinfo=UTC)
                 days_old = (now - mod_dt).days
                 if days_old < 90:
                     score -= 0.8  # erittäin tuore
@@ -336,8 +346,21 @@ async def search_by_region(
         parts[0] += f" haulle '{query}'"
     parts[0] += ":\n"
 
+    otsikko_annettu = False
     for row in rows:
-        parts.append(format_dataset_summary(dict(row)))
+        d = dict(row)
+        # Valtakunnalliset kuntatasoiset aineistot omaan ryhmäänsä. Ne
+        # eivät koske tätä kuntaa vaan sisältävät sen rivinä, eikä
+        # kattavuudesta ole varmuutta ilman datan hakemista.
+        if d.get("on_aluetaso") and not otsikko_annettu:
+            parts.append(
+                f"### Koko maan aineistot joissa kunta on dimensiona\n"
+                f"Nämä eivät koske erityisesti aluetta '{region}' vaan"
+                f" sisältävät kuntatason rivit. Kattavuus vaihtelee"
+                f" aineistoittain — tarkista datasta.\n"
+            )
+            otsikko_annettu = True
+        parts.append(format_dataset_summary(d))
         parts.append("---")
 
     return "\n".join(parts)
@@ -351,43 +374,65 @@ def _build_region_query(
     fts_query: str | None,
     limit: int,
 ) -> tuple[str, list[Any]]:
-    """Rakenna aluehaun SQL-kysely parametreineen."""
-    coverage_conditions = " OR ".join(
-        "d.geographical_coverage LIKE ?" for _ in municipality_names
-    )
+    """Rakenna aluehaun SQL-kysely parametreineen.
+
+    Alueellisesti relevantti aineisto on kahdenlaista. Aineisto voi
+    koskea aluetta (``geographical_coverage``), tai se voi olla koko
+    maan kattava aineisto jossa kunta on dimensioarvo. Jälkimmäinen
+    puuttui, ja siksi "Kuopio + väestö" palautti tyhjän vaikka Kuopion
+    väkiluku on sekä StatFinissä että Sotkanetissa.
+
+    ``on_aluetaso``-sarake kertoo kummasta on kyse, jotta tuloste voi
+    erottaa ne: kuntatasoinen valtakunnallinen taulu ei ole sama asia
+    kuin kuntaa koskeva aineisto, eikä sitä saa esittää sellaisena.
+    """
+    coverage_conditions = " OR ".join("d.geographical_coverage LIKE ?" for _ in municipality_names)
     coverage_params = [f"%{name}%" for name in municipality_names]
 
+    region_level = "d.id IN (SELECT dataset_id FROM enrichments WHERE field = 'region_level')"
+    where = f"(({coverage_conditions}) OR {region_level})"
+    flag = f"CASE WHEN {region_level} AND NOT ({coverage_conditions}) THEN 1 ELSE 0 END"
+
     if fts_query:
-        sql = """
-            SELECT d.*, COALESCE(fts.rank, 0) as rank
+        sql = f"""
+            SELECT d.*, COALESCE(fts.rank, 0) as rank,
+                   {flag} AS on_aluetaso
             FROM datasets d
             LEFT JOIN (
                 SELECT rowid, rank FROM datasets_fts
                 WHERE datasets_fts MATCH ?
             ) fts ON d.rowid = fts.rowid
-            WHERE (""" + coverage_conditions + """)
+            WHERE {where}
             AND (fts.rowid IS NOT NULL OR d.id IN
                 (SELECT DISTINCT dataset_id FROM enrichments_fts
                  WHERE enrichments_fts MATCH ?))
-            ORDER BY rank
+            ORDER BY on_aluetaso, rank
             LIMIT ?
         """
-        params: list[Any] = [fts_query, *coverage_params, fts_query, limit]
+        # SQLite sitoo parametrit siinä järjestyksessä kuin ne esiintyvät
+        # SQL-tekstissä. flag on SELECT-listassa eli ennen FROM-lauseen
+        # MATCH-alikyselyä, joten sen parametrit tulevat ensin.
+        params: list[Any] = [
+            *coverage_params,  # SELECT: flag-sarakkeen NOT (...)
+            fts_query,  # FROM: datasets_fts MATCH
+            *coverage_params,  # WHERE: coverage
+            fts_query,  # WHERE: enrichments_fts MATCH
+            limit,
+        ]
     else:
-        sql = """
-            SELECT d.*
+        sql = f"""
+            SELECT d.*, {flag} AS on_aluetaso
             FROM datasets d
-            WHERE (""" + coverage_conditions + """)
+            WHERE {where}
+            ORDER BY on_aluetaso
             LIMIT ?
         """
-        params = [*coverage_params, limit]
+        params = [*coverage_params, *coverage_params, limit]
 
     return sql, params
 
 
-def _batch_enrichment_counts(
-    conn: sqlite3.Connection, dataset_ids: list[str]
-) -> dict[str, int]:
+def _batch_enrichment_counts(conn: sqlite3.Connection, dataset_ids: list[str]) -> dict[str, int]:
     """Hae enrichment-lukumäärät yhdellä kyselyllä."""
     if not dataset_ids:
         return {}
@@ -404,9 +449,7 @@ def _batch_enrichment_counts(
     return {row["dataset_id"]: row["cnt"] for row in rows}
 
 
-def _batch_formats(
-    conn: sqlite3.Connection, dataset_ids: list[str]
-) -> dict[str, set[str]]:
+def _batch_formats(conn: sqlite3.Connection, dataset_ids: list[str]) -> dict[str, set[str]]:
     """Hae resurssiformaatit dataseteille yhdellä kyselyllä."""
     if not dataset_ids:
         return {}
@@ -425,9 +468,7 @@ def _batch_formats(
     return result
 
 
-def _batch_quality_scores(
-    conn: sqlite3.Connection, dataset_ids: list[str]
-) -> dict[str, float]:
+def _batch_quality_scores(conn: sqlite3.Connection, dataset_ids: list[str]) -> dict[str, float]:
     """Hae overall-laatupisteet dataseteille yhdellä kyselyllä."""
     if not dataset_ids:
         return {}
