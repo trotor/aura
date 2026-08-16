@@ -15,6 +15,32 @@ vaikka eivät yleiskielen sanakirjassa.
 **Jako on additiivinen.** Alkuperäinen sana säilyy aina ja osat lisätään sen
 rinnalle. Jako voi siis vain lisätä osumia, ei kadottaa niitä — sama sääntö
 kuin dimensiokerroksella: laajentaa kattavuutta, ei syrjäytä.
+
+**Genetiivialkuisia ei jaeta, ja se on mitattu päätös.** Sanasto sisältää
+perusmuodot, joten ``vedenlämpötila`` ei jakaudu: sanastossa on ``vesi``
+(158 datasettiä) muttei ``veden``. Suomen yhdyssanan alkuosa on tyypillisesti
+genetiivissä, joten aukko on iso — alkuosan lemmatisointi avaisi 892 korpuksen
+sanaa, 11,7 % jakamattomista, ja niiden joukossa on ilmeisiä voittoja kuten
+``tekijänoikeus``, ``terveydenhuolto`` ja ``lastensuojelu``.
+
+Se **hävisi silti mittauksessa** (16.8.2026). Lemmatisointi tuottaa myös
+virhejakoja — ``valtiokonttori`` → ``valtio`` + ``tori``, ``erityisohjelma``
+→ ``erittyä`` + ``ohjelma``, ``yksityiskohta`` → ``yksi`` + ``kohta`` — ja
+kohina maksoi enemmän kuin osumat toivat:
+
+===========================  ==========  ========  ============
+tila                         recall@50   nDCG@10   precision@10
+===========================  ==========  ========  ============
+nykyinen (ei lemmatisointia)     0,8611    0,6182         0,7778
+alkuosan lemmatisointi           0,8444    0,6201         0,6000
+===========================  ==========  ========  ============
+
+Alkuosan pituusraja ei pelasta sitä. Rajat 5, 6, 7 ja 8 mitattiin: tarkkuus
+jää **0,6000:aan jokaisella**, eli haitalliset jaot eivät ole lyhytalkuisia
+vaan vika on rakenteellinen. Vain nDCG@10 nousee, ja marginaalisesti.
+
+Jos tähän palataan, ongelma on erottaa aito taivutusmuoto keksitystä
+katkaisusta — ei säätää pituusrajaa uudestaan.
 """
 
 from __future__ import annotations
@@ -59,6 +85,7 @@ MIN_DATASETS = 2
 #: erottele.
 MAX_PART_SHARE = 0.10
 
+
 class Lexicon(NamedTuple):
     """Sanasto jakoa varten.
 
@@ -89,9 +116,7 @@ _lexicons: dict[str, Lexicon] = {}
 _split_caches: dict[str, dict[str, list[str] | None]] = {}
 
 
-def build_lexicon(
-    conn: sqlite3.Connection, *, min_datasets: int = MIN_DATASETS
-) -> Lexicon:
+def build_lexicon(conn: sqlite3.Connection, *, min_datasets: int = MIN_DATASETS) -> Lexicon:
     """Kokoa sanasto korpuksen lemmoista.
 
     Sanasto rakennetaan nykyisistä lemmoista, jotka on tuotettu ilman jakoa.
@@ -110,13 +135,9 @@ def build_lexicon(
         ).fetchone()[0]
     )
     kept = {
-        word: n
-        for word, n in counts.items()
-        if n >= min_datasets and len(word) >= MIN_PART_LENGTH
+        word: n for word, n in counts.items() if n >= min_datasets and len(word) >= MIN_PART_LENGTH
     }
-    logger.info(
-        "[decompound] Sanasto: %d sanaa, %d datasettiä", len(kept), total
-    )
+    logger.info("[decompound] Sanasto: %d sanaa, %d datasettiä", len(kept), total)
     return Lexicon(kept, total)
 
 
