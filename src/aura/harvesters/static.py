@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Iterator
 from typing import Any
 
@@ -94,12 +95,22 @@ class StaticHarvester(BaseHarvester):
         title = fmt(cfg.get("title", ""))
 
         resources = []
+        # Formaattilaskuri: oletustunnus oli pelkkä {ds_id}-{formaatti},
+        # joten datasetin kolme JSON-resurssia saivat saman tunnuksen ja
+        # save_dataset()-upsert kirjoitti ne toistensa päälle — kaksi
+        # kolmesta katosi hiljaa. Ensimmäinen kutakin formaattia pitää
+        # entisen tunnuksensa, jottei koko katalogin tunnuksia vaihdeta;
+        # seuraaville lisätään järjestysnumero.
+        seen_formats: Counter[str] = Counter()
         for r in cfg.get("resources", []):
             r_fmt = r.get("format", "")
             label = FORMAT_LABELS_FI.get(r_fmt, r_fmt)
+            seen_formats[r_fmt] += 1
+            n = seen_formats[r_fmt]
+            default_id = f"{ds_id}-{r_fmt.lower()}" + ("" if n == 1 else f"-{n}")
             resources.append(
                 Resource(
-                    id=fmt(r["id"]) if "id" in r else f"{ds_id}-{r_fmt.lower()}",
+                    id=fmt(r["id"]) if "id" in r else default_id,
                     name=fmt(r.get("name", f"{title} ({r_fmt})")),
                     name_fi=fmt(r.get("name_fi", f"{title} — {label}")),
                     format=r_fmt,

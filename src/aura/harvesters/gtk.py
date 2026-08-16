@@ -28,6 +28,11 @@ from __future__ import annotations
 
 from aura.harvesters.static import StaticHarvester
 
+#: OGC-rajapinnat. **Jokainen palvelu on erikseen WFS- ja WMS-nimellä**:
+#: ``GTK_Kalliopera_WFS`` ja ``GTK_Kalliopera_WMS`` ovat eri palveluja.
+#: WMS-osoite ``_WFS``-polun alla vastaa HTTP 400 — se vika oli täällä
+#: kolmessa datasetissä eikä näkynyt mitenkään, koska harvestointi ei
+#: kutsu näitä osoitteita.
 ARCGIS_BASE = "https://gtkdata.gtk.fi/arcgis/services/Rajapinnat"
 
 #: REST-palvelut hakemiston muista kansioista. Näillä ei ole WFS/WMS-paria
@@ -63,7 +68,7 @@ class GtkHarvester(StaticHarvester):
             "estimated_size_bytes": 2 * 1024**3,
             "resources": [
                 {"format": "WFS", "url": f"{ARCGIS_BASE}/GTK_Kalliopera_WFS/MapServer/WFSServer"},
-                {"format": "WMS", "url": f"{ARCGIS_BASE}/GTK_Kalliopera_WFS/MapServer/WMSServer"},
+                {"format": "WMS", "url": f"{ARCGIS_BASE}/GTK_Kalliopera_WMS/MapServer/WMSServer"},
             ],
         },
         {
@@ -77,7 +82,7 @@ class GtkHarvester(StaticHarvester):
             "estimated_size_bytes": 3 * 1024**3,
             "resources": [
                 {"format": "WFS", "url": f"{ARCGIS_BASE}/GTK_Maapera_WFS/MapServer/WFSServer"},
-                {"format": "WMS", "url": f"{ARCGIS_BASE}/GTK_Maapera_WFS/MapServer/WMSServer"},
+                {"format": "WMS", "url": f"{ARCGIS_BASE}/GTK_Maapera_WMS/MapServer/WMSServer"},
             ],
         },
         {
@@ -93,11 +98,11 @@ class GtkHarvester(StaticHarvester):
                 },
                 {
                     "format": "WMS",
-                    "url": f"{ARCGIS_BASE}/GTK_Kiviainesvarannot_WFS/MapServer/WMSServer",
+                    "url": f"{ARCGIS_BASE}/GTK_Kiviainesvarannot_WMS/MapServer/WMSServer",
                 },
             ],
         },
-        # --- WMS-only -palvelut ---
+        # --- WMS-only ---
         {
             "id": "gtk-geofysiikka",
             "title": "Geofysikaaliset kartat",
@@ -107,7 +112,7 @@ class GtkHarvester(StaticHarvester):
             "keywords_fi": ["geofysiikka", "magneettikenttä", "gravimetria", "GTK"],
             "estimated_size_bytes": 1 * 1024**3,
             "resources": [
-                {"format": "WMS", "url": f"{ARCGIS_BASE}/geofysiikka"},
+                {"format": "WMS", "url": f"{ARCGIS_BASE}/GTK_Geofysiikka_WMS/MapServer/WMSServer"},
             ],
         },
         {
@@ -119,7 +124,14 @@ class GtkHarvester(StaticHarvester):
             "keywords_fi": ["pohjatutkimus", "kairaus", "geotekniikka", "GTK"],
             "estimated_size_bytes": int(0.5 * 1024**3),
             "resources": [
-                {"format": "WMS", "url": f"{ARCGIS_BASE}/pohjatutkimukset"},
+                {
+                    "format": "WFS",
+                    "url": f"{ARCGIS_BASE}/GTK_Pohjatutkimukset_WFS/MapServer/WFSServer",
+                },
+                {
+                    "format": "WMS",
+                    "url": f"{ARCGIS_BASE}/GTK_Pohjatutkimukset_WMS/MapServer/WMSServer",
+                },
             ],
         },
         # --- Aihealueet joita ei ole muissa lähteissä (tarkistettu 16.8.2026) ---

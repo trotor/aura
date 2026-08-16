@@ -76,6 +76,35 @@ class TestConfig:
             for r in cfg["resources"]:
                 assert r["url"].startswith(GTK_HOST), (cfg["id"], r["url"])
 
+    def test_wms_ei_osoita_wfs_palveluun(self):
+        """WMS-osoite ``_WFS``-palvelun alla vastaa HTTP 400.
+
+        GTK julkaisee jokaisen aineiston kahtena erillisenä palveluna,
+        ``GTK_X_WFS`` ja ``GTK_X_WMS``. Kolmessa datasetissä WMS osoitti
+        WFS-palveluun. Vika ei näkynyt mitenkään: harvestointi ei kutsu
+        näitä osoitteita, joten rikkinäinen linkki päätyi katalogiin ja
+        olisi hajonnut vasta käyttäjän kädessä.
+        """
+        h = _harvester()
+        for cfg in h.datasets_config:
+            for r in cfg["resources"]:
+                if r["format"] == "WMS":
+                    assert "_WFS/" not in r["url"], (cfg["id"], r["url"])
+                if r["format"] == "WFS":
+                    assert "_WMS/" not in r["url"], (cfg["id"], r["url"])
+
+    def test_ogc_osoitteet_paattyvat_palvelupolkuun(self):
+        """OGC-resurssin on osoitettava ``…Server``-päätteeseen.
+
+        Pelkkä palvelun juuri (``…/Rajapinnat/geofysiikka``) vastaa 400
+        GetCapabilities-kyselyyn.
+        """
+        h = _harvester()
+        for cfg in h.datasets_config:
+            for r in cfg["resources"]:
+                if r["format"] in ("WFS", "WMS"):
+                    assert r["url"].endswith(f"/{r['format']}Server"), (cfg["id"], r["url"])
+
     def test_puuttuvat_aihealueet_ovat_mukana(self):
         """Aihealueet joita ei saa mistään muusta lähteestä.
 
