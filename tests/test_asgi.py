@@ -188,7 +188,28 @@ class TestInstanssikuvaus:
         monkeypatch.setenv("AURA_INSTANCE_NOTE", "Kenttätason indeksi mukana.")
         with TestClient(create_asgi_app()) as c:
             body = c.get("/").text
-        assert "laajennettua versiota" in body
+        # Sivu kertoo **kyvystä**, ei tuoteversiosta: "laajennettu versio
+        # (Aura Pro)" luki kuin maksullinen taso, vaikka kyse on indeksin
+        # syvyydestä. Nimi näytetään yhä jos se on asetettu, mutta se ei
+        # enää kanna viestiä.
+        assert "ulottuu myös aineistojen sisälle" in body
         assert "Aura Pro" in body
         assert "Kenttätason indeksi mukana." in body
+        assert "tulevat samasta repositoriosta" not in body
+
+    def test_nimeton_laajennus_kertoo_silti_kyvysta(
+        self, db_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pelkkä kuvaus riittää — tuotenimeä ei tarvita.
+
+        Julkinen instanssi ajaa juuri näin: nimi on tyhjä ja kuvaus kertoo
+        mitä indeksi sisältää.
+        """
+        monkeypatch.setenv("AURA_DB", str(db_path))
+        monkeypatch.delenv("AURA_INSTANCE_NAME", raising=False)
+        monkeypatch.setenv("AURA_INSTANCE_NOTE", "Koodistojen käsitteet mukana.")
+        with TestClient(create_asgi_app()) as c:
+            body = c.get("/").text
+        assert "ulottuu myös aineistojen sisälle" in body
+        assert "Koodistojen käsitteet mukana." in body
         assert "tulevat samasta repositoriosta" not in body

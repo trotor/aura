@@ -44,11 +44,13 @@
             instanssin omalla koneellasi tai palvelimellasi.
         </p>
         <p>
-            <strong>Tämä palvelin ajaa laajennettua versiota{% if instance.name %}
-            ({{ instance.name }}){% endif %}.</strong>
+            <strong>Tämän palvelimen haku ulottuu myös aineistojen sisälle.</strong>
             {% if instance.note %}{{ instance.note }}{% endif %}
-            Avoin versio sisältää saman aineiston ja saman hakukoneen; laajennus
-            on lisäkerros sen päällä.
+        </p>
+        <p>
+            Aineisto ja hakukone ovat samat kuin avoimessa versiossa. Sisältöindeksi
+            on erillinen kerros, jota ylläpidetään tämän palvelimen mukana{% if instance.name %} —
+            {{ instance.name }}{% endif %}.
         </p>
         {% else %}
         <p>
