@@ -26,6 +26,31 @@ DEFAULT_STALE_DAYS = 7  # tarkista uudelleen N päivän jälkeen
 # URL-patternit joille HEAD ei yleensä toimi
 SKIP_HEAD_PATTERNS = ("wfs", "wms", "wcs", "ows", "geoserver")
 
+#: OGC-formaatit ja niiden palvelunimi GetCapabilities-kyselyssä.
+#:
+#: Osa palvelimista vaatii parametrit: ``kartta.hel.fi/ws/geoserver/
+#: avoindata/wfs`` ja ``inspire.ruokavirasto-awsa.com/geoserver/wfs``
+#: vastaavat paljaaseen GET:iin HTTP 400:lla vaikka palvelevat
+#: GetCapabilitiesiin normaalisti. Useimmat sietävät paljaan GET:in,
+#: joten vaikutus on maltillinen: 120 OGC-resurssin otoksessa
+#: saatavuus nousi 92 %:sta 97 %:iin (16.8.2026). Ne viisi ovat
+#: kuitenkin vääriä hälytyksiä, ja väärä hälytys tekee koko raportista
+#: sellaisen ettei sitä lueta.
+OGC_SERVICES = {"WFS": "WFS", "WMS": "WMS", "WCS": "WCS"}
+
+
+def probe_url(url: str, resource_format: str | None) -> str:
+    """Osoite jolla saatavuus mitataan.
+
+    OGC-palveluille liitetään GetCapabilities-kysely, ellei osoitteessa
+    jo ole ``request``-parametria. Muut osoitteet mitataan sellaisenaan.
+    """
+    service = OGC_SERVICES.get((resource_format or "").upper())
+    if not service or "request=" in url.lower():
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}service={service}&request=GetCapabilities"
+
 
 class TokenBucket:
     """Token bucket -pohjainen rate limiter (pyyntöjä/sekunti)."""
@@ -94,10 +119,13 @@ async def check_resource(
     resource_id: str,
     dataset_id: str,
     url: str,
+    resource_format: str | None = None,
 ) -> HealthResult:
     """Tarkista yksittäisen resurssin saatavuus.
 
     Käyttää HEAD-pyyntöä, fallback GET:iin jos HEAD epäonnistuu.
+    OGC-palvelut mitataan GetCapabilities-kyselyllä, ks. :func:`probe_url`.
+    Tulokseen tallennetaan alkuperäinen osoite, ei mittausosoite.
     """
     result = HealthResult(
         resource_id=resource_id,
@@ -109,6 +137,8 @@ async def check_resource(
         result.error_message = "Virheellinen URL"
         return result
 
+    target = probe_url(url, resource_format)
+
     # Kokeile HEAD ensin (ellei tunneta ongelmalliseksi)
     use_head = not any(p in url.lower() for p in SKIP_HEAD_PATTERNS)
     methods = ["HEAD", "GET"] if use_head else ["GET"]
@@ -117,11 +147,12 @@ async def check_resource(
         start = time.monotonic()
         try:
             if method == "HEAD":
-                response = await client.head(url, follow_redirects=True)
+                response = await client.head(target, follow_redirects=True)
             else:
                 # GET: lue vain headerit, älä lataa bodya
                 response = await client.get(
-                    url, follow_redirects=True,
+                    target,
+                    follow_redirects=True,
                     headers={"Range": "bytes=0-0"},
                 )
 
@@ -147,9 +178,7 @@ async def check_resource(
 
         except httpx.TimeoutException:
             result.error_message = "Timeout"
-            result.response_time_ms = int(
-                (time.monotonic() - start) * 1000
-            )
+            result.response_time_ms = int((time.monotonic() - start) * 1000)
             return result
         except httpx.TransportError as e:
             result.error_message = str(e)[:200]
@@ -200,7 +229,7 @@ def get_resources_to_check(
     # SQLite osaa vertailla ISO-aikaleimoja merkkijonoina
 
     query = """
-        SELECT r.id as resource_id, r.dataset_id, r.url
+        SELECT r.id as resource_id, r.dataset_id, r.url, r.format
         FROM resources r
         JOIN datasets d ON r.dataset_id = d.id
         LEFT JOIN resource_health h ON r.id = h.resource_id
@@ -277,6 +306,7 @@ async def check_all_resources(
                     res["resource_id"],
                     res["dataset_id"],
                     res["url"],
+                    res.get("format"),
                 )
 
         tasks = [_check_one(r) for r in resources]
@@ -311,7 +341,10 @@ async def check_all_resources(
 
     logger.info(
         "[health] Tarkistettu %d resurssia: %d saatavilla, %d ei saatavilla, %d virhettä",
-        summary.total, summary.available, summary.unavailable, summary.errors,
+        summary.total,
+        summary.available,
+        summary.unavailable,
+        summary.errors,
     )
 
     return summary
@@ -399,7 +432,10 @@ def _detect_auth_from_results(
             continue
 
         add_enrichment(
-            conn, ds_id, "auth_method", "registration",
+            conn,
+            ds_id,
+            "auth_method",
+            "registration",
             confidence="medium",
             source_type="health_check",
             source_detail="Auto-detected from HTTP 401/403",
