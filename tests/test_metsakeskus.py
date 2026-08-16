@@ -59,21 +59,19 @@ class TestChmYears:
     def test_chm_year_config_has_years(self):
         """CHM-vuosiversion konfiguraatiossa on years-kenttä."""
         h = _harvester()
-        chm_year = next(
-            c for c in h.datasets_config
-            if "years" in c and "chm" in c["id"]
-        )
-        assert list(chm_year["years"]) == list(range(2008, 2023))
+        chm_year = next(c for c in h.datasets_config if "years" in c and "chm" in c["id"])
+        # Vuosivalikoima seuraa rajapinnan tarjontaa, ei kiinteää lukua:
+        # 2008–2022 olivat listalla mutta vastasivat HTTP 404:llä.
+        years = list(chm_year["years"])
+        assert years, "latvusmallivuodet kadonneet"
+        assert years == list(range(min(years), max(years) + 1)), "vuosissa aukko"
 
     def test_chm_has_wcs_and_zip(self):
         """CHM-vuosiversion konfiguraatiossa on WCS ja ZIP."""
         h = _harvester()
-        chm_year = next(
-            c for c in h.datasets_config
-            if "years" in c and "chm" in c["id"]
-        )
+        chm_year = next(c for c in h.datasets_config if "years" in c and "chm" in c["id"])
         formats = {r["format"] for r in chm_year["resources"]}
-        assert formats == {"WCS", "ZIP"}
+        assert formats == {"WCS", "WMS", "ZIP"}
 
 
 class TestKemera:
@@ -115,11 +113,15 @@ class TestHarvest:
 
     @pytest.mark.asyncio
     async def test_harvest_returns_correct_count(self):
-        """harvest() palauttaa oikean datasettien lukumäärän (43)."""
+        """harvest() palauttaa kaikkien konfiguroitujen datasettien määrän.
+
+        Laskettu konfiguraatiosta: kiinteä luku rikkoutui aina kun
+        rajapinnan vuosivalikoima muuttui, kertomatta mitään viasta.
+        """
         h = _harvester()
         count = await h.harvest()
-        # 11 pääpalvelua + 15 CHM-vuotta + 16 Kemeraa + 1 Korjuukelpoisuus = 43
-        assert count == 43
+        odotettu = sum(len(list(c["years"])) if "years" in c else 1 for c in h.datasets_config)
+        assert count == odotettu
 
     @pytest.mark.asyncio
     async def test_harvest_num_resources_matches(self):

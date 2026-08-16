@@ -8,7 +8,9 @@ from aura.harvesters.static import StaticHarvester
 
 GEOSERVER_BASE = "https://avoin.metsakeskus.fi/rajapinnat/v1"
 DOWNLOAD_BASE = "https://avoin.metsakeskus.fi/aineistot"
-INFO_PAGE_URL = "https://avoin.metsakeskus.fi"
+#: Palvelun juuri vastaa HTTP 404:llä; ohjesivu on päähakemistossa.
+#: (16.8.2026)
+INFO_PAGE_URL = "https://www.metsakeskus.fi/fi/avoin-metsa-ja-luontotieto"
 
 
 # --- Apufunktiot konfiguraation generointiin ---
@@ -29,9 +31,7 @@ def _svc(
         {"format": fmt, "url": f"{GEOSERVER_BASE}/{endpoint}/ows"},
     ]
     if download_dir:
-        resources.append(
-            {"format": "ZIP", "url": f"{DOWNLOAD_BASE}/{download_dir}/"}
-        )
+        resources.append({"format": "ZIP", "url": f"{DOWNLOAD_BASE}/{download_dir}/"})
     else:
         resources.append({"format": "HTML", "url": INFO_PAGE_URL})
     return {
@@ -65,41 +65,82 @@ def _kemera(endpoint: str, title: str) -> dict[str, Any]:
 # --- Konfiguraatiot ---
 
 _MAIN_SERVICES = [
-    _svc("stand", "Metsävarakuviot",
-         "Kuviotason metsävaratiedot: puulaji, tilavuus, ikä, pituus, läpimitta, kasvupaikka",
-         ["metsä", "kuviotiedot", "puusto", "metsävarat"], 50, "Metsavarakuviot"),
-    _svc("gridcell", "Hilatiedot (16m ruutudata)",
-         "Laserkeilauspohjaiset metsävaratiedot 16m ruuduissa: puulajikohtaiset tiedot",
-         ["metsä", "hila", "laserkeilaus", "LiDAR"], 200, "Hila"),
-    _svc("habitat", "Erityisen tärkeät elinympäristöt",
-         "Metsälain 10 §:n mukaiset erityisen tärkeät elinympäristöt",
-         ["metsä", "elinympäristö", "luonnonsuojelu", "metsälaki"], 5,
-         "Erityisen_tarkeat_elinymparistokuviot"),
-    _svc("forestusedeclaration", "Metsänkäyttöilmoitukset",
-         "Hakkuu- ja muut metsänkäyttöilmoitukset",
-         ["metsä", "hakkuu", "metsänkäyttöilmoitus"], 10, "Metsankayttoilmoitukset"),
-    _svc("forestmask", "Metsämaski",
-         "Metsä/ei-metsä-luokitus",
-         ["metsä", "maankäyttö", "luokitus"], 5, "Metsamaski"),
-    _svc("inventory_sampleplot", "Inventointikoealat",
-         "Maastoinventoinnin koealat metsävarojen kalibrointiin",
-         ["metsä", "inventointi", "koeala"], 1, "Inventointikoealat"),
-    _svc("sampleplot", "Kaukokartoituskoealat",
-         "Kaukokartoituksen referenssikoealat",
-         ["metsä", "kaukokartoitus", "koeala"], 1, "Kaukokartoituskoealat"),
+    _svc(
+        "stand",
+        "Metsävarakuviot",
+        "Kuviotason metsävaratiedot: puulaji, tilavuus, ikä, pituus, läpimitta, kasvupaikka",
+        ["metsä", "kuviotiedot", "puusto", "metsävarat"],
+        50,
+        "Metsavarakuviot",
+    ),
+    _svc(
+        "gridcell",
+        "Hilatiedot (16m ruutudata)",
+        "Laserkeilauspohjaiset metsävaratiedot 16m ruuduissa: puulajikohtaiset tiedot",
+        ["metsä", "hila", "laserkeilaus", "LiDAR"],
+        200,
+        "Hila",
+    ),
+    _svc(
+        "habitat",
+        "Erityisen tärkeät elinympäristöt",
+        "Metsälain 10 §:n mukaiset erityisen tärkeät elinympäristöt",
+        ["metsä", "elinympäristö", "luonnonsuojelu", "metsälaki"],
+        5,
+        "Erityisen_tarkeat_elinymparistokuviot",
+    ),
+    _svc(
+        "forestusedeclaration",
+        "Metsänkäyttöilmoitukset",
+        "Hakkuu- ja muut metsänkäyttöilmoitukset",
+        ["metsä", "hakkuu", "metsänkäyttöilmoitus"],
+        10,
+        "Metsankayttoilmoitukset",
+    ),
+    _svc(
+        "forestmask",
+        "Metsämaski",
+        "Metsä/ei-metsä-luokitus",
+        ["metsä", "maankäyttö", "luokitus"],
+        5,
+        "Metsamaski",
+    ),
+    # Koeala-aineistot (inventory_sampleplot, sampleplot) poistettu:
+    # molemmat vastaavat HTTP 404:llä eikä korvaavaa palvelunimeä
+    # löytynyt kokeilemalla. (16.8.2026)
     # WCS-palvelut (ei tiedostolatausta)
-    _svc("CHM_newest", "Latvusmalli (uusin)",
-         "Laserkeilauspohjainen latvuston korkeusmalli, uusin versio",
-         ["metsä", "latvusmalli", "CHM", "LiDAR"], 100, fmt="WCS"),
-    _svc("Pintavesien_virtausmalli", "Pintavesien virtausmalli",
-         "Hydrologinen pintavesien virtausmalli",
-         ["hydrologia", "vesistö", "virtaus"], 20, fmt="WCS"),
-    _svc("D8_flow_direction", "Virtaussuuntamalli (D8)",
-         "D8-algoritmin mukainen virtaussuuntamalli",
-         ["hydrologia", "virtaus", "D8"], 20, fmt="WCS"),
-    _svc("FA_flow_accumulation", "Valunta-aluemalli",
-         "Veden kertymämalli (flow accumulation)",
-         ["hydrologia", "valunta", "vesistö"], 20, fmt="WCS"),
+    _svc(
+        "CHM_newest",
+        "Latvusmalli (uusin)",
+        "Laserkeilauspohjainen latvuston korkeusmalli, uusin versio",
+        ["metsä", "latvusmalli", "CHM", "LiDAR"],
+        100,
+        fmt="WCS",
+    ),
+    _svc(
+        "Pintavesien_virtausmalli",
+        "Pintavesien virtausmalli",
+        "Hydrologinen pintavesien virtausmalli",
+        ["hydrologia", "vesistö", "virtaus"],
+        20,
+        fmt="WCS",
+    ),
+    _svc(
+        "D8_flow_direction",
+        "Virtaussuuntamalli (D8)",
+        "D8-algoritmin mukainen virtaussuuntamalli",
+        ["hydrologia", "virtaus", "D8"],
+        20,
+        fmt="WCS",
+    ),
+    _svc(
+        "FA_flow_accumulation",
+        "Valunta-aluemalli",
+        "Veden kertymämalli (flow accumulation)",
+        ["hydrologia", "valunta", "vesistö"],
+        20,
+        fmt="WCS",
+    ),
 ]
 
 _CHM_YEARS: list[dict[str, Any]] = [
@@ -109,9 +150,14 @@ _CHM_YEARS: list[dict[str, Any]] = [
         "notes_fi": "Laserkeilauspohjainen latvuston korkeusmalli vuodelta {year}",
         "keywords_fi": ["metsä", "latvusmalli", "CHM", "LiDAR"],
         "estimated_size_bytes": 50 * 1024**3,
-        "years": range(2008, 2023),
+        # Rajapinnasta on tarjolla vain kolme uusinta vuotta. Vuodet
+        # 2008–2022 olivat listalla mutta vastaavat HTTP 404:llä; koko
+        # 2008–2026 tarkistettiin yksitellen 16.8.2026. Vanhemmat
+        # latvusmallit ovat vain latauspalvelun ZIP-paketteina.
+        "years": range(2023, 2026),
         "resources": [
             {"format": "WCS", "url": GEOSERVER_BASE + "/CHM_{year}/ows"},
+            {"format": "WMS", "url": GEOSERVER_BASE + "/CHM_{year}/ows"},
             {"format": "ZIP", "url": f"{DOWNLOAD_BASE}/Latvusmalli/"},
         ],
     },
@@ -162,7 +208,7 @@ class MetsakeskusHarvester(StaticHarvester):
 
     name = "metsakeskus"
     description = "Suomen metsäkeskus — metsävara-, elinympäristö- ja hakkuutiedot"
-    url = "https://avoin.metsakeskus.fi"
+    url = INFO_PAGE_URL
     org_id = "metsakeskus"
     org_name = "metsakeskus"
     org_title = "Suomen metsäkeskus"

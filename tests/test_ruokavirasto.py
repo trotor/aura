@@ -23,21 +23,38 @@ class TestInspireConfig:
     """INSPIRE-paikkatietojen konfiguraatio."""
 
     def test_inspire_has_three_resource_formats(self):
-        """INSPIRE-konfiguraatiossa on WMS, WFS ja GPKG."""
+        """INSPIRE-konfiguraatiossa on katselu-, kysely- ja latausmuoto.
+
+        GeoPackage oli tässä aiemmin, mutta palvelin ei tue sitä:
+        ``outputFormat=geopackage`` vastaa HTTP 400:lla. Tuetut muodot
+        ovat SHAPE-ZIP, json ja csv.
+        """
         h = _harvester()
         inspire = [c for c in h.datasets_config if "years" in c]
         assert len(inspire) == 4
         for cfg in inspire:
             formats = {r["format"] for r in cfg["resources"]}
-            assert formats == {"WMS", "WFS", "GPKG"}
+            assert formats == {"WMS", "WFS", "GeoJSON"}, cfg["id"]
+
+    def test_inspire_tasonimi_on_kuvauksessa(self):
+        """Yhteinen päätepiste tarvitsee tasonimen, muuten rivi on hyödytön.
+
+        Kaikki neljä teemaa jakavat saman GeoServer-osoitteen; vain
+        ``typeNames`` erottaa ne. Jos tasonimi katoaa kuvauksesta,
+        käyttäjä ei tiedä mitä pyytää.
+        """
+        h = _harvester()
+        for cfg in (c for c in h.datasets_config if "years" in c):
+            assert "tasonimi on inspire:" in cfg["notes_fi"], cfg["id"]
+            wfs = next(r for r in cfg["resources"] if r["format"] == "WFS")
+            assert "typeNames=inspire:" in wfs["url"], cfg["id"]
 
     def test_inspire_total_count(self):
-        """INSPIRE-datasettien kokonaismäärä on tyyppit x vuodet."""
+        """INSPIRE-datasettien kokonaismäärä on teemat x vuodet."""
         h = _harvester()
         inspire = [c for c in h.datasets_config if "years" in c]
-        # 4 tyyppiä x 5 vuotta = 20
         total = sum(len(list(c["years"])) for c in inspire)
-        assert total == 20
+        assert total == 4 * len(list(inspire[0]["years"]))
 
 
 class TestDashboardConfig:
@@ -47,7 +64,8 @@ class TestDashboardConfig:
         """Dashboard-konfiguraatioissa on HTML-resurssi."""
         h = _harvester()
         dashboards = [
-            c for c in h.datasets_config
+            c
+            for c in h.datasets_config
             if any(r["format"] == "HTML" for r in c["resources"])
             and c.get("access_level") == "open"
         ]
@@ -75,11 +93,15 @@ class TestHarvest:
 
     @pytest.mark.asyncio
     async def test_harvest_returns_correct_count(self):
-        """harvest() palauttaa oikean datasettien lukumäärän (33)."""
+        """harvest() palauttaa kaikkien konfiguroitujen datasettien määrän.
+
+        Laskettu konfiguraatiosta eikä vakiona: vuosivalikoima muuttuu
+        kun lähde julkaisee uuden vuoden, eikä se ole vika.
+        """
         h = _harvester()
         count = await h.harvest()
-        # 4 tyyppiä x 5 vuotta + 5 dashboardia + 8 rajoitettua = 33
-        assert count == 33
+        odotettu = sum(len(list(c["years"])) if "years" in c else 1 for c in h.datasets_config)
+        assert count == odotettu
 
     @pytest.mark.asyncio
     async def test_harvest_restricted_in_db(self):
@@ -103,6 +125,10 @@ class TestHarvest:
             "SELECT id FROM datasets"
             " WHERE source = 'ruokavirasto' AND id LIKE 'ruokavirasto-peltolohkorekisteri-%'"
         ).fetchall()
-        assert len(inspire) == 5
+        cfg = next(
+            c for c in h.datasets_config if c["id"].startswith("ruokavirasto-peltolohkorekisteri")
+        )
+        odotetut = {str(y) for y in cfg["years"]}
+        assert len(inspire) == len(odotetut)
         years_found = {row["id"].split("-")[-1] for row in inspire}
-        assert years_found == {"2020", "2021", "2022", "2023", "2024"}
+        assert years_found == odotetut

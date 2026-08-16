@@ -41,8 +41,13 @@ class KunnatHarvester(StaticHarvester):
                 " meluselvitykset, luontotiedot, kaavahakemisto ja tilastot."
             ),
             "keywords_fi": [
-                "Helsinki", "kaupunki", "kartta", "opaskartta",
-                "kaava", "luonto", "meluselvitys",
+                "Helsinki",
+                "kaupunki",
+                "kartta",
+                "opaskartta",
+                "kaava",
+                "luonto",
+                "meluselvitys",
             ],
             "organization_title": "Helsingin kaupunki",
             "geographical_coverage": ["Helsinki"],
@@ -68,8 +73,12 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat, geologia, meluselvitykset ja ekologinen verkosto."
             ),
             "keywords_fi": [
-                "Espoo", "kaupunki", "kartta", "kaava",
-                "geologia", "ortokuva",
+                "Espoo",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "geologia",
+                "ortokuva",
             ],
             "organization_title": "Espoon kaupunki",
             "geographical_coverage": ["Espoo"],
@@ -95,8 +104,11 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat, kiinteistöt ja palvelupisteet."
             ),
             "keywords_fi": [
-                "Vantaa", "kaupunki", "kartta",
-                "kaava", "kiinteisto",
+                "Vantaa",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "kiinteisto",
             ],
             "organization_title": "Vantaan kaupunki",
             "geographical_coverage": ["Vantaa"],
@@ -122,8 +134,12 @@ class KunnatHarvester(StaticHarvester):
                 " melualueet, maankäyttö, joukkoliikenne ja luontotiedot."
             ),
             "keywords_fi": [
-                "Tampere", "kaupunki", "kartta", "ilmanlaatu",
-                "joukkoliikenne", "maankaytto",
+                "Tampere",
+                "kaupunki",
+                "kartta",
+                "ilmanlaatu",
+                "joukkoliikenne",
+                "maankaytto",
             ],
             "organization_title": "Tampereen kaupunki",
             "geographical_coverage": ["Tampere"],
@@ -149,7 +165,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat ja pohjakartta."
             ),
             "keywords_fi": [
-                "Turku", "kaupunki", "kartta", "kaava",
+                "Turku",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Turun kaupunki",
             "geographical_coverage": ["Turku"],
@@ -170,7 +189,9 @@ class KunnatHarvester(StaticHarvester):
                 " 28 WMS-tasoa: opaskartta, kantakartta ja pohjakartta."
             ),
             "keywords_fi": [
-                "Oulu", "kaupunki", "kartta",
+                "Oulu",
+                "kaupunki",
+                "kartta",
             ],
             "organization_title": "Oulun kaupunki",
             "geographical_coverage": ["Oulu"],
@@ -192,8 +213,12 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat, kiinteistöt ja maastomalli."
             ),
             "keywords_fi": [
-                "Kuopio", "kaupunki", "kartta", "kaava",
-                "opaskartta", "kiinteisto",
+                "Kuopio",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "opaskartta",
+                "kiinteisto",
             ],
             "organization_title": "Kuopion kaupunki",
             "geographical_coverage": ["Kuopio"],
@@ -219,7 +244,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat, ortokuvat ja pohjakartta."
             ),
             "keywords_fi": [
-                "Jyväskylä", "kaupunki", "kartta", "kaava",
+                "Jyväskylä",
+                "kaupunki",
+                "kartta",
+                "kaava",
                 "opaskartta",
             ],
             "organization_title": "Jyväskylän kaupunki",
@@ -242,7 +270,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat, ortokuvat ja pohjakartta."
             ),
             "keywords_fi": [
-                "Lahti", "kaupunki", "kartta", "kaava",
+                "Lahti",
+                "kaupunki",
+                "kartta",
+                "kaava",
                 "opaskartta",
             ],
             "organization_title": "Lahden kaupunki",
@@ -260,11 +291,13 @@ class KunnatHarvester(StaticHarvester):
             "id": "kunnat-pori-avoindata",
             "title": "Pori — avoimet paikkatiedot",
             "notes_fi": (
-                "Porin kaupungin kartta-aineistot."
-                " 6 WMS-tasoa: opaskartta ja pohjakartta."
+                "Porin kaupungin kartta-aineistot. 6 WMS-tasoa: opaskartta ja pohjakartta."
             ),
             "keywords_fi": [
-                "Pori", "kaupunki", "kartta", "opaskartta",
+                "Pori",
+                "kaupunki",
+                "kartta",
+                "opaskartta",
             ],
             "organization_title": "Porin kaupunki",
             "geographical_coverage": ["Pori"],
@@ -285,7 +318,10 @@ class KunnatHarvester(StaticHarvester):
                 " 12 WMS-tasoa: opaskartta, kantakartta ja kaavat."
             ),
             "keywords_fi": [
-                "Kouvola", "kaupunki", "kartta", "kaava",
+                "Kouvola",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Kouvolan kaupunki",
             "geographical_coverage": ["Kouvola"],
@@ -307,8 +343,12 @@ class KunnatHarvester(StaticHarvester):
                 " opaskartta, kaavat, kiinteistöt ja maankäyttö."
             ),
             "keywords_fi": [
-                "Joensuu", "kaupunki", "kartta", "kaava",
-                "kiinteisto", "maankaytto",
+                "Joensuu",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "kiinteisto",
+                "maankaytto",
             ],
             "organization_title": "Joensuun kaupunki",
             "geographical_coverage": ["Joensuu"],
@@ -334,7 +374,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat ja pohjakartta."
             ),
             "keywords_fi": [
-                "Lappeenranta", "kaupunki", "kartta", "kaava",
+                "Lappeenranta",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Lappeenrannan kaupunki",
             "geographical_coverage": ["Lappeenranta"],
@@ -355,7 +398,10 @@ class KunnatHarvester(StaticHarvester):
                 " 18 WMS-tasoa: opaskartta, kantakartta ja kaavat."
             ),
             "keywords_fi": [
-                "Hämeenlinna", "kaupunki", "kartta", "kaava",
+                "Hämeenlinna",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Hämeenlinnan kaupunki",
             "geographical_coverage": ["Hämeenlinna"],
@@ -376,7 +422,10 @@ class KunnatHarvester(StaticHarvester):
                 " 16 WMS-tasoa: opaskartta, kantakartta ja kaavat."
             ),
             "keywords_fi": [
-                "Seinäjoki", "kaupunki", "kartta", "kaava",
+                "Seinäjoki",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Seinäjoen kaupunki",
             "geographical_coverage": ["Seinäjoki"],
@@ -398,7 +447,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat ja pohjakartta."
             ),
             "keywords_fi": [
-                "Rovaniemi", "kaupunki", "kartta", "kaava",
+                "Rovaniemi",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Rovaniemen kaupunki",
             "geographical_coverage": ["Rovaniemi"],
@@ -415,11 +467,12 @@ class KunnatHarvester(StaticHarvester):
             "id": "kunnat-mikkeli-avoindata",
             "title": "Mikkeli — avoimet paikkatiedot",
             "notes_fi": (
-                "Mikkelin kaupungin kartta-aineistot."
-                " 3 WMS-tasoa: opaskartta ja pohjakartta."
+                "Mikkelin kaupungin kartta-aineistot. 3 WMS-tasoa: opaskartta ja pohjakartta."
             ),
             "keywords_fi": [
-                "Mikkeli", "kaupunki", "kartta",
+                "Mikkeli",
+                "kaupunki",
+                "kartta",
             ],
             "organization_title": "Mikkelin kaupunki",
             "geographical_coverage": ["Mikkeli"],
@@ -441,7 +494,10 @@ class KunnatHarvester(StaticHarvester):
                 " opaskartta, kaavat, kiinteistöt ja infrastruktuuri."
             ),
             "keywords_fi": [
-                "Kotka", "kaupunki", "kartta", "kaava",
+                "Kotka",
+                "kaupunki",
+                "kartta",
+                "kaava",
                 "kiinteisto",
             ],
             "organization_title": "Kotkan kaupunki",
@@ -463,11 +519,13 @@ class KunnatHarvester(StaticHarvester):
             "id": "kunnat-salo-avoindata",
             "title": "Salo — avoimet paikkatiedot",
             "notes_fi": (
-                "Salon kaupungin kartta-aineistot."
-                " 11 WMS-tasoa: opaskartta, kantakartta ja kaavat."
+                "Salon kaupungin kartta-aineistot. 11 WMS-tasoa: opaskartta, kantakartta ja kaavat."
             ),
             "keywords_fi": [
-                "Salo", "kaupunki", "kartta", "kaava",
+                "Salo",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Salon kaupunki",
             "geographical_coverage": ["Salo"],
@@ -493,7 +551,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavat ja ortokuvat."
             ),
             "keywords_fi": [
-                "Kokkola", "kaupunki", "kartta", "kaava",
+                "Kokkola",
+                "kaupunki",
+                "kartta",
+                "kaava",
                 "ortokuva",
             ],
             "organization_title": "Kokkolan kaupunki",
@@ -516,8 +577,12 @@ class KunnatHarvester(StaticHarvester):
                 " ortokuvat, johtotiedot ja maastomalli."
             ),
             "keywords_fi": [
-                "Hyvinkää", "kaupunki", "kartta", "kaava",
-                "opaskartta", "ortokuva",
+                "Hyvinkää",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "opaskartta",
+                "ortokuva",
             ],
             "organization_title": "Hyvinkään kaupunki",
             "geographical_coverage": ["Hyvinkää"],
@@ -538,7 +603,10 @@ class KunnatHarvester(StaticHarvester):
                 " 23 WMS-tasoa: opaskartta, kantakartta ja kaavat."
             ),
             "keywords_fi": [
-                "Rauma", "kaupunki", "kartta", "kaava",
+                "Rauma",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Rauman kaupunki",
             "geographical_coverage": ["Rauma"],
@@ -559,7 +627,10 @@ class KunnatHarvester(StaticHarvester):
                 " 25 WMS-tasoa: opaskartta, kantakartta ja kaavat."
             ),
             "keywords_fi": [
-                "Kajaani", "kaupunki", "kartta", "kaava",
+                "Kajaani",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Kajaanin kaupunki",
             "geographical_coverage": ["Kajaani"],
@@ -584,7 +655,10 @@ class KunnatHarvester(StaticHarvester):
                 " ajantasa-asemakaava ja yksinkertaistettu pohjakartta."
             ),
             "keywords_fi": [
-                "Kauniainen", "kaupunki", "kartta", "kaava",
+                "Kauniainen",
+                "kaupunki",
+                "kartta",
+                "kaava",
                 "opaskartta",
             ],
             "organization_title": "Kauniaisten kaupunki",
@@ -611,7 +685,10 @@ class KunnatHarvester(StaticHarvester):
                 " maastokartta ja rakennusrajoitukset."
             ),
             "keywords_fi": [
-                "Nurmijärvi", "kunta", "kartta", "kaava",
+                "Nurmijärvi",
+                "kunta",
+                "kartta",
+                "kaava",
                 "opaskartta",
             ],
             "organization_title": "Nurmijärven kunta",
@@ -634,7 +711,10 @@ class KunnatHarvester(StaticHarvester):
                 " kaavarekisteri, ilmanlaatu ja opaskartta."
             ),
             "keywords_fi": [
-                "Tuusula", "kunta", "kartta", "kaava",
+                "Tuusula",
+                "kunta",
+                "kartta",
+                "kaava",
                 "ilmanlaatu",
             ],
             "organization_title": "Tuusulan kunta",
@@ -661,8 +741,12 @@ class KunnatHarvester(StaticHarvester):
                 " kaavoituskartat, infrastruktuuri, rakennukset ja osoitteet."
             ),
             "keywords_fi": [
-                "Vihti", "kunta", "kartta", "kaava",
-                "ortokuva", "infrastruktuuri",
+                "Vihti",
+                "kunta",
+                "kartta",
+                "kaava",
+                "ortokuva",
+                "infrastruktuuri",
             ],
             "organization_title": "Vihdin kunta",
             "geographical_coverage": ["Vihti"],
@@ -690,7 +774,10 @@ class KunnatHarvester(StaticHarvester):
                 " 7 WMS-tasoa: asemakaavat ja muut kaavoitusaineistot."
             ),
             "keywords_fi": [
-                "Naantali", "kaupunki", "kartta", "kaava",
+                "Naantali",
+                "kaupunki",
+                "kartta",
+                "kaava",
             ],
             "organization_title": "Naantalin kaupunki",
             "geographical_coverage": ["Naantali"],
@@ -712,7 +799,10 @@ class KunnatHarvester(StaticHarvester):
                 " osoitekartat, pohjakartat, vesihuoltoalueet ja yleiskaavat."
             ),
             "keywords_fi": [
-                "Raisio", "kaupunki", "kartta", "kaava",
+                "Raisio",
+                "kaupunki",
+                "kartta",
+                "kaava",
                 "yleiskaava",
             ],
             "organization_title": "Raision kaupunki",
@@ -738,8 +828,12 @@ class KunnatHarvester(StaticHarvester):
                 " liikenneväylät, virkistysreitit, vieraslajit ja tontti-inventaario."
             ),
             "keywords_fi": [
-                "Kangasala", "kaupunki", "kartta", "kaava",
-                "opaskartta", "virkistysreitit",
+                "Kangasala",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "opaskartta",
+                "virkistysreitit",
             ],
             "organization_title": "Kangasalan kaupunki",
             "geographical_coverage": ["Kangasala"],
@@ -761,11 +855,13 @@ class KunnatHarvester(StaticHarvester):
             "id": "kunnat-nokia-avoindata",
             "title": "Nokia — avoimet paikkatiedot",
             "notes_fi": (
-                "Nokian kaupungin kartta-aineistot (ArcGIS REST)."
-                " Opaskartta ja aluejaot."
+                "Nokian kaupungin kartta-aineistot (ArcGIS REST). Opaskartta ja aluejaot."
             ),
             "keywords_fi": [
-                "Nokia", "kaupunki", "kartta", "opaskartta",
+                "Nokia",
+                "kaupunki",
+                "kartta",
+                "opaskartta",
             ],
             "organization_title": "Nokian kaupunki",
             "geographical_coverage": ["Nokia"],
@@ -792,8 +888,12 @@ class KunnatHarvester(StaticHarvester):
                 " kiinteistökartta, opaskartta, maanomistus, vesihuolto ja tonttivaranto."
             ),
             "keywords_fi": [
-                "Ylöjärvi", "kaupunki", "kartta", "kaava",
-                "kiinteisto", "vesihuolto",
+                "Ylöjärvi",
+                "kaupunki",
+                "kartta",
+                "kaava",
+                "kiinteisto",
+                "vesihuolto",
             ],
             "organization_title": "Ylöjärven kaupunki",
             "geographical_coverage": ["Ylöjärvi"],
@@ -820,7 +920,10 @@ class KunnatHarvester(StaticHarvester):
                 " kiintopisteet, maanomistus, tonttivaranto ja yleiskaavayhdistelmä."
             ),
             "keywords_fi": [
-                "Lempäälä", "kunta", "kartta", "kaava",
+                "Lempäälä",
+                "kunta",
+                "kartta",
+                "kaava",
                 "kantakartta",
             ],
             "organization_title": "Lempäälän kunta",
@@ -849,16 +952,27 @@ class KunnatHarvester(StaticHarvester):
                 " tilastoalueet, tonttivaranto ja uimarannat."
             ),
             "keywords_fi": [
-                "Pirkkala", "kunta", "kartta", "kaava",
-                "meluselvitys", "koulupiirit",
+                "Pirkkala",
+                "kunta",
+                "kartta",
+                "kaava",
+                "meluselvitys",
+                "koulupiirit",
             ],
             "organization_title": "Pirkkalan kunta",
             "geographical_coverage": ["Pirkkala"],
             "estimated_size_bytes": 500 * 1024**2,
             "resources": [
+                # WMS-laajennus ei ole käytössä: palvelun supportedExtensions
+                # on pelkkä FeatureServer, ja WMSServer-osoite vastaa HTTP
+                # 400:lla. Kaavat tarjoillaan REST-palveluna. (16.8.2026)
                 {
-                    "format": "WMS",
-                    "url": "https://paikkatietopalvelu.pirnet.fi/arcgis/services/pirkkala/Asema_ja_yleiskaavat/MapServer/WmsServer",
+                    "format": "API",
+                    "url": (
+                        "https://paikkatietopalvelu.pirnet.fi/arcgis/rest/services"
+                        "/pirkkala/Asema_ja_yleiskaavat/MapServer"
+                    ),
+                    "name_fi": "Pirkkala — asema- ja yleiskaavat (ArcGIS REST)",
                 },
                 {
                     "format": "API",
@@ -876,7 +990,9 @@ class KunnatHarvester(StaticHarvester):
                 " Paikkatietopalvelu Pirnet-klusterin kautta."
             ),
             "keywords_fi": [
-                "Hämeenkyrö", "kunta", "kartta",
+                "Hämeenkyrö",
+                "kunta",
+                "kartta",
             ],
             "organization_title": "Hämeenkyrön kunta",
             "geographical_coverage": ["Hämeenkyrö"],
@@ -898,7 +1014,9 @@ class KunnatHarvester(StaticHarvester):
                 " Paikkatietopalvelu Pirnet-klusterin kautta."
             ),
             "keywords_fi": [
-                "Orivesi", "kaupunki", "kartta",
+                "Orivesi",
+                "kaupunki",
+                "kartta",
             ],
             "organization_title": "Oriveden kaupunki",
             "geographical_coverage": ["Orivesi"],

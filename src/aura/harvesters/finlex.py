@@ -53,8 +53,13 @@ OHJE = (
 
 
 def _dataset(
-    ds_id: str, title: str, polku: str, kuvaus: str, keywords: list[str],
-    web: str, koko: int,
+    ds_id: str,
+    title: str,
+    polku: str,
+    kuvaus: str,
+    keywords: list[str],
+    web: str,
+    koko: int,
 ) -> dict[str, object]:
     return {
         "id": ds_id,
@@ -101,15 +106,16 @@ class FinlexHarvester(StaticHarvester):
             "Sama säädös esiintyy useana ajallisena versiona; arvo "
             "langAndVersion=fin@latest hakee uusimman.",
             ["lainsäädäntö", "laki", "ajantasainen"],
-            f"{WEB}/lainsaadanto/ajantasainen",
+            # Ajantasainen lainsäädäntö on /lainsaadanto-hakemiston juuri;
+            # /lainsaadanto/ajantasainen vastaa HTTP 404:llä. (16.8.2026)
+            f"{WEB}/lainsaadanto",
             2 * 1024**3,
         ),
         _dataset(
             "finlex-saadoskokoelma",
             "Suomen säädöskokoelma",
             "act/statute",
-            "Säädökset alkuperäisessä muodossaan julkaisujärjestyksessä, "
-            "muutoksia huomioimatta.",
+            "Säädökset alkuperäisessä muodossaan julkaisujärjestyksessä, muutoksia huomioimatta.",
             ["säädöskokoelma", "laki", "asetus"],
             f"{WEB}/lainsaadanto/saadoskokoelma",
             2 * 1024**3,
@@ -127,8 +133,7 @@ class FinlexHarvester(StaticHarvester):
             "finlex-hallituksen-esitykset",
             "Hallituksen esitykset",
             "doc/government-proposal",
-            "Hallituksen esitykset eduskunnalle perusteluineen. "
-            "Säädösvalmistelun tausta-aineisto.",
+            "Hallituksen esitykset eduskunnalle perusteluineen. Säädösvalmistelun tausta-aineisto.",
             ["hallituksen esitykset", "lainvalmistelu", "eduskunta"],
             f"{WEB}/hallituksen-esitykset",
             1024**3,
