@@ -53,6 +53,10 @@ def _format_map_sheet(d: dict[str, Any]) -> str:
     )
 
 
+#: Ainoa koordinaatisto jota karttalehti- ja kuntarajaukset käyttävät.
+CRS = "EPSG:3067"
+
+
 def _parse_floats(text: str, count: int) -> list[float] | None:
     """Pilko pilkuilla erotettu lukumerkkijono (esim. bbox tai piste)."""
     parts = [p.strip() for p in text.split(",") if p.strip()]
@@ -62,6 +66,23 @@ def _parse_floats(text: str, count: int) -> list[float] | None:
         return [float(p) for p in parts]
     except ValueError:
         return None
+
+
+def _strip_crs(text: str) -> tuple[str, str | None]:
+    """Irrota mahdollinen koordinaatistopääte bbox-merkkijonosta.
+
+    Sekä :func:`municipality_bbox` että :func:`find_map_sheets` tulostavat
+    bbox-arvon muodossa ``minx,miny,maxx,maxy,EPSG:3067`` ja kehottavat
+    syöttämään sen seuraavaan kutsuun. Ilman tätä irrotusta kehotus
+    johtaa virheeseen: viisiosainen arvo ei kelpaa neliosaiseen kenttään,
+    ja ketju katkeaa juuri siinä kohtaa jossa ohje lupaa sen toimivan.
+
+    Palauttaa ``(numero-osa, koordinaatisto tai None)``.
+    """
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    if parts and ":" in parts[-1]:
+        return ",".join(parts[:-1]), parts[-1].upper()
+    return ",".join(parts), None
 
 
 def _find_map_sheets(
@@ -113,7 +134,9 @@ def find_map_sheets(
     Args:
         scale: Mittakaavataso: 'utm200' (yleiskatsaus), 'utm50' (maakunnat),
             'utm25' (kaupungit), 'utm10' (yksityiskohdat).
-        bbox: Rajauslaatikko EPSG:3067: 'minx,miny,maxx,maxy' — palauttaa leikkaavat lehdet.
+        bbox: Rajauslaatikko EPSG:3067: 'minx,miny,maxx,maxy'. Myös
+            muoto '...,EPSG:3067' kelpaa, eli municipality_bbox():n ja
+            tämän oma tuloste voidaan syöttää sellaisenaan takaisin.
         point: Piste EPSG:3067: 'x,y' — palauttaa lehden joka sisältää pisteen.
         prefix: Tunnusprefiksi (esim. 'L413') — hierarkkinen rajaus.
         limit: Tulosten enimmäismäärä (oletus 50).
@@ -125,12 +148,25 @@ def find_map_sheets(
             "point ('x,y') tai prefix (esim. 'L413')."
         )
 
-    bbox_vals = _parse_floats(bbox, 4) if bbox else None
-    if bbox and bbox_vals is None:
-        return "Virheellinen bbox. Muoto: 'minx,miny,maxx,maxy' (EPSG:3067)."
-    point_vals = _parse_floats(point, 2) if point else None
-    if point and point_vals is None:
-        return "Virheellinen point. Muoto: 'x,y' (EPSG:3067)."
+    bbox_vals = None
+    if bbox:
+        numbers, crs = _strip_crs(bbox)
+        # Väärä koordinaatisto on hylättävä äänekkäästi: hiljaa ohitettuna
+        # WGS84-koordinaatit osuisivat Suomen ruudukossa mereen eikä
+        # tyhjä tulos kertoisi syytä.
+        if crs and crs != CRS:
+            return f"Koordinaatisto {crs} ei kelpaa. Karttalehtijako on {CRS}:ssä."
+        bbox_vals = _parse_floats(numbers, 4)
+        if bbox_vals is None:
+            return f"Virheellinen bbox. Muoto: 'minx,miny,maxx,maxy' ({CRS})."
+    point_vals = None
+    if point:
+        numbers, crs = _strip_crs(point)
+        if crs and crs != CRS:
+            return f"Koordinaatisto {crs} ei kelpaa. Karttalehtijako on {CRS}:ssä."
+        point_vals = _parse_floats(numbers, 2)
+        if point_vals is None:
+            return f"Virheellinen point. Muoto: 'x,y' ({CRS})."
 
     conn = _server._get_conn(ctx)
     sheets = _find_map_sheets(
@@ -155,9 +191,7 @@ def _municipality_row(conn: sqlite3.Connection, query: str) -> sqlite3.Row | Non
     row: sqlite3.Row | None
     if query.isdigit() and len(query) <= 3:
         code = query.zfill(3)
-        row = conn.execute(
-            "SELECT * FROM ref_municipalities WHERE code = ?", (code,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM ref_municipalities WHERE code = ?", (code,)).fetchone()
     else:
         row = conn.execute(
             "SELECT * FROM ref_municipalities "
