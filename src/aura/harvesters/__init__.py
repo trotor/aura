@@ -28,6 +28,7 @@ from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.paikkatietoikkuna import PaikkatietoikkunaHarvester
 from aura.harvesters.paituli import PaituliHarvester
 from aura.harvesters.pohtiva import PohtivaHarvester
+from aura.harvesters.ptv import PtvHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.sanastot import SanastotHarvester
 from aura.harvesters.smartsmear import SmartSmearHarvester
@@ -81,6 +82,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "paikkatietoikkuna": PaikkatietoikkunaHarvester,
     "paituli": PaituliHarvester,
     "pohtiva": PohtivaHarvester,
+    "ptv": PtvHarvester,
     "kunnat": KunnatHarvester,
     "lajitietokeskus": LajitietokeskusHarvester,
     "koodistot": KoodistotHarvester,
