@@ -39,22 +39,70 @@ def _map_sheet_data(conn: sqlite3.Connection, sheet_id: str) -> dict[str, Any] |
     }
 
 
-def _bbox_str(d: dict[str, Any]) -> str:
-    """Valmis WFS/WCS-bbox EPSG:3067:ssä: minx,miny,maxx,maxy,EPSG:3067."""
-    return f"{d['min_x']},{d['min_y']},{d['max_x']},{d['max_y']},EPSG:3067"
-
-
-def _format_map_sheet(d: dict[str, Any]) -> str:
-    return (
-        f"Karttalehti {d['id']} (mittakaavataso {d['scale']}, EPSG:3067)\n"
-        f"  bbox (WFS/WCS): {_bbox_str(d)}\n"
-        f"  centroidi: {d['centroid_x']},{d['centroid_y']}\n\n"
-        f"Käytä bbox-arvoa aluerajauksena WFS/WCS/OGC-kyselyssä."
-    )
-
-
 #: Ainoa koordinaatisto jota karttalehti- ja kuntarajaukset käyttävät.
 CRS = "EPSG:3067"
+
+#: Aluerajaus bbox-nelikkona (minx, miny, maxx, maxy) EPSG:3067:ssä.
+Bbox = tuple[float, float, float, float]
+
+
+def _bbox_param(bbox: Bbox) -> str:
+    """Valmis WFS/WCS-bbox EPSG:3067:ssä: minx,miny,maxx,maxy,EPSG:3067."""
+    return f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},{CRS}"
+
+
+def _bbox_str(d: dict[str, Any]) -> str:
+    """Rivin bbox samassa muodossa kuin :func:`_bbox_param`."""
+    return _bbox_param((d["min_x"], d["min_y"], d["max_x"], d["max_y"]))
+
+
+def _parent_sheet(conn: sqlite3.Connection, sheet_id: str) -> dict[str, Any] | None:
+    """Hae lehden vanhempi pisimpänä olemassa olevana prefiksinä.
+
+    Hierarkiassa on aukkoja: kannassa on utm200, utm50, utm25 ja utm10,
+    mutta ei utm100:aa. Kiinteä merkkimäärä (yksi pois) putoaisi siis
+    tyhjään tasoon, joten vanhempi on haettava sillä mitä kannassa on.
+    """
+    row = conn.execute(
+        "SELECT id, scale FROM ref_map_sheets "
+        "WHERE ? LIKE id || '%' AND LENGTH(id) < LENGTH(?) "
+        "ORDER BY LENGTH(id) DESC LIMIT 1",
+        (sheet_id, sheet_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _child_sheets(conn: sqlite3.Connection, sheet_id: str) -> list[dict[str, Any]]:
+    """Hae lehden suorat lapset eli seuraavan olemassa olevan tason lehdet."""
+    rows = conn.execute(
+        "SELECT id, scale FROM ref_map_sheets "
+        "WHERE id LIKE ? || '%' AND LENGTH(id) > LENGTH(?) "
+        "ORDER BY LENGTH(id), id",
+        (sheet_id, sheet_id),
+    ).fetchall()
+    if not rows:
+        return []
+    next_level = len(rows[0]["id"])
+    return [dict(r) for r in rows if len(r["id"]) == next_level]
+
+
+def _format_map_sheet(conn: sqlite3.Connection, d: dict[str, Any]) -> str:
+    lines = [
+        f"Karttalehti {d['id']} (mittakaavataso {d['scale']}, EPSG:3067)",
+        f"  bbox (WFS/WCS): {_bbox_str(d)}",
+        f"  centroidi: {d['centroid_x']},{d['centroid_y']}",
+    ]
+    parent = _parent_sheet(conn, d["id"])
+    if parent:
+        lines.append(f"  vanhempi: {parent['id']} ({parent['scale']})")
+    children = _child_sheets(conn, d["id"])
+    if children:
+        ids = ", ".join(c["id"] for c in children)
+        lines.append(f"  lapset ({children[0]['scale']}): {ids}")
+    lines.append("")
+    lines.append("Käytä bbox-arvoa aluerajauksena WFS/WCS/OGC-kyselyssä tai anna")
+    lines.append(f"lehtitunnus suoraan: query_data(dataset_id, area='{d['id']}').")
+    return "\n".join(lines)
 
 
 def _parse_floats(text: str, count: int) -> list[float] | None:
@@ -124,12 +172,14 @@ def find_map_sheets(
     bbox: str | None = None,
     point: str | None = None,
     prefix: str | None = None,
+    municipality: str | None = None,
     limit: int = 50,
     ctx: Context | None = None,
 ) -> str:
     """Etsi karttalehdet jotka osuvat alueelle (aluerajauksen apu).
 
-    Anna **vähintään yksi** suodatin: ``bbox``, ``point`` tai ``prefix``.
+    Anna **vähintään yksi** suodatin: ``bbox``, ``point``, ``prefix`` tai
+    ``municipality``.
 
     Args:
         scale: Mittakaavataso: 'utm200' (yleiskatsaus), 'utm50' (maakunnat),
@@ -139,16 +189,27 @@ def find_map_sheets(
             tämän oma tuloste voidaan syöttää sellaisenaan takaisin.
         point: Piste EPSG:3067: 'x,y' — palauttaa lehden joka sisältää pisteen.
         prefix: Tunnusprefiksi (esim. 'L413') — hierarkkinen rajaus.
+        municipality: Kunnan nimi (fi/sv) tai koodi — sama kuin antaisi
+            kunnan bbox:n, ilman välikutsua municipality_bbox():iin.
         limit: Tulosten enimmäismäärä (oletus 50).
     """
     limit = clamp(limit, MAX_LIST_LIMIT)
-    if not (bbox or point or prefix):
+    if not (bbox or point or prefix or municipality):
         return (
             "Anna vähintään yksi suodatin: bbox ('minx,miny,maxx,maxy'), "
-            "point ('x,y') tai prefix (esim. 'L413')."
+            "point ('x,y'), prefix (esim. 'L413') tai municipality ('Tampere')."
         )
+    if bbox and municipality:
+        return "Anna joko bbox tai municipality, ei molempia."
+
+    conn = _server._get_conn(ctx)
 
     bbox_vals = None
+    if municipality:
+        area_bbox, detail = _resolve_municipality_bbox(conn, municipality.strip())
+        if area_bbox is None:
+            return detail
+        bbox_vals = list(area_bbox)
     if bbox:
         numbers, crs = _strip_crs(bbox)
         # Väärä koordinaatisto on hylättävä äänekkäästi: hiljaa ohitettuna
@@ -168,7 +229,6 @@ def find_map_sheets(
         if point_vals is None:
             return f"Virheellinen point. Muoto: 'x,y' ({CRS})."
 
-    conn = _server._get_conn(ctx)
     sheets = _find_map_sheets(
         conn,
         scale=scale.strip(),
@@ -201,30 +261,90 @@ def _municipality_row(conn: sqlite3.Connection, query: str) -> sqlite3.Row | Non
     return row
 
 
+def _resolve_municipality_bbox(
+    conn: sqlite3.Connection, query: str
+) -> tuple[Bbox | None, str]:
+    """Kunnan bbox nimellä tai koodilla; virhetilanteessa (None, syy)."""
+    row = _municipality_row(conn, query)
+    if row is None:
+        return None, f"Kuntaa '{query}' ei löytynyt."
+    if row["min_x"] is None:
+        return None, (
+            f"Kunnan {row['name_fi']} bbox-tietoja ei ole ladattu. "
+            "Aja ensin: `populate_reference('municipality_bbox')`."
+        )
+    bbox = (row["min_x"], row["min_y"], row["max_x"], row["max_y"])
+    return bbox, f"{row['name_fi']} ({row['code']})"
+
+
+def _resolve_area(
+    conn: sqlite3.Connection, area: str
+) -> tuple[Bbox | None, str]:
+    """Ratkaise aluerajaus bbox:ksi: kunta, karttalehti tai raaka bbox.
+
+    Tunnistus tehdään kannasta hakemalla eikä merkkijonoa arvaamalla —
+    kuntien nimet ja lehtitunnukset ovat molemmat vapaata tekstiä, ja
+    väärin arvattu tyyppi rajaisi kyselyn hiljaa väärään paikkaan.
+
+    Palauttaa ``(bbox, kuvaus)`` onnistuessa ja ``(None, virheviesti)``
+    muuten. Virhe on aina kerrottava: hiljaa ohitettu aluerajaus tuottaisi
+    oikealta näyttävän vastauksen väärältä alueelta.
+    """
+    text = area.strip()
+    if not text:
+        return None, "Tyhjä aluerajaus."
+
+    # 1) Raaka bbox — pilkut erottavat sen nimistä ja lehtitunnuksista.
+    numbers, crs = _strip_crs(text)
+    if "," in numbers:
+        if crs and crs != CRS:
+            return None, f"Koordinaatisto {crs} ei kelpaa. Aluerajaus on {CRS}:ssä."
+        vals = _parse_floats(numbers, 4)
+        if vals is None:
+            return None, (
+                f"Virheellinen bbox '{text}'. Muoto: 'minx,miny,maxx,maxy' ({CRS})."
+            )
+        return (vals[0], vals[1], vals[2], vals[3]), "annettu bbox"
+
+    # 2) Karttalehti.
+    sheet = _map_sheet_data(conn, text)
+    if sheet is not None:
+        bbox = (sheet["min_x"], sheet["min_y"], sheet["max_x"], sheet["max_y"])
+        return bbox, f"karttalehti {sheet['id']} ({sheet['scale']})"
+
+    # 3) Kunta nimellä tai koodilla.
+    if _municipality_row(conn, text) is not None:
+        return _resolve_municipality_bbox(conn, text)
+
+    return None, (
+        f"Aluetta '{text}' ei tunnistettu: ei kuntaa, ei karttalehteä eikä "
+        f"bbox:ia. Anna kunnan nimi tai koodi, lehtitunnus (esim. 'L4133A') "
+        f"tai bbox 'minx,miny,maxx,maxy' ({CRS})."
+    )
+
+
 @mcp.tool()
 def municipality_bbox(query: str, ctx: Context | None = None) -> str:
     """Hae kunnan bbox (EPSG:3067) aluerajaukseen.
 
-    Palauttaa kunnan rajauslaatikon valmiina WFS/WCS-kyselyyn. Voit ketjuttaa:
-    hae kunnan bbox → syötä se ``find_map_sheets(bbox=...)``-kutsuun.
+    Palauttaa kunnan rajauslaatikon valmiina WFS/WCS-kyselyyn. Useimmiten
+    tätä ei tarvita erikseen: ``query_data(dataset_id, area='Helsinki')`` ja
+    ``find_map_sheets(scale=..., municipality='Helsinki')`` ottavat kunnan
+    nimen suoraan.
 
     Args:
         query: Kunnan nimi (fi/sv) tai kuntakoodi (esim. 'Helsinki' tai '091').
     """
     conn = _server._get_conn(ctx)
-    row = _municipality_row(conn, query.strip())
-    if row is None:
-        return f"Kuntaa '{query}' ei löytynyt."
-    if row["min_x"] is None:
-        return (
-            f"Kunnan {row['name_fi']} bbox-tietoja ei ole ladattu. "
-            "Aja ensin: `populate_reference('municipality_bbox')`."
-        )
-    bbox = f"{row['min_x']},{row['min_y']},{row['max_x']},{row['max_y']},EPSG:3067"
+    name = query.strip()
+    bbox, detail = _resolve_municipality_bbox(conn, name)
+    if bbox is None:
+        return detail
     return (
-        f"Kunta {row['name_fi']} ({row['code']}, EPSG:3067)\n"
-        f"  bbox (WFS/WCS): {bbox}\n\n"
-        f"Käytä bbox-arvoa aluerajauksena tai find_map_sheets(bbox=...)-kutsussa."
+        f"Kunta {detail} {CRS}\n"
+        f"  bbox (WFS/WCS): {_bbox_param(bbox)}\n\n"
+        f"Käytä bbox-arvoa aluerajauksena, tai anna kunnan nimi suoraan: "
+        f"query_data(dataset_id, area='{name}')."
     )
 
 
@@ -242,4 +362,4 @@ def map_sheet(sheet_id: str, ctx: Context | None = None) -> str:
     data = _map_sheet_data(conn, sheet_id.strip())
     if data is None:
         return f"Karttalehteä '{sheet_id}' ei löytynyt."
-    return _format_map_sheet(data)
+    return _format_map_sheet(conn, data)

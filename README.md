@@ -181,7 +181,7 @@ aura import-enrichments contributions/*.json
 | `search_structured` | Hae datasettejä ja palauta JSON tekoälyagenteille |
 | `search_by_region` | Hae alueellisesti (kunta, maakunta, postinumero) |
 | `describe` | Kuvaa datasetti yksityiskohtaisesti (sis. skeema, laatu, rikastukset) |
-| `query_data` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
+| `query_data` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData); `area`-parametri rajaa WFS-kyselyn kuntaan, karttalehteen tai bbox:iin |
 | `recommend` | Suosittele parhaita datasettejä aiheesta |
 | `compare` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related` | Etsi samankaltaiset datasetit |
@@ -194,6 +194,9 @@ aura import-enrichments contributions/*.json
 | `area_profile` | Alueprofiili: datasetit, laatu, puutteet |
 | `compare_municipalities` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
 | `lookup_municipality` | Hae kuntatiedot nimellä, koodilla tai postinumerolla |
+| `municipality_bbox` | Kunnan rajauslaatikko (EPSG:3067) WFS/WCS-kyselyyn |
+| `find_map_sheets` | MML:n TM35-karttalehdet jotka osuvat alueelle (kunta, bbox, piste, prefiksi) |
+| `map_sheet` | Karttalehden bbox, centroidi sekä vanhempi- ja lapsilehdet |
 
 **Laatu:**
 
@@ -258,7 +261,7 @@ Aura ei ole pelkkä hakemisto — tekoälyagentti voi **hakea dataa suoraan** ra
 |-----------|-------------|----------------|
 | REST/JSON | `query_data` tai suora HTTP | Digitraffic (tie, rata, meri), Sotkanet |
 | PxWeb | `query_data` (suodattimet) | Tilastokeskus, LUKE |
-| WFS | `query_data` (bbox, tyyppi) | FMI, SYKE, MML, Väylävirasto |
+| WFS | `query_data` (`area`, suodattimet) | FMI, SYKE, MML, Väylävirasto |
 | OData v4 | `query_data` (filter) | Traficom |
 | CSV | `query_data` (rivit) | avoindata.fi, HRI |
 | GTFS | GTFS-tiedostojen URL:t | Digitransit (32 operaattoria) |
