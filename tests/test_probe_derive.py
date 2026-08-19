@@ -30,3 +30,19 @@ def test_tuntematon_koodi_ei_arvaa() -> None:
     """Väärä arvaus on pahempi kuin puuttuva tieto."""
     assert auth_from_status(500) == []
     assert auth_from_status(None) == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://api.example.fi/data?key=login_token",  # login in query param
+        "https://example.fi/tunnus-id/123.csv",  # tunnus as part of segment
+        "https://example.fi/wfs?typeName=rekisteri:kohteet",  # rekisteri in query param
+    ],
+)
+def test_query_parametrit_eivat_aiheuta_valheita(url: str) -> None:
+    """Query-parametrit ja osittaiset segmentit eivät saa aiheuttaa väärää tunnistusta."""
+    result = auth_from_status(200, url)
+    # Ei saisi tunnistaa rekisteröintisivuksi
+    if result:
+        assert dict(result)["auth_method"] != "registration"

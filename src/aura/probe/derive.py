@@ -7,7 +7,10 @@ kaksinkertaistaisi liikenteen kertomatta mitään uutta.
 
 from __future__ import annotations
 
-#: Osoitteen osat jotka kertovat rekisteröintisivusta.
+from urllib.parse import urlparse
+
+#: Osoitteen polkuosassa esiintyvät vihjeet rekisteröintisivusta.
+#: Vertailu on kirjainkoosta riippumaton.
 _REGISTRATION_HINTS = ("register", "signup", "rekister", "tunnus", "login")
 
 _BY_STATUS = {200: "none", 401: "apikey", 403: "restricted"}
@@ -24,7 +27,7 @@ def auth_from_status(
     if http_status is None:
         return []
 
-    if final_url and any(h in final_url.lower() for h in _REGISTRATION_HINTS):
+    if final_url and _is_registration_url(final_url):
         return [
             ("auth_method", "registration"),
             ("auth_registration_url", final_url),
@@ -34,3 +37,18 @@ def auth_from_status(
     if method is None:
         return []
     return [("auth_method", method)]
+
+
+def _is_registration_url(url: str) -> bool:
+    """Tarkista onko URL:ssa rekisteröintisivun vihjeitä polkuosassa.
+
+    Query-parametrit jätetään huomioimatta: niiden nimissä ei ole
+    merkitystä sivun luonteelle.
+    """
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    # Tarkista polkusegmentit: /register, /tunnus, jne.
+    # Näin vältetään väärät positiiviset query-parametreissa
+    # ja osittaisissa segmentinimissä (esim. /tunnus-id).
+    segments = path.split("/")
+    return any(hint in segments for hint in _REGISTRATION_HINTS)
