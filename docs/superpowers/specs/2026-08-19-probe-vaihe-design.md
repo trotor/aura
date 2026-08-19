@@ -2,58 +2,61 @@
 
 **Päivä:** 2026-08-19
 **Tila:** suunniteltu
-**Lähtökohta:** agenttiasiakkaan palaute (P1), ks. myös #146:n yhteydessä korjatut P0-viat
+**Lähtökohta:** agenttiasiakkaan palaute (P1)
 
 ## Ongelma
 
-Katalogi kertoo mitä aineistoja on, muttei mitä niissä on. Agentti näkee otsikon ja
-kuvauksen; se ei näe sarakkeita, koordinaatistoa, avainkenttiä eikä sitä miten
-rajapintaa kutsutaan. Nämä ovat konekielisesti johdettavissa itse rajapinnasta.
+Agentti näkee otsikon ja kuvauksen; se ei näe sarakkeita, koordinaatistoa,
+avainkenttiä eikä sitä miten rajapintaa kutsutaan. Nämä ovat konekielisesti
+johdettavissa itse rajapinnasta.
 
-Mitattu tilanne (2026-08-19, `data/aura.db`, 12 918 datasettiä):
+Palaute sanoi että kentät puuttuvat. Mitattuna tilanne on kolmijakoinen, ja vain
+yksi kolmasosa on aito aukko:
 
-| kenttä | rivejä | provenienssi |
+| protokolla | tila | missä |
 |---|---|---|
-| `data_fields` | 2 275 | `harvest` — **vain PxWeb**: statfin 99,9 %, luke 100 %, muut ~0 % |
-| `crs` | 2 107 | `harvest` |
-| `access_instructions` | 1 292 | `harvest` |
-| `joinable_keys` | 26 | `schema_analysis` — `query_data`:n sivutuote |
-| `auth_method` | 1 | `health_check` |
+| CSV, JSON | **kaapataan, mutta lähes ajamatta** — 54 datasettiä 12 918:sta | `resource_schema`-taulu |
+| PxWeb | **kaapataan kattavasti** harvestoinnissa (statfin 99,9 %, luke 100 %) | `data_fields`-enrichment |
+| **WFS, WMS** | **ei kaapata missään** — 1 100 + 1 671 datasettiä | — |
 
-Kattavuus ei siis puutu kokonaan vaan on yhden protokollan varassa. PxWeb-harvesteri
-kirjoittaa dimensiot enrichmenteiksi; muut protokollat eivät kirjoita mitään.
-`tools/schema.py` osaa jo tyyppipäättelyn ja avainheuristiikan, mutta se laukeaa vain
-kun ihminen tai agentti sattuu kutsumaan `query_data`:a — 54 datasettiä 12 918:sta.
+Raportoija törmäsi juuri kolmanteen riviin: GTK:n aineistot ovat WFS:ää.
 
-Kohteita formaatin mukaan, datasetit joilta kenttätieto puuttuu:
+### Miksi CSV/JSON on kaapattu mutta ajamatta
 
-| formaatti | kpl | mitä probe saa irti |
-|---|---|---|
-| CSV | 4 569 | otsikkorivi + tyyppiarvaus |
-| WMS | 1 671 | layerien nimet ja otsikot (ei sarakkeita) |
-| WFS | 1 100 | sarakkeet, tyypit, DefaultCRS |
-| PxWeb | 119 | dimensiot — jäänteet joita harvestointi ei tavoita |
+`aura infer-schemas` (`cli.py:1026`) hakee datasetit joilla on CSV/JSON-resurssi
+mutta ei skeemaa, lataa esikatselun ja tallentaa kentät. Se on jo probe-vaihe.
+Sen puutteet ovat ne, jotka pitävät kattavuuden 54:ssä:
+
+| ominaisuus | tila |
+|---|---|
+| CSV, JSON | on |
+| WFS, WMS, PxWeb | **puuttuu** |
+| jatkaminen (puuttuvat ensin) | on |
+| TTL / uudelleenprobe | **puuttuu** — kerran tehty, ei koskaan uudelleen |
+| epäonnistumisen kirjaus | **puuttuu** — virhe tulostetaan ja katoaa |
+| tahdinsäätö per isäntä | **puuttuu** — kiinteä globaali viive |
+| `auth_method`, esimerkkikutsu | **puuttuu** |
+
+Logiikka asuu CLI-tiedostossa sadan rivin funktiona, mikä on myös syy siihen ettei
+sitä voi kutsua MCP:stä eikä testata ilman CLI:tä.
 
 ## Rajaus
 
-Mukana: WFS, WMS, PxWeb, CSV, `auth_method`, `example_request`, `joinable_keys`.
-
-Ei mukana: JSON-resurssit (4 581 kpl). Katkaistu JSON ei jäsenny, joten probe
-joutuisi lataamaan koko dokumentin tuntemattomasta koosta. Otetaan seuraavalle
-kierrokselle, kun mittari on olemassa näyttämään paljonko se lisää.
+Mukana: WFS, WMS, PxWeb, CSV, JSON, `auth_method`, `example_request`,
+`joinable_keys`.
 
 **`use_case` ei ole probe-kenttä eikä siitä tule sellaista.** Se on ainoa
 puuttuvista kentistä joka ei ole johdettavissa lähteestä, ja generoitu sisältö
-muuttuu katalogissa faktaksi seuraavalle lukijalle.
+muuttuu katalogissa faktaksi seuraavalle lukijalle. AI-tuotettu sisältö siirtyy
+kenttään `use_case_suggested`, jolloin kentän **nimi** kertoo mistä on kyse —
+provenienssimetatieto ei näy lukijalle samalla tavalla. Rivejä ei poisteta.
 
 ## Arkkitehtuuri
 
-Uusi paketti `src/aura/probe/`. Vaihtoehdot, jotka hylättiin:
-
-- **Harvesterit saisivat `probe()`-metodin.** Probe on protokollakohtainen, ei
-  lähdekohtainen: sama WFS-logiikka monistuisi 20 harvesteriin.
-- **Laajennettaisiin `spatial_probe.py`:tä.** Sen työ on koon arviointi
-  otosruuduilla — eri tehtävä. Yhdistäminen tekisi yhdestä moduulista kaksi.
+**Ei uutta komentoa vaan olemassa olevan laajennus.** `infer-schemas` tekee jo
+oikeaa asiaa väärässä paikassa ja liian kapeasti. Logiikka siirtyy CLI:stä omaan
+pakettiin, jolloin siihen voi lisätä protokollat, TTL:n ja kirjanpidon — ja
+jolloin sen voi kutsua myös MCP:stä ja testata ilman CLI:tä.
 
 ```
 src/aura/probe/
@@ -62,62 +65,71 @@ src/aura/probe/
 ├── wfs.py           GetCapabilities + DescribeFeatureType
 ├── wms.py           GetCapabilities
 ├── pxweb.py         taulun metadata
-├── csv.py           range-pyyntö
-└── derive.py        joinable_keys ja auth_method muiden tuloksesta
+├── tabular.py       CSV ja JSON (nykyinen esikatselupolku)
+└── derive.py        auth_method ja example_request muiden tuloksesta
 ```
 
-Kukin prober on funktio `async probe(resource: dict) -> ProbeResult`. Se ei kirjoita
+Kukin prober on funktio `async probe(resource) -> ProbeResult`. Se ei kirjoita
 kantaan eikä tiedä orkestroinnista; sen ainoa riippuvuus on HTTP-vastaus. Siksi
 jokainen on testattavissa tallennetulla vastauksella ilman verkkoa.
 
+Vaihtoehdot, jotka hylättiin:
+
+- **Harvesterit saisivat `probe()`-metodin.** Probe on protokollakohtainen, ei
+  lähdekohtainen: sama WFS-logiikka monistuisi 20 harvesteriin.
+- **Laajennettaisiin `spatial_probe.py`:tä.** Sen työ on koon arviointi
+  otosruuduilla — eri tehtävä. Yhdistäminen tekisi yhdestä moduulista kaksi.
+
 Uudelleenkäytetään: `aura/wfs.py` (kykyjen luku, virheen tunnistus, neuvottelu),
-`tools/schema.py` (`infer_type`, `_KEY_PATTERNS`), `tools/preview.py` (CSV:n
-erottimen tunnistus), `health.py` (statuskoodien tulkinta).
+`tools/schema.py` (`infer_type`, `detect_joinable_keys`, `save_schema_from_markdown`),
+`tools/preview.py` (`_preview_csv`, `_preview_json`), `health.py` (statuskoodit).
 
 ## Tiedon sijainti
 
-Kaksi eri asiaa, kaksi eri paikkaa.
+**Kolme varastoa kolmelle eri asialle.** Ne eivät ole päällekkäisiä vaan
+erimuotoisia, ja niillä on eri kuluttajat. Yhteen pakottaminen rikkoisi
+olemassa olevaa toimintaa.
 
-**Johdettu tieto → `enrichments`, `source_type='probe'`.** Olemassa oleva
-provenienssimalli riittää. Probe kirjoittaa: `data_fields`, `joinable_keys`, `crs`,
-`example_request`, `auth_method`, `auth_registration_url`. Tämä on sama polku jota
-PxWeb-harvesteri jo käyttää, joten `describe`, `search` ja laatupisteet näkevät
-tuloksen ilman uutta lukupolkua.
+| tieto | varasto | muoto | kuluttaja |
+|---|---|---|---|
+| sarakkeet (WFS, CSV, JSON) | `resource_schema`-taulu | `field_name`, `field_type`, per **resurssi** | `describe` |
+| dimensiot (PxWeb) | `data_fields`-enrichment | `{code, name, value_count, examples}`, per datasetti | `region_levels`, `_preview_pxweb` |
+| layerit (WMS) | `service_layers`-enrichment | `[{name, title}]` | `describe` |
 
-### Arvojen muodot ovat jo päätetty — niitä ei keksitä uudestaan
+Kolme perustetta tälle jaolle:
 
-`data_fields` on JSON-lista, jonka PxWeb-harvesteri kirjoittaa muodossa
-`{code, name, value_count, examples}` ja jota `_preview_pxweb` lukee. Sarakkeet
-mahtuvat samaan avainjoukkoon, kun lisätään kaksi valinnaista avainta:
+1. **Granulariteetti.** Sarakkeet kuuluvat resurssille: yhdellä datasetillä voi
+   olla monta resurssia eri skeemoilla. `resource_schema` on jo oikeassa
+   muodossa, ja `describe` ryhmittelee sen resurssin mukaan.
+2. **`data_fields` ei ole vapaa.** `region_levels.py` lukee sen arvoa
+   tunnistaakseen kuntadimension, ja se ohjaa hakutuloksen aluelaajennusta.
+   Sarakelistan työntäminen samaan kenttään sekoittaisi tuon logiikan.
+3. **Layer ei ole skeema.** WMS ei tarjoa sarakkeita lainkaan. Layer-listan
+   esittäminen kenttätietona antaisi lukijalle väärän kuvan siitä mitä
+   aineistosta saa irti.
 
-```json
-[{"name": "OBJECTID", "type": "integer", "kind": "column"},
- {"name": "Onnettomuustyyppi", "code": "onnettomuustyyp_2", "value_count": 12,
-  "examples": ["Yhteensä"], "kind": "dimension"}]
-```
+Lisäksi probe kirjoittaa enrichmenteinä, `source_type='probe'`: `crs`,
+`example_request`, `auth_method`, `auth_registration_url`.
 
-`kind` on `column` (WFS, CSV), `dimension` (PxWeb) tai `layer` (WMS). Ilman sitä
-lukija olettaisi WMS:n layer-listan olevan skeema — WMS ei tarjoa sarakkeita
-lainkaan, ja sen tulos on eri laatua kuin muiden.
-
-`joinable_keys` on jo muodossa `[{"field": "Y-tunnus", "key": "y-tunnus",
-"standard": "PRH 8-num"}]`, jonka `tools/schema.py` tuottaa. Probe käyttää samaa
-funktiota ja samaa muotoa.
+`joinable_keys` syntyy jo `tools/schema.py`:n `detect_joinable_keys`-funktiosta
+merkinnällä `confidence='medium'`, `source_detail='Auto-detected from field
+names'`. Probe käyttää samaa funktiota ja samaa merkintää; `source_detail`
+tarkennetaan muotoon `Auto-detected from field names (heuristic)`, jotta
+heuristiikka lukee arvon vierestä eikä vain provenienssikentästä.
 
 **`access_instructions` ei ole oikea kenttä esimerkkikutsulle.** Mitattuna sen
 nykyiset 1 292 arvoa ovat ihmisluettavia yhteydenotto-ohjeita — yksi arvo on
 kokonaisuudessaan `sijaintipalvelut@stat.fi`. Konekielinen esimerkkikutsu on eri
-asia, ja samaan kenttään sekoitettuna kumpikin heikkenee: lukija ei tiedä
-kummankaan muotoa etukäteen. Siksi probe kirjoittaa uuteen kenttään
-`example_request`.
+asia, ja samaan kenttään sekoitettuna kumpikin heikkenee. Siksi probe kirjoittaa
+uuteen kenttään `example_request`.
 
-**Kirjanpito → uusi taulu `probe_results`:**
+### Kirjanpito
 
 ```sql
 CREATE TABLE probe_results (
     resource_id TEXT PRIMARY KEY,
     dataset_id  TEXT NOT NULL,
-    probe_type  TEXT NOT NULL,     -- wfs | wms | pxweb | csv
+    probe_type  TEXT NOT NULL,     -- wfs | wms | pxweb | csv | json
     status      TEXT NOT NULL,     -- ok | http_error | timeout | parse_error | empty
     detail      TEXT DEFAULT '',   -- esim. "HTTP 404"
     probed_at   TEXT NOT NULL
@@ -127,52 +139,43 @@ CREATE INDEX idx_probe_results_dataset ON probe_results(dataset_id);
 ```
 
 `resource_id` on pääavain: taulu kantaa **viimeisimmän** tilan per resurssi, ei
-historiaa. Historia kuuluu enrichmenteihin, joissa se jo on; kirjanpidossa vanha
-tila ei kerro mitään jota uusi ei kertoisi paremmin.
+historiaa. Historia kuuluu enrichmenteihin, joissa se jo on.
 
-Erillinen taulu siksi, että TTL ja jatkaminen vaativat indeksoituja kyselyitä
-("mitkä ovat vanhentuneet", "mitä ei ole yritetty"), ja `enrichments` on versioitu
-lisäystaulu johon kirjanpito paisuisi.
+Erillinen taulu siksi, että TTL ja jatkaminen vaativat indeksoituja kyselyitä, ja
+`enrichments` on versioitu lisäystaulu johon kirjanpito paisuisi.
 
-Tämä taulu on myös se paikka jossa **epäonnistuminen näkyy**. "Ei saatu selville" on
-agentille tietoa, ei tyhjä.
+Tämä taulu on myös se paikka jossa **epäonnistuminen näkyy**. "Ei saatu selville"
+on agentille tietoa, ei tyhjä. Nykyinen `infer-schemas` tulostaa virheen ja
+unohtaa sen, joten sama rikkinäinen resurssi yritetään uudestaan joka ajolla eikä
+kukaan tiedä mikä on rikki.
 
-### Kaksi tarkennusta
-
-`joinable_keys` merkitään heuristiikaksi arvossa itsessään: `confidence='low'`,
-`source_detail='column-name-heuristic'`. Pelkkä provenienssi ei riitä, koska lukija
-näkee arvon ennen kuin näkee mistä se tuli.
-
-AI-tuotettu käyttötapauskuvaus siirtyy uuteen kenttään `use_case_suggested`.
-Kentän **nimi** kertoo mistä on kyse — provenienssimetatieto ei näy lukijalle
-samalla tavalla. `use_case` jää ihmisen kirjoittamaksi.
-
-Toteutus: `use_case_suggested` ja `example_request` lisätään
-`VALID_ENRICHMENT_FIELDS`-joukkoon, ja skeemamigraatio siirtää nykyiset viisi
-`field='use_case' AND source_type='ai_analysis'` -riviä uudelle kentälle. Rivejä ei
-poisteta — sisältö säilyy, vain sen nimi muuttuu todeksi.
+`probe_results` lisätään `prune.py`:n `RELATED_TABLES`-listaan, jotta kadonneen
+datasetin rivit siivoutuvat samalla kuin muutkin.
 
 ## Proberit
 
 | prober | kutsut | tuottaa |
 |---|---|---|
-| `wfs` | GetCapabilities + DescribeFeatureType | `data_fields` (nimi + tyyppi), `crs`, `example_request` |
-| `wms` | GetCapabilities | `data_fields` = layerit, `crs` |
-| `pxweb` | taulun metadata | `data_fields` = dimensiot ja luokitusarvot |
-| `csv` | 1 range-pyyntö (~8 kt) | `data_fields` otsikkorivistä + `infer_type` |
+| `wfs` | GetCapabilities + DescribeFeatureType | `resource_schema`, `crs`, `example_request` |
+| `wms` | GetCapabilities | `service_layers`, `crs` |
+| `pxweb` | taulun metadata | `data_fields` |
+| `tabular` | 1 esikatselupyyntö | `resource_schema` (nykyinen polku) |
 
 **WFS.** DescribeFeatureType antaa tyypitetyt sarakkeet sekä ArcGIS- että
 GeoServer-palvelimilla, mutta eri nimiavaruusprefiksillä (`xsd:` / `xs:`), joten
-jäsennys tehdään prefiksistä riippumatta — sama `_local()`-apuri kuin `aura/wfs.py`
-käyttää. Geometriakentät (`gml:*PropertyType`) merkitään geometriaksi eikä
-sarakkeiksi. DefaultCRS luetaan GetCapabilitiesin FeatureTypestä.
+jäsennys tehdään prefiksistä riippumatta — sama `_local()`-apuri kuin
+`aura/wfs.py` käyttää. Geometriakentät (`gml:*PropertyType`) merkitään
+geometriaksi eikä sarakkeiksi. DefaultCRS luetaan GetCapabilitiesin
+FeatureTypestä.
 
-**WMS** ei tarjoa sarakkeita lainkaan. Sen tulos merkitään `kind='layer'`, kuten
-arvojen muodoissa on kuvattu.
+**WMS.** GetCapabilities antaa layerien nimet ja otsikot. Ei sarakkeita.
 
-**CSV.** Range-pyyntö ensimmäisistä ~8 kilotavusta. Erottimen tunnistus on jo
-olemassa `preview.py`:ssä. Palvelin joka ei tue range-pyyntöjä palauttaa koko
-tiedoston; lukeminen katkaistaan samaan rajaan.
+**PxWeb.** Sama logiikka kuin harvesterissa jo on; probe kattaa ne 119 joita
+harvestointi ei tavoita.
+
+**`tabular`** on nykyinen `infer-schemas`-polku siirrettynä: `_preview_csv` tai
+`_preview_json`, sitten `save_schema_from_markdown`. Käytös ei muutu — vain
+sijainti, TTL ja epäonnistumisen kirjaus.
 
 **`auth_method` ja `auth_registration_url`** johdetaan muiden proberien
 vastauskoodeista, ei omalla kutsulla: 200 → `none`, 401 → `apikey`, 403 →
@@ -180,9 +183,9 @@ vastauskoodeista, ei omalla kutsulla: 200 → `none`, 401 → `apikey`, 403 →
 resurssille kaksinkertaistaisi liikenteen kertomatta mitään uutta.
 
 **`example_request`** on konkreettinen kutsu, ei sanallinen ohje. WFS:lle se on se
-pyyntö joka juuri todistettiin toimivaksi —
-`aura/wfs.py`:n neuvottelun sivutuote: kun `fetch_features` on selvittänyt mikä
-yhdistelmä toimii, se yhdistelmä *on* ohje.
+pyyntö joka juuri todistettiin toimivaksi — `aura/wfs.py`:n neuvottelun
+sivutuote: kun `fetch_features` on selvittänyt mikä yhdistelmä toimii, se
+yhdistelmä *on* ohje.
 
 ## Orkestrointi
 
@@ -191,7 +194,7 @@ Kohteiden valinta — probaamattomat ensin, sitten vanhimmat:
 ```sql
 SELECT r.id, r.dataset_id, r.format, r.url
 FROM resources r LEFT JOIN probe_results p ON p.resource_id = r.id
-WHERE UPPER(r.format) IN ('WFS','WMS','PXWEB','CSV')
+WHERE UPPER(r.format) IN ('WFS','WMS','PXWEB','CSV','JSON','GEOJSON')
   AND (p.probed_at IS NULL OR p.probed_at < :vanhentunut)
 ORDER BY (p.probed_at IS NULL) DESC, p.probed_at
 LIMIT :limit
@@ -209,7 +212,8 @@ LIMIT :limit
 **Tahdinsäätö on 2 kutsua sekunnissa per isäntä**, rinnakkaisuus isäntien välillä.
 Tämä ei ole arvaus: aura-pron dimensiohaku menetti 3 808 taulua 3 928:sta kun
 6-rinnakkainen ajo törmäsi PxWebin 429-rajoitukseen — ja 429 näytti tyhjältä
-tulokselta, ei virheeltä.
+tulokselta, ei virheeltä. Nykyinen `--delay 0.3` on globaali eikä katso isäntää,
+joten se on yhtä aikaa liian hidas monelle palvelimelle ja liian nopea yhdelle.
 
 **Jatkaminen** on kirjoitus per resurssi, commit joka 50. Keskeytys menettää
 korkeintaan 50 kohdetta.
@@ -220,14 +224,15 @@ korkeintaan 50 kohdetta.
 aura probe [--source X] [--format WFS] [--limit N] [--max-age-days 30] [--dry-run]
 ```
 
-MCP-työkalu `probe_schemas(source, limit)` — sama muoto kuin olemassa olevalla
-`probe_sizes`-työkalulla. Kirjoittavana se rajautuu automaattisesti pois
-read-only-etäpalvelusta, kuten `harvest`.
+`infer-schemas` jää aliakseksi, joka tulostaa varoituksen uudesta nimestä. Nimi
+`probe-sizes` on jo varattu koon mittaukselle eikä siihen kosketa.
+
+MCP-työkalu `probe_schemas(source, limit)` — sama muoto kuin `probe_sizes`.
+Kirjoittavana se rajautuu automaattisesti pois read-only-etäpalvelusta.
 
 **Uutta status-työkalua ei tule.** Epäonnistuminen näkyy siellä missä sitä
-katsotaan: `describe(dataset_id)` kertoo `Skeemaa ei saatu selville: HTTP 404
-(2026-08-19)`, ja `stats()` näyttää kokonaiskattavuuden. Agentti kohtaa tiedon
-samassa kutsussa jossa se muutenkin kysyy datasetistä.
+katsotaan: `describe(dataset_id)` kertoo kenttätietojen kohdalla `Skeemaa ei saatu
+selville: HTTP 404 (2026-08-19)`, ja `stats()` näyttää kokonaiskattavuuden.
 
 ## Virheenkäsittely
 
@@ -247,21 +252,22 @@ Yksikään probe ei epäonnistu hiljaa: jokainen kirjoittaa rivin `probe_results
 Kolme tasoa, kaikki ilman verkkoa:
 
 1. **Proberit** — tallennetuilla oikeilla vastauksilla. `tests/fixtures/wfs_*.xml`
-   ovat jo olemassa (GTK:n ArcGIS). Palautteen pyytämä ArcGIS-regressio syntyy tästä.
-   Uudet fixturet: WMS GetCapabilities, PxWeb-metadata, CSV-otsikkorivi.
+   ovat jo olemassa (GTK:n ArcGIS). Palautteen pyytämä ArcGIS-regressio syntyy
+   tästä. Uudet fixturet: WMS GetCapabilities, PxWeb-metadata, CSV-otsikkorivi.
 2. **Orkestrointi** — valeprobereilla muistikannassa: kohteiden valinta, TTL-rajat
-   tilaa kohden, jatkaminen kesken ajon, tahdinsäätö.
+   tilaa kohden, jatkaminen kesken ajon, tahdinsäätö per isäntä.
 3. **Näkyvyys** — `describe` kertoo epäonnistuneesta probesta, `stats` laskee
    kattavuuden.
 
-Onnistumisen mitta: WFS- ja CSV-kohteiden `data_fields`-kattavuus nousee ~0 %:sta,
-ja `joinable_keys` 26 rivistä. Tarkka luku mitataan ensimmäisen täyden ajon
-jälkeen — se on tulos, ei tavoite jonka voisi asettaa etukäteen.
+Onnistumisen mitta: WFS- ja WMS-kohteiden kattavuus nousee nollasta, ja
+CSV/JSON-kattavuus 54:stä. Tarkat luvut mitataan ensimmäisen täyden ajon jälkeen
+— ne ovat tulos, ei tavoite jonka voisi asettaa etukäteen.
 
 ## Riippuvuudet ja järjestys
 
-Perustuu PR #151:n `aura/wfs.py`-moduuliin (kykyjen luku, virheen tunnistus).
-Se on siis mergettävä ensin.
+Perustuu PR #151:n `aura/wfs.py`-moduuliin (kykyjen luku, virheen tunnistus,
+neuvottelu). Se on mergettävä ensin.
 
 Ei riipu P2:sta (laatupisteiden jako), mutta tuottaa sille syötteen: "pystyykö
-agentti hakemaan tästä dataa ilman ihmistä" tarvitsee juuri probe-vaiheen tuloksen.
+agentti hakemaan tästä dataa ilman ihmistä" tarvitsee juuri probe-vaiheen
+tuloksen — sekä onnistumisen että epäonnistumisen.
