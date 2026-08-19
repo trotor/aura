@@ -89,6 +89,7 @@ def select_targets(
     source: str = "",
     fmt: str = "",
     limit: int = 50,
+    max_age_days: int = 0,
 ) -> list[dict[str, Any]]:
     """Valitse probattavat resurssit: probaamattomat ensin, sitten vanhimmat.
 
@@ -96,6 +97,10 @@ def select_targets(
     ehdokkaat ja Python karsii ne joiden aika ei ole vielä tullut. Ehtojen
     kirjoittaminen SQL:ään vaatisi CASE-lausekkeen jokaiselle tilalle,
     eivätkä kohdemäärät ole sellaisia että sillä olisi väliä.
+
+    ``max_age_days`` ohittaa tilakohtaisen TTL:n kokonaan: kohde valitaan jos
+    ``probed_at`` on tätä vanhempi, riippumatta tilasta. 0 (oletus) käyttää
+    normaalia tilakohtaista TTL:ää.
     """
     formats = ",".join(f"'{f}'" for f in PROBE_TYPES)
     sql = f"""
@@ -121,8 +126,11 @@ def select_targets(
     targets: list[dict[str, Any]] = []
     for row in conn.execute(sql, params):
         if row["prev_probed_at"]:
-            avain = _ttl_key(row["prev_status"] or "", row["prev_detail"] or "")
-            ikaraja = nyt - timedelta(days=TTL_DAYS.get(avain, 30))
+            if max_age_days > 0:
+                ikaraja = nyt - timedelta(days=max_age_days)
+            else:
+                avain = _ttl_key(row["prev_status"] or "", row["prev_detail"] or "")
+                ikaraja = nyt - timedelta(days=TTL_DAYS.get(avain, 30))
             if datetime.fromisoformat(row["prev_probed_at"]) > ikaraja:
                 continue
         targets.append(dict(row))
@@ -208,8 +216,12 @@ async def run_probe(
     now: str = "",
     client: httpx.AsyncClient | None = None,
     probers: dict[str, Prober] | None = None,
+    max_age_days: int = 0,
 ) -> dict[str, int]:
     """Aja probe valituille kohteille ja kirjaa tulokset.
+
+    ``max_age_days`` välitetään suoraan ``select_targets``:lle — ks. sen
+    docstring.
 
     Returns:
         Yhteenveto tiloittain, esim. ``{"ok": 12, "http_error": 3}``.
@@ -217,7 +229,7 @@ async def run_probe(
     timestamp = now or datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
     active = probers or DEFAULT_PROBERS
     targets = select_targets(
-        conn, now=timestamp, source=source, fmt=fmt, limit=limit
+        conn, now=timestamp, source=source, fmt=fmt, limit=limit, max_age_days=max_age_days
     )
     summary: dict[str, int] = defaultdict(int)
     if not targets:

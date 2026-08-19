@@ -862,6 +862,7 @@ def main() -> None:
                 fmt=args.format,
                 limit=args.limit,
                 dry_run=args.dry_run,
+                max_age_days=args.max_age_days,
             )
         )
 
@@ -1031,9 +1032,18 @@ async def _auto_tag(
 
 
 async def _probe(
-    source: str = "", fmt: str = "", limit: int = 50, dry_run: bool = False
+    source: str = "",
+    fmt: str = "",
+    limit: int = 50,
+    dry_run: bool = False,
+    max_age_days: int = 0,
 ) -> None:
-    """Aja probe-vaihe."""
+    """Aja probe-vaihe.
+
+    ``max_age_days`` ohittaa tilakohtaisen TTL:n kokonaan (ks.
+    ``aura.probe.select_targets``) — kuljetettava läpi molemmille reiteille,
+    myös kuiva-ajolle, tai lippu näyttää toimivalta tekemättä mitään.
+    """
     from datetime import UTC, datetime
 
     import aura.server  # noqa: F401 — ratkaise kiertoimport ennen tools-tuonteja
@@ -1045,13 +1055,17 @@ async def _probe(
     now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
     if dry_run:
-        targets = select_targets(conn, now=now, source=source, fmt=fmt, limit=limit)
+        targets = select_targets(
+            conn, now=now, source=source, fmt=fmt, limit=limit, max_age_days=max_age_days
+        )
         print(f"{len(targets)} kohdetta:")
         for t in targets[:20]:
             print(f"  {t['format']:8} {t['url'][:90]}")
         return
 
-    summary = await run_probe(conn, source=source, fmt=fmt, limit=limit, now=now)
+    summary = await run_probe(
+        conn, source=source, fmt=fmt, limit=limit, now=now, max_age_days=max_age_days
+    )
     print(format_probe_summary(summary))
 
 

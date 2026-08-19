@@ -85,6 +85,32 @@ class TestKohteidenValinta:
         assert {t["id"] for t in select_targets(conn, now=NOW, fmt="WFS")} == {"r-wfs"}
         assert select_targets(conn, now=NOW, source="ei-ole") == []
 
+    def test_max_age_days_ohittaa_tilakohtaisen_ttl_n(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """--max-age-days ohittaa TTL:n kokonaan, riippumatta tilasta.
+
+        404 saisi normaalisti 90 vrk:n TTL:n (http_error_permanent) eikä
+        yrittäisi uudestaan 2 vrk:n jälkeen. max_age_days=1 ohittaa sen.
+        """
+        upsert_probe_result(
+            conn, "r-wfs", "d1", "wfs", "http_error", "HTTP 404", "2026-08-17T12:00:00"
+        )
+        conn.commit()
+        idt = {t["id"] for t in select_targets(conn, now=NOW, max_age_days=1)}
+        assert "r-wfs" in idt
+
+    def test_max_age_days_oletus_kayttaytyy_kuten_ennen(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """max_age_days=0 (oletus) ei muuta käytöstä: sama 404 pysyy TTL:n sisällä."""
+        upsert_probe_result(
+            conn, "r-wfs", "d1", "wfs", "http_error", "HTTP 404", "2026-08-17T12:00:00"
+        )
+        conn.commit()
+        idt = {t["id"] for t in select_targets(conn, now=NOW)}
+        assert "r-wfs" not in idt
+
 
 class TestAjo:
     @pytest.mark.anyio
@@ -205,3 +231,32 @@ class TestAjo:
             "SELECT status FROM probe_results WHERE resource_id = 'r-wfs'"
         ).fetchone()
         assert rivi["status"] == "http_error"
+
+    @pytest.mark.anyio
+    async def test_max_age_days_valittyy_select_targets_lle(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """run_probe():n on välitettävä max_age_days select_targets:lle.
+
+        Ilman tätä lippu näyttäisi toimivalta CLI:ssä (parseri hyväksyy sen)
+        muttei tekisi mitään — sama vikaluokka jonka takia tämä koko
+        parametri lisättiin.
+        """
+        upsert_probe_result(
+            conn, "r-wfs", "d1", "wfs", "http_error", "HTTP 404", "2026-08-17T12:00:00"
+        )
+        conn.commit()
+
+        async def fake_probe(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(status=ProbeStatus.OK, fields=[("a", "string")], http_status=200)
+
+        yhteenveto = await run_probe(
+            conn,
+            now=NOW,
+            limit=10,
+            max_age_days=1,
+            probers={"wfs": fake_probe, "csv": fake_probe},
+        )
+        # r-wfs (2 vrk vanha 404, ohitettu max_age_days:llä) + r-csv (probaamaton)
+        assert yhteenveto["ok"] == 2
+
