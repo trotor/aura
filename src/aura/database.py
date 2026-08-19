@@ -550,6 +550,72 @@ def _bm25_expr(conn: sqlite3.Connection) -> str:
     return "bm25(datasets_fts, " + ", ".join(str(w) for w in weights) + ")"
 
 
+def build_dataset_filters(
+    source: str = "",
+    fmt: str = "",
+    organization: str = "",
+    access_level: str = "",
+    region_names: list[str] | None = None,
+) -> tuple[list[str], list[Any]]:
+    """Rakenna hakusuodattimien SQL-ehdot ja parametrit.
+
+    Ehdot olettavat että datasets-taulu on aliaksella ``d``.
+
+    Julkinen siksi, että suodatin on määriteltävä **yhdessä paikassa**.
+    Hakua täydentävät kerrokset (esim. pro-moottorin dimensiohaku) hakevat
+    ehdokkaita ohi tämän funktion FTS-haun, ja niiden on rajattava samoilla
+    ehdoilla. Omat kopiot ajautuisivat erilleen hiljaa: vastaus näyttäisi
+    suodatetulta mutta sisältäisi rivejä joita suodatin ei päästäisi läpi.
+
+    Args:
+        source: Lähde tarkalleen (esim. "avoindata.fi").
+        fmt: Formaatti — datasetti kelpaa jos sillä on resurssi siinä.
+        organization: Organisaation nimen osa.
+        access_level: "open" | "registration" | "restricted".
+        region_names: Maantieteellinen kattavuus, ks. huomio alla.
+
+    Returns:
+        ``(ehdot, parametrit)`` — ehdot yhdistetään AND:lla.
+    """
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if source:
+        conditions.append("d.source = ?")
+        params.append(source)
+    if organization:
+        conditions.append("d.organization_title LIKE ?")
+        params.append(f"%{organization}%")
+    if access_level:
+        conditions.append("d.access_level = ?")
+        params.append(access_level)
+    if fmt:
+        conditions.append(
+            "d.id IN (SELECT dataset_id FROM resources WHERE format = ? COLLATE NOCASE)"
+        )
+        params.append(fmt)
+    if region_names:
+        # Kaksi tapaa olla alueellisesti relevantti. Ensimmäinen on
+        # aineiston oma aluerajaus. Toinen on koko maan kattava aineisto
+        # jossa kunta on dimensioarvo — se puuttui, ja siksi
+        # "Kuopio + väestö" palautti tyhjän vaikka Kuopion väkiluku on
+        # sekä StatFinissä että Sotkanetissa. Ks. aura.region_levels.
+        #
+        # Jälkimmäinen haara ei katso pyydettyä aluetta lainkaan, joten
+        # aluerajaus on pehmeä: se laajentaa, ei rajaa. Kutsujan on
+        # kerrottava se käyttäjälle — ks. _region_widening_note().
+        coverage_conditions = " OR ".join(
+            "d.geographical_coverage LIKE ?" for _ in region_names
+        )
+        conditions.append(
+            f"(({coverage_conditions}) OR d.id IN ("
+            "SELECT dataset_id FROM enrichments WHERE field = 'region_level'))"
+        )
+        params.extend(f"%{name}%" for name in region_names)
+
+    return conditions, params
+
+
 def search_datasets(
     conn: sqlite3.Connection,
     query: str,
@@ -592,35 +658,13 @@ def search_datasets(
         region_names: Rajaa maantieteellisen kattavuuden mukaan.
     """
     # Suodattimet (yhteinen FTS- ja enrichment-haulle)
-    filter_conditions: list[str] = []
-    filter_params: list[Any] = []
-
-    if source:
-        filter_conditions.append("d.source = ?")
-        filter_params.append(source)
-    if organization:
-        filter_conditions.append("d.organization_title LIKE ?")
-        filter_params.append(f"%{organization}%")
-    if access_level:
-        filter_conditions.append("d.access_level = ?")
-        filter_params.append(access_level)
-    if fmt:
-        filter_conditions.append(
-            "d.id IN (SELECT dataset_id FROM resources WHERE format = ? COLLATE NOCASE)"
-        )
-        filter_params.append(fmt)
-    if region_names:
-        # Kaksi tapaa olla alueellisesti relevantti. Ensimmäinen on
-        # aineiston oma aluerajaus. Toinen on koko maan kattava aineisto
-        # jossa kunta on dimensioarvo — se puuttui, ja siksi
-        # "Kuopio + väestö" palautti tyhjän vaikka Kuopion väkiluku on
-        # sekä StatFinissä että Sotkanetissa. Ks. aura.region_levels.
-        coverage_conditions = " OR ".join("d.geographical_coverage LIKE ?" for _ in region_names)
-        filter_conditions.append(
-            f"(({coverage_conditions}) OR d.id IN ("
-            "SELECT dataset_id FROM enrichments WHERE field = 'region_level'))"
-        )
-        filter_params.extend(f"%{name}%" for name in region_names)
+    filter_conditions, filter_params = build_dataset_filters(
+        source=source,
+        fmt=fmt,
+        organization=organization,
+        access_level=access_level,
+        region_names=region_names,
+    )
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
