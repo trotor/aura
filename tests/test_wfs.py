@@ -71,6 +71,22 @@ class TestVirheenTunnistus:
     def test_roska_ei_kaada(self) -> None:
         assert exception_text("<ei suljettu") is None
 
+    def test_wms_service_exception_tunnistetaan(self) -> None:
+        """WMS-palvelin ei kääri virhettä ExceptionReportiin vaan omaan muotoonsa.
+
+        Ilman tätä ``exception_text`` palauttaisi None:in aidolle
+        WMS-virheelle, ja kutsuja (esim. WMS-prober) joutuisi kertomaan
+        geneerisen syyn palvelimen oman virheen sijaan.
+        """
+        xml = (
+            '<ServiceExceptionReport version="1.3.0" '
+            'xmlns="http://www.opengis.net/ogc">'
+            '<ServiceException code="InvalidParameterValue">'
+            "Layer not defined</ServiceException>"
+            "</ServiceExceptionReport>"
+        )
+        assert exception_text(xml) == "Layer not defined"
+
 
 class TestKyvyt:
     def test_featuretyypit_loytyvat(self) -> None:

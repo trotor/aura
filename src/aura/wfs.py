@@ -76,27 +76,45 @@ def _root(body: str) -> ET.Element | None:
         return None
 
 
+#: Virhevastauksen juurielementti -> (tekstin kantava tagi, koodin
+#: attribuutin nimi). OWS-muoto (WFS, GeoServer) kääri viestin omaan
+#: ``ExceptionText``-lapsielementtiinsä ``Exception``-elementin sisällä.
+#: WMS:n vanhempi ``ServiceExceptionReport``-muoto ei kääri: viesti on
+#: suoraan ``ServiceException``-elementin tekstinä, ja koodi on sen omassa
+#: ``code``-attribuutissa eikä ``exceptionCode``-attribuutissa.
+_EXCEPTION_SHAPES = {
+    "ExceptionReport": ("ExceptionText", "Exception", "exceptionCode"),
+    "ServiceExceptionReport": ("ServiceException", "ServiceException", "code"),
+}
+
+
 def exception_text(body: str) -> str | None:
     """Palauta palvelimen virheteksti, tai None jos vastaus ei ole virhe.
 
     Tämä on ainoa tapa erottaa virhe datasta: statuskoodi on 200 myös
-    silloin kun palvelin kieltäytyi.
+    silloin kun palvelin kieltäytyi. Kaksi eri virhemuotoa tunnistetaan,
+    koska WMS-palvelimet käyttävät eri kääretasoa kuin WFS/GeoServer —
+    ks. ``_EXCEPTION_SHAPES``.
     """
     root = _root(body)
-    if root is None or _local(root.tag) != "ExceptionReport":
+    if root is None:
         return None
+    shape = _EXCEPTION_SHAPES.get(_local(root.tag))
+    if shape is None:
+        return None
+    text_tag, code_tag, code_attr = shape
     texts = [
         (el.text or "").strip()
         for el in root.iter()
-        if _local(el.tag) == "ExceptionText" and (el.text or "").strip()
+        if _local(el.tag) == text_tag and (el.text or "").strip()
     ]
     if texts:
         return " ".join(texts)
     # Jotkin palvelimet jättävät tekstin pois ja kertovat syyn koodissa.
     codes = [
-        el.get("exceptionCode", "")
+        el.get(code_attr, "")
         for el in root.iter()
-        if _local(el.tag) == "Exception"
+        if _local(el.tag) == code_tag
     ]
     return " ".join(c for c in codes if c) or "Tuntematon WFS-virhe."
 

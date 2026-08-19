@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from aura.probe.types import ProbeStatus
@@ -24,10 +25,16 @@ def _fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def test_layerit_loytyvat_nimineen(self=None) -> None:
+def test_layerit_loytyvat_nimineen() -> None:
+    """Koko layer-lista täsmälleen: pelkkä ei-tyhjyys ei paljasta suodatuksen katoamista.
+
+    Fixture sisältää kolme <Layer>-elementtiä (nimetön juuri, nimetön ryhmä
+    "Kantakartat" ja yksi nimetty lehtikerros). Jos nimettömien layerien
+    suodatus katoaisi, ``assert layers`` ja ``assert all("name" in lay ...)``
+    menisivät silti läpi — vain täsmällinen vertailu paljastaa sen.
+    """
     layers = parse_layers(_fixture("wms_capabilities.xml"))
-    assert layers, "yhtään layeria ei löytynyt"
-    assert all("name" in lay for lay in layers)
+    assert layers == [{"name": "avoindata:Kantakartta", "title": "Kantakartta"}]
 
 
 def test_nimeton_kokoava_layer_ohitetaan() -> None:
@@ -59,3 +66,70 @@ async def test_probe_tuottaa_service_layers_enrichmentin() -> None:
     arvot = dict(tulos.enrichments)
     layers = json.loads(arvot["service_layers"])
     assert layers and "name" in layers[0]
+
+
+@pytest.mark.anyio
+async def test_timeout_kirjautuu_omana_tilanaan() -> None:
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+
+    tulos = await probe({"url": "https://example.test/wms"}, client)
+    assert tulos.status == ProbeStatus.TIMEOUT
+    assert tulos.detail == "GetCapabilities"
+
+
+@pytest.mark.anyio
+async def test_http_virhe_kirjautuu_koodina() -> None:
+    resp = MagicMock()
+    resp.status_code = 404
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=resp)
+
+    tulos = await probe({"url": "https://example.test/wms"}, client)
+    assert tulos.status == ProbeStatus.HTTP_ERROR
+    assert tulos.detail == "HTTP 404"
+    assert tulos.http_status == 404
+
+
+@pytest.mark.anyio
+async def test_tyhja_capabilities_kirjautuu_yleisena_syyna() -> None:
+    """Ei layereita eikä tunnistettavaa virhettä — geneerinen syy kelpaa."""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.text = (
+        '<WMS_Capabilities xmlns="http://www.opengis.net/wms">'
+        "<Capability><Layer><Title>Tyhjä</Title></Layer></Capability>"
+        "</WMS_Capabilities>"
+    )
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=resp)
+
+    tulos = await probe({"url": "https://example.test/wms"}, client)
+    assert tulos.status == ProbeStatus.EMPTY
+    assert tulos.detail == "GetCapabilities ei sisältänyt layereita"
+    assert tulos.http_status == 200
+
+
+@pytest.mark.anyio
+async def test_palvelimen_oma_virhe_kirjautuu_syyna() -> None:
+    """WMS:n ServiceExceptionReport-muoto (ei OWS:n ExceptionReport) on tunnistuttava.
+
+    Tämä on aidon kieltäytymisen tavallisin muoto WMS-palvelimilla —
+    geneerinen "ei sisältänyt layereita" hukkaisi palvelimen oman syyn,
+    vaikka se oli saatavilla.
+    """
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.text = (
+        '<ServiceExceptionReport version="1.3.0" '
+        'xmlns="http://www.opengis.net/ogc">'
+        '<ServiceException code="InvalidParameterValue">'
+        "Layer not defined</ServiceException>"
+        "</ServiceExceptionReport>"
+    )
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=resp)
+
+    tulos = await probe({"url": "https://example.test/wms"}, client)
+    assert tulos.status == ProbeStatus.EMPTY
+    assert tulos.detail == "Layer not defined"
