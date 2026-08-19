@@ -880,13 +880,21 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         """,
     ).fetchall()
 
-    return {
+    stats = {
         "total_datasets": total,
         "total_organizations": orgs,
         "total_formats": formats,
         "top_organizations": [dict(r) for r in top_orgs],
         "top_formats": [dict(r) for r in top_formats],
     }
+
+    probe_rows = conn.execute(
+        "SELECT status, COUNT(*) AS n FROM probe_results GROUP BY status"
+    ).fetchall()
+    stats["probe_total"] = sum(r["n"] for r in probe_rows)
+    stats["probe_ok"] = next((r["n"] for r in probe_rows if r["status"] == "ok"), 0)
+
+    return stats
 
 
 # --- Organizations ---

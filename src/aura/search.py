@@ -244,4 +244,10 @@ def format_stats(stats: dict[str, Any]) -> str:
         for fmt in stats["top_formats"]:
             parts.append(f"- {fmt['format']}: {fmt['count']} resurssia")
 
+    if stats.get("probe_total"):
+        parts.append(
+            f"\n**Skeema johdettu:** {stats['probe_ok']}/{stats['probe_total']} "
+            "resurssista onnistuneesti"
+        )
+
     return "\n".join(parts)
