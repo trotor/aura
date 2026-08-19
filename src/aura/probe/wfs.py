@@ -46,12 +46,25 @@ def parse_feature_types(body: str) -> list[tuple[str, str]]:
     Geometriakenttä (``gml:*PropertyType``) merkitään tyypillä "geometry"
     eikä pudoteta: sen olemassaolo kertoo että aineisto on paikkatietoa,
     vaikka koordinaattilista itsessään ei kuulu sarakelistaan.
+
+    ``typeNames``-parametri voi pyytää useamman feature typen kerralla
+    (esim. Lounaistiedon ``hame_keski_suomi``), jolloin vastaus sisältää
+    oman ``complexType``/``sequence``-lohkon jokaiselle tyypille. Eri
+    feature typeillä on aidosti usein samannimisiä attribuutteja (``nimi``,
+    ``kunta``, ``id``) — se ei ole datavirhe, vaan yleistä kun useampi
+    kerros jakaa yhteisen attribuuttimallin. ``resource_schema``-taulu on
+    kuitenkin resurssikohtainen, ei feature type -kohtainen (avain on
+    ``resource_id + field_name``), joten sama nimi kelpaa vain kerran:
+    ensimmäinen esiintymä voittaa. Tämä dedup kuuluu tänne eikä
+    tietokantakerrokseen, koska vain prober tietää että toisto tässä on
+    odotettua eikä merkki rikkinäisestä vastauksesta.
     """
     root = _root(body)
     if root is None:
         return []
 
     fields: list[tuple[str, str]] = []
+    seen: set[str] = set()
     for seq in root.iter():
         if _local(seq.tag) != "sequence":
             continue
@@ -59,9 +72,10 @@ def parse_feature_types(body: str) -> list[tuple[str, str]]:
             if _local(el.tag) != "element":
                 continue
             name = el.get("name")
-            if not name:
+            if not name or name in seen:
                 continue
             fields.append((name, _field_type(el)))
+            seen.add(name)
     return fields
 
 

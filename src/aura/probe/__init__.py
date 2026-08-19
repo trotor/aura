@@ -265,8 +265,37 @@ async def run_probe(
                 result = ProbeResult(
                     status=ProbeStatus.PARSE_ERROR, detail=str(e)[:100]
                 )
-            _store(conn, target, result, timestamp)
-            summary[result.status] += 1
+
+            # _store() ei myöskään saa kaataa koko ajoa: esim. WFS-resurssi
+            # jonka typeNames kattaa useamman feature typen voi silti tuoda
+            # kenttäluettelon joka rikkoo tietokannan oletuksia tavalla jota
+            # prober ei ehkäissyt (ks. wfs.parse_feature_types). SAVEPOINTia
+            # ei käytetä: add_enrichment() commitoi sisäisesti jokaisen
+            # rikastuksen heti, mikä päättäisi ympäröivän SAVEPOINTin
+            # ennenaikaisesti ("no such savepoint" seuraavalla RELEASEllä).
+            # upsert_resource_schema on ainoa kohta josta tämä virhe on
+            # toistaiseksi nähty tulevan, joten kesken jäänyt kirjoitus
+            # siivotaan kohdennetusti sen sijaan että koko _store() olisi
+            # transaktion sisällä.
+            try:
+                _store(conn, target, result, timestamp)
+            except Exception as e:
+                logger.warning("[probe] %s tallennus epäonnistui: %s", target["id"], e)
+                conn.execute(
+                    "DELETE FROM resource_schema WHERE resource_id = ?", (target["id"],)
+                )
+                upsert_probe_result(
+                    conn,
+                    target["id"],
+                    target["dataset_id"],
+                    probe_type,
+                    ProbeStatus.PARSE_ERROR,
+                    str(e)[:100],
+                    timestamp,
+                )
+                summary[ProbeStatus.PARSE_ERROR] += 1
+            else:
+                summary[result.status] += 1
             if i % _COMMIT_EVERY == 0:
                 conn.commit()
         conn.commit()

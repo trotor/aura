@@ -260,3 +260,88 @@ class TestAjo:
         # r-wfs (2 vrk vanha 404, ohitettu max_age_days:llä) + r-csv (probaamaton)
         assert yhteenveto["ok"] == 2
 
+
+    @pytest.mark.anyio
+    async def test_kaksoiskappale_sarakenimi_ei_kaada_ajoa(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """resource_schema:n avain (resource_id, field_name) ei siedä kahta
+        samannimistä saraketta samalle resurssille.
+
+        WFS-prober voi tuottaa tämän kun ``typeNames`` kattaa useamman
+        feature typen joilla on yhteisiä attribuuttinimiä (havaittu
+        Lounaistiedon hame_keski_suomi-aineistolla: ``probe --format WFS``
+        kaatui käsittelemättömään IntegrityErroriin, ja koska
+        select_targets asettaa probaamattomat aina ensin, uudelleenajo
+        osui täsmälleen samaan kohteeseen — ajo oli pysyvästi jumissa).
+
+        Kaatuminen tässä ei saa nousta Python-poikkeuksena asti: kohde jää
+        kirjatuksi parse_error-tilaan, eikä resource_schema-tauluun jää
+        puolitiehen kirjoitettua riviä.
+        """
+
+        async def kaksoiskappale(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.OK,
+                fields=[("nimi", "string"), ("nimi", "string")],
+                http_status=200,
+            )
+
+        yhteenveto = await run_probe(
+            conn,
+            now=NOW,
+            limit=10,
+            probers={"wfs": kaksoiskappale, "csv": kaksoiskappale},
+        )
+        assert yhteenveto == {"parse_error": 2}
+
+        rivi = conn.execute(
+            "SELECT status, detail FROM probe_results WHERE resource_id = 'r-wfs'"
+        ).fetchone()
+        assert rivi is not None
+        assert rivi["status"] == "parse_error"
+        assert rivi["detail"] != ""
+
+        kentat = conn.execute(
+            "SELECT field_name FROM resource_schema WHERE resource_id = 'r-wfs'"
+        ).fetchall()
+        assert kentat == []
+
+    @pytest.mark.anyio
+    async def test_tallennuksen_epaonnistuminen_ei_pysayta_ajoa(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Yhden kohteen _store()-kaatuminen ei saa estää seuraavan käsittelyä."""
+
+        async def kaksoiskappale(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.OK,
+                fields=[("nimi", "string"), ("nimi", "string")],
+                http_status=200,
+            )
+
+        async def onnistuva(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(status=ProbeStatus.OK, fields=[("a", "string")], http_status=200)
+
+        yhteenveto = await run_probe(
+            conn,
+            now=NOW,
+            limit=10,
+            probers={"wfs": kaksoiskappale, "csv": onnistuva},
+        )
+        assert yhteenveto == {"parse_error": 1, "ok": 1}
+
+        wfs_rivi = conn.execute(
+            "SELECT status FROM probe_results WHERE resource_id = 'r-wfs'"
+        ).fetchone()
+        assert wfs_rivi["status"] == "parse_error"
+
+        csv_rivi = conn.execute(
+            "SELECT status FROM probe_results WHERE resource_id = 'r-csv'"
+        ).fetchone()
+        assert csv_rivi["status"] == "ok"
+
+        kentat = conn.execute(
+            "SELECT field_name FROM resource_schema WHERE resource_id = 'r-csv'"
+        ).fetchall()
+        assert {r["field_name"] for r in kentat} == {"a"}

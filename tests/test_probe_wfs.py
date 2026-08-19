@@ -126,6 +126,35 @@ class TestSarakkeidenLuku:
     def test_tyhja_vastaus_ei_kaada(self) -> None:
         assert parse_feature_types("") == []
 
+    def test_useamman_feature_typen_yhteinen_sarake_ei_toistu(self) -> None:
+        """``typeNames=a,b`` palauttaa erillisen sequence-lohkon per tyyppi.
+
+        Eri feature typeillä on aidosti usein samannimisiä attribuutteja
+        (havaittu Lounaistiedon hame_keski_suomi-aineistolla: kaksi
+        toistuvaa ``nimi``-saraketta kaatoi ``upsert_resource_schema``:n
+        IntegrityErroriin, koska sen avain on resource_id+field_name eikä
+        feature type erottele). Ensimmäinen esiintymä voittaa; tyyppi ei
+        katoa, vaikka nimi toistuisi.
+        """
+        xml = (
+            '<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
+            "<xsd:sequence>"
+            '<xsd:element name="nimi" type="xsd:string"/>'
+            '<xsd:element name="a_vain" type="xsd:integer"/>'
+            "</xsd:sequence>"
+            "<xsd:sequence>"
+            '<xsd:element name="nimi" type="xsd:string"/>'
+            '<xsd:element name="b_vain" type="xsd:double"/>'
+            "</xsd:sequence>"
+            "</xsd:schema>"
+        )
+        kentat = parse_feature_types(xml)
+        assert kentat == [
+            ("nimi", "string"),
+            ("a_vain", "integer"),
+            ("b_vain", "float"),
+        ]
+
 
 def _client(responses: list[tuple[int, str]]) -> AsyncMock:
     calls: list[dict] = []
