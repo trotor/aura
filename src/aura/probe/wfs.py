@@ -1,12 +1,21 @@
 """WFS-prober: sarakkeet, tyypit ja koordinaatisto kyvyistä.
 
 DescribeFeatureType antaa tyypitetyt sarakkeet sekä ArcGIS- että
-GeoServer-palvelimilla, mutta eri nimiavaruusprefiksillä (``xsd:`` / ``xs:``).
-Siksi jäsennys tehdään prefiksistä riippumatta.
+GeoServer-palvelimilla, mutta rakenne eroaa yksityiskohdissa jotka
+nimestä ei näe: ArcGIS jättää ``type``-attribuutin merkkijonokentistä
+kokonaan pois ja ilmaisee tyypin sisäkkäisellä rajoituksella, ja
+GeoServer nimeää featuretyypin kääre-complexTypen samalla ``...Type``-
+päätteellä jota käytetään myös aidoissa nimetyissä sarake-tyypeissä
+(esim. INSPIRE-koodistokentät kuten ``ns:TilaType``). Siksi sarake
+erotetaan kääre-elementistä sijainnin perusteella: sarake on aina
+``xsd:sequence``:n sisällä, kääre-elementti on ``xsd:schema``:n suora
+lapsi.
 """
 
 from __future__ import annotations
 
+import urllib.parse
+import xml.etree.ElementTree as ET
 from typing import Any
 
 import httpx
@@ -27,6 +36,13 @@ _XSD_TYPES = {
 def parse_feature_types(body: str) -> list[tuple[str, str]]:
     """Poimi DescribeFeatureType-vastauksesta sarakkeet ja tyypit.
 
+    Vain ``xsd:sequence``-lohkon sisällä olevat elementit ovat sarakkeita.
+    Featuretyypin oma kääre-elementti on ``xsd:schema``:n suora lapsi eikä
+    koskaan minkään sequence-lohkon sisällä — tämä rakenteellinen sijainti
+    erottaa sen luotettavasti, kun taas nimi (``...Type``/``...FeatureType``)
+    ei: GeoServer nimeää kääretyypin samalla kaavalla kuin aito nimetty
+    sarake-tyyppi (esim. INSPIRE-koodistokenttä ``ns:TilaType``).
+
     Geometriakenttä (``gml:*PropertyType``) merkitään tyypillä "geometry"
     eikä pudoteta: sen olemassaolo kertoo että aineisto on paikkatietoa,
     vaikka koordinaattilista itsessään ei kuulu sarakelistaan.
@@ -36,24 +52,56 @@ def parse_feature_types(body: str) -> list[tuple[str, str]]:
         return []
 
     fields: list[tuple[str, str]] = []
-    for el in root.iter():
-        if _local(el.tag) != "element":
+    for seq in root.iter():
+        if _local(seq.tag) != "sequence":
             continue
-        name = el.get("name")
-        raw_type = el.get("type") or ""
-        if not name or not raw_type:
-            continue
-        if raw_type.startswith("gml:"):
-            fields.append((name, "geometry"))
-            continue
-        # Ylin element on featuretyyppi itse, ei sarake: sen type-attribuutti
-        # viittaa complexTypeen jonka nimi päättyy "Type" (ArcGIS: "...FeatureType",
-        # GeoServer: "...Type"). XSD-perustyypit eivät koskaan pääty "Type".
-        if raw_type.endswith("Type"):
-            continue
-        local_type = raw_type.split(":")[-1]
-        fields.append((name, _XSD_TYPES.get(local_type, "string")))
+        for el in seq:
+            if _local(el.tag) != "element":
+                continue
+            name = el.get("name")
+            if not name:
+                continue
+            fields.append((name, _field_type(el)))
     return fields
+
+
+def _field_type(el: ET.Element) -> str:
+    """Sarakkeen Aura-tyyppi elementin ``type``-attribuutista.
+
+    ArcGIS jättää ``type``-attribuutin pois merkkijonokentistä ja ilmaisee
+    tyypin sisäkkäisellä ``<xsd:simpleType><xsd:restriction base="..."/>``
+    -rakenteella. Ilman tätä katsantoa nuo kentät katoaisivat äänettömästi,
+    vaikka niillä on ``name``.
+    """
+    raw_type = el.get("type") or _restriction_base(el) or ""
+    if raw_type.startswith("gml:"):
+        return "geometry"
+    local_type = raw_type.split(":")[-1]
+    return _XSD_TYPES.get(local_type, "string")
+
+
+def _restriction_base(el: ET.Element) -> str | None:
+    """Sisäkkäisen ``xsd:simpleType``-rajoituksen ``base``-attribuutti."""
+    for child in el.iter():
+        if _local(child.tag) == "restriction":
+            return child.get("base")
+    return None
+
+
+def _url_type_name(url: str) -> str | None:
+    """typeName/typeNames-parametri resurssin URL:sta, jos sellainen on.
+
+    ``aura.wfs.request_params`` tekee saman valinnan GetFeature-kutsulle
+    samasta syystä: resurssin URL on usein GetCapabilities-osoite jonka
+    query-osa kantaa myös kerroksen nimen. Ilman tätä probe valitsisi
+    aina kykyjen ensimmäisen featuretyypin — joka voi olla eri kerros
+    kuin se jota resurssi oikeasti kuvaa.
+    """
+    query = urllib.parse.urlparse(url).query
+    for key, values in urllib.parse.parse_qs(query).items():
+        if key.lower() in ("typename", "typenames") and values:
+            return values[0]
+    return None
 
 
 async def probe(
@@ -82,7 +130,9 @@ async def probe(
             status=ProbeStatus.PARSE_ERROR, detail=virhe, http_status=caps_resp.status_code
         )
 
-    type_name = caps.feature_types[0]
+    # Resurssin oma typeName voittaa kykyjen ensimmäisen: sama periaate
+    # kuin request_params()-funktiossa GetFeature-kutsulle.
+    type_name = _url_type_name(url) or caps.feature_types[0]
     dft_params = {
         "service": "WFS",
         "version": "2.0.0",
