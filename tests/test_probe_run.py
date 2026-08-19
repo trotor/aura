@@ -166,3 +166,42 @@ class TestAjo:
             "SELECT status FROM probe_results WHERE resource_id='r-wfs'"
         ).fetchone()
         assert rivi["status"] == "parse_error"
+
+    @pytest.mark.anyio
+    async def test_epaonnistuneen_tuloksen_sisaltoa_ei_tallenneta(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """`_store()`:n vartija: epäonnistuneen proben sisältö ei saa läpäistä sitä.
+
+        Prober voi teknisesti täyttää `fields`/`enrichments`-kentät vaikka
+        status olisi epäonnistunut (esim. osittainen vastaus ennen virhettä).
+        Vartijan pitää silti hylätä ne kokonaan — vain kirjanpitorivi jää.
+        """
+
+        async def fake_probe(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.HTTP_ERROR,
+                detail="HTTP 500",
+                fields=[("kuntakoodi", "string")],
+                enrichments=[("crs", "EPSG:3067")],
+                http_status=500,
+            )
+
+        await run_probe(
+            conn, now=NOW, limit=10, probers={"wfs": fake_probe, "csv": fake_probe}
+        )
+
+        kentat = conn.execute(
+            "SELECT field_name FROM resource_schema WHERE resource_id = 'r-wfs'"
+        ).fetchall()
+        assert kentat == []
+
+        rikastukset = conn.execute(
+            "SELECT field FROM enrichments WHERE dataset_id = 'd1'"
+        ).fetchall()
+        assert rikastukset == []
+
+        rivi = conn.execute(
+            "SELECT status FROM probe_results WHERE resource_id = 'r-wfs'"
+        ).fetchone()
+        assert rivi["status"] == "http_error"
