@@ -9,45 +9,26 @@ lukijalle samalla tavalla.
 
 from __future__ import annotations
 
-import ast
 import sqlite3
 from pathlib import Path
 
 import pytest
 
+import aura.server  # noqa: F401 — resolve circular import before tools
 from aura.database import init_db
-
-
-def _get_valid_enrichment_fields() -> set[str]:
-    """Lue VALID_ENRICHMENT_FIELDS-joukko suoraan lähdetiedostosta."""
-    source = Path("src/aura/tools/enrichment.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "VALID_ENRICHMENT_FIELDS":
-                    if isinstance(node.value, ast.Set):
-                        # Pura string-elementit joukosta
-                        fields = set()
-                        for elt in node.value.elts:
-                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                                fields.add(elt.value)
-                        return fields
-    raise ValueError("VALID_ENRICHMENT_FIELDS not found in enrichment.py")
+from aura.tools.enrichment import VALID_ENRICHMENT_FIELDS
 
 
 @pytest.mark.parametrize(
     "kentta", ["service_layers", "example_request", "use_case_suggested"]
 )
 def test_uusi_kentta_on_sallittu(kentta: str) -> None:
-    fields = _get_valid_enrichment_fields()
-    assert kentta in fields
+    assert kentta in VALID_ENRICHMENT_FIELDS
 
 
 def test_use_case_sailyy_sallittuna() -> None:
     """Ihmisen kirjoittama use_case ei katoa mihinkään."""
-    fields = _get_valid_enrichment_fields()
-    assert "use_case" in fields
+    assert "use_case" in VALID_ENRICHMENT_FIELDS
 
 
 def test_migraatio_siirtaa_ai_rivit() -> None:

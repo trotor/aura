@@ -65,6 +65,8 @@ def enrich(
                 (esim. '["Reittiopas", "Karttapalvelu"]')
             - quality_notes: huomioita datan laadusta
             - use_case: käyttötapausesimerkki
+            - use_case_suggested: kielimallin ehdottama käyttötapaus
+                (erillään ihmisen kirjoittamasta use_case-kentästä)
             - access_instructions: ohjeet datan hakemiseen
             - auth_method: autentikointimenetelmä (none, apikey, oauth, registration)
             - auth_registration_url: URL josta pääsy haetaan
@@ -72,6 +74,8 @@ def enrich(
             - crs: koordinaattijärjestelmä (esim. "EPSG:3067", "EPSG:4326")
             - joinable_keys: yhdistettävät avaimet JSON-listana
                 (esim. '[{"field":"kunta","key":"kuntakoodi","standard":"Tilastokeskus"}]')
+            - service_layers: WMS-palvelun layerit (nimi ja otsikko), ei sarakkeita
+            - example_request: konkreettinen esimerkkikutsu rajapintaan
             - organization_context: taustatietoa julkaisijasta
             - temporal_coverage: ajallinen kattavuus
             - update_frequency_actual: havaittu päivitystiheys
