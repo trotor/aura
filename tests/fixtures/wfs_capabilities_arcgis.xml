@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wfs:WFS_Capabilities
+  xmlns="http://www.opengis.net/wfs/2.0"
+  xmlns:wfs="http://www.opengis.net/wfs/2.0"
+  xmlns:ows="http://www.opengis.net/ows/1.1"
+  xmlns:fes="http://www.opengis.net/fes/2.0"
+  xmlns:Rajapinnat_GTK_Maapera_WFS="https://gtkdata.gtk.fi/arcgis/services/Rajapinnat/GTK_Maapera_WFS/MapServer/WFSServer"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  version="2.0.0"  xsi:schemaLocation="http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd https://gtkdata.gtk.fi/arcgis/services/Rajapinnat/GTK_Maapera_WFS/MapServer/WFSServer https://gtkdata.gtk.fi/arcgis/services/Rajapinnat/GTK_Maapera_WFS/MapServer/WFSServer?service=wfs%26version=2.0.0%26request=DescribeFeatureType"
+>
+  <ows:ServiceIdentification>
+    <ows:Title>WFS</ows:Title>
+    <ows:Abstract></ows:Abstract>
+    <ows:Keywords>
+      <ows:Keyword>ESRI(longlat)</ows:Keyword>
+      <ows:Keyword>GTK</ows:Keyword>
+      <ows:Keyword>Maaperä</ows:Keyword>
+      <ows:Keyword>WFS</ows:Keyword>
+    </ows:Keywords>
+    <ows:ServiceType>WFS</ows:ServiceType>
+    <ows:ServiceTypeVersion>2.0.0</ows:ServiceTypeVersion>
+    <ows:Fees>none</ows:Fees>
+    <ows:AccessConstraints>https://www.gtk.fi/export/sites/fi/tietopalvelut/hinnastot/GTK_aineistotuotelisenssi_1_v10.pdf</ows:AccessConstraints>
+  </ows:ServiceIdentification>
+  <ows:ServiceProvider>
+    <ows:ProviderName>GTK</ows:ProviderName>
+    <ows:ServiceContact>
+      <ows:IndividualName></ows:IndividualName>
+      <ows:PositionName></ows:PositionName>
+      <ows:ContactInfo>
+        <ows:Phone>
+          <ows:Voice></ows:Voice>
+          <ows:Facsimile></ows:Facsimile>
+        </ows:Phone>
+        <ows:Address>
+          <ows:DeliveryPoint></ows:DeliveryPoint>
+          <ows:City></ows:City>
+          <ows:AdministrativeArea></ows:AdministrativeArea>
+          <ows:PostalCode></ows:PostalCode>
+          <ows:Country></ows:Country>
+          <ows:ElectronicMailAddress></ows:ElectronicMailAddress>
+        </ows:Address>
+        <ows:OnlineResource xlink:href="http://localhost:6080/arcgis/services/Rajapinnat/GTK_Maapera_WFS/MapServer/WFSServer"/>
+        <ows:HoursOfService></ows:HoursOfService>
+        <ows:ContactInstructions></ows:ContactInstructions>
+      </ows:ContactInfo>
+      <ows:Role></ows:Role>
+    </ows:ServiceContact>
+  </ows:ServiceProvider>
+  <ows:OperationsMetadata>
+<ows:Operation name="GetFeature">
+      <ows:DCP>
+        <ows:HTTP>
+          <ows:Get xlink:href="https://gtkdata.gtk.fi/arcgis/services/Rajapinnat/GTK_Maapera_WFS/MapServer/WFSServer?"/>
+          <ows:Post xlink:href="https://gtkdata.gtk.fi/arcgis/services/Rajapinnat/GTK_Maapera_WFS/MapServer/WFSServer"/>
+        </ows:HTTP>
+      </ows:DCP>
+      <ows:Parameter name="resultType">
+        <ows:AllowedValues>
+          <ows:Value>results</ows:Value>
+          <ows:Value>hits</ows:Value>
+        </ows:AllowedValues>
+      </ows:Parameter>
+      <ows:Parameter name="outputFormat">
+        <ows:AllowedValues>
+          <ows:Value>GML32</ows:Value>
+          <ows:Value>GML32+ZIP</ows:Value>
+          <ows:Value>GML32+GZIP</ows:Value>
+          <ows:Value>application/gml+xml; version=3.2</ows:Value>
+          <ows:Value>GML3</ows:Value>
+          <ows:Value>GML3+ZIP</ows:Value>
+          <ows:Value>GML3+GZIP</ows:Value>
+          <ows:Value>text/xml; subtype=gml/3.1.1</ows:Value>
+          <ows:Value>GML2</ows:Value>
+          <ows:Value>GML2+ZIP</ows:Value>
+          <ows:Value>GML2+GZIP</ows:Value>
+          <ows:Value>text/xml; subtype=gml/2.1.2</ows:Value>
+          <ows:Value>GEOJSON</ows:Value>
+          <ows:Value>GEOJSON+ZIP</ows:Value>
+          <ows:Value>GEOJSON+GZIP</ows:Value>
+          <ows:Value>ESRIGEOJSON</ows:Value>
+          <ows:Value>ESRIGEOJSON+ZIP</ows:Value>
+          <ows:Value>ESRIGEOJSON+GZIP</ows:Value>
+          <ows:Value>KML</ows:Value>
+          <ows:Value>application/vnd.google-earth.kml xml</ows:Value>
+          <ows:Value>application/vnd.google-earth.kml+xml</ows:Value>
+          <ows:Value>KMZ</ows:Value>
+          <ows:Value>application/vnd.google-earth.kmz</ows:Value>
+          <ows:Value>SHAPE+ZIP</ows:Value>
+          <ows:Value>CSV</ows:Value>
+          <ows:Value>CSV+ZIP</ows:Value>
+          <ows:Value>CSV+GZIP</ows:Value>
+          <ows:Value>Geopackage</ows:Value>
+          <ows:Value>Geopackage+ZIP</ows:Value>
+        </ows:AllowedValues>
+      </ows:Parameter>
+      <ows:Parameter name="resolve">
+        <ows:AllowedValues>
+          <ows:Value>none</ows:Value>
+          <ows:Value>local</ows:Value>
+        </ows:AllowedValues>
+      </ows:Parameter>
+    </ows:Operation>
+</ows:OperationsMetadata>
+<wfs:FeatureTypeList>
+<wfs:FeatureType>
+    <wfs:Name>Rajapinnat_GTK_Maapera_WFS:postglasiaalisiirros</wfs:Name>
+    <wfs:Title>postglasiaalisiirros</wfs:Title>
+    <wfs:DefaultCRS>urn:ogc:def:crs:EPSG::3067</wfs:DefaultCRS>
+    <ows:WGS84BoundingBox>
+      <ows:LowerCorner>20.36188248 62.10935112</ows:LowerCorner>
+      <ows:UpperCorner>28.50531504 69.78240126</ows:UpperCorner>
+    </ows:WGS84BoundingBox>
+  </wfs:FeatureType>
+<wfs:FeatureType>
+    <wfs:Name>Rajapinnat_GTK_Maapera_WFS:merenpohjan_naytepaikat</wfs:Name>
+    <wfs:Title>merenpohjan_naytepaikat</wfs:Title>
+    <wfs:DefaultCRS>urn:ogc:def:crs:EPSG::3067</wfs:DefaultCRS>
+    <ows:WGS84BoundingBox>
+      <ows:LowerCorner>16.01133476 56.99289522</ows:LowerCorner>
+      <ows:UpperCorner>29.17429272 65.76776824</ows:UpperCorner>
+    </ows:WGS84BoundingBox>
+  </wfs:FeatureType>
+<wfs:FeatureType>
+    <wfs:Name>Rajapinnat_GTK_Maapera_WFS:postglasiaalinen_maanvyory</wfs:Name>
+    <wfs:Title>postglasiaalinen_maanvyory</wfs:Title>
+    <wfs:DefaultCRS>urn:ogc:def:crs:EPSG::3067</wfs:DefaultCRS>
+    <ows:WGS84BoundingBox>
+      <ows:LowerCorner>21.32676983 65.70139436</ows:LowerCorner>
+      <ows:UpperCorner>30.34685167 69.72291887</ows:UpperCorner>
+    </ows:WGS84BoundingBox>
+  </wfs:FeatureType>
+</wfs:FeatureTypeList>
+</wfs:WFS_Capabilities>

@@ -9,12 +9,12 @@ import csv
 import io
 import json
 import logging
-import urllib.parse
 from typing import Any
 
 import httpx
 
 from aura.constants import PREVIEWABLE_FORMATS, user_agent
+from aura.wfs import fetch_features
 
 logger = logging.getLogger(__name__)
 
@@ -213,59 +213,33 @@ async def _preview_pxweb(
     return "\n".join(parts)
 
 
-def _wfs_params(
-    url: str, max_rows: int, bbox: str | None = None
-) -> tuple[str, dict[str, str]]:
-    """Rakenna WFS GetFeature -pyyntö säilyttäen kerroksen nimi URL:sta.
-
-    Resurssin URL on useimmiten GetCapabilities-osoite, jonka query-osa on
-    turha — mutta osassa lähteitä se kantaa myös ``typeName``-parametrin.
-    Jos se pudotetaan, palvelin vastaa "The query should specify either
-    typeName..." eikä virheestä näe että kerros katosi kyselyä
-    rakennettaessa. Siksi kerroksen nimi poimitaan talteen.
-    """
-    base_url = url.split("?")[0]
-    params = {
-        "service": "WFS",
-        "version": "2.0.0",
-        "request": "GetFeature",
-        "outputFormat": "application/json",
-        "count": str(max_rows),
-    }
-    query = urllib.parse.urlparse(url).query
-    for key, values in urllib.parse.parse_qs(query).items():
-        if key.lower() in ("typename", "typenames") and values:
-            params[key] = values[0]
-    if bbox:
-        params["bbox"] = bbox
-    return base_url, params
-
-
 async def _preview_wfs(url: str, max_rows: int, bbox: str | None = None) -> str:
-    """Esikatsele WFS-palvelu: hae muutama feature (valinnaisella bbox-rajauksella)."""
-    base_url, params = _wfs_params(url, max_rows, bbox)
+    """Esikatsele WFS-palvelu: hae muutama kohde (valinnaisella bbox-rajauksella).
+
+    Protokollan erot hoituvat ``aura.wfs.fetch_features``-funktiossa, joka
+    neuvottelee formaatista ja kerroksesta. Täällä vastaus vain muotoillaan.
+    """
     try:
-        async with httpx.AsyncClient(
-            timeout=_HTTP_TIMEOUT,
-            headers={"User-Agent": user_agent()},
-        ) as client:
-            resp = await client.get(base_url, params=params, follow_redirects=True)
-            resp.raise_for_status()
-            data = resp.json()
+        result = await fetch_features(url, max_rows, bbox=bbox, timeout=_HTTP_TIMEOUT)
     except Exception as e:
         return f"WFS-esikatselu epäonnistui: {e}\n\nPalvelun URL: {url}"
 
-    features = data.get("features", [])
-    if not features:
+    if result.error:
+        return f"WFS-palvelu vastasi virheellä: {result.error}\n\nPalvelun URL: {url}"
+    if not result.rows:
         return f"WFS-palvelu ei palauttanut kohteita.\n\nURL: {url}"
 
-    rows = [f.get("properties", {}) for f in features[:max_rows]]
-    headers = list(rows[0].keys()) if rows else []
-    table_rows = [[str(r.get(h, "")) for h in headers] for r in rows]
-    total = data.get("totalFeatures", data.get("numberMatched", "?"))
+    muoto = " (GML)" if result.output_format == "gml" else ""
+    # Kokonaismäärä vain jos palvelu kertoi sen. Rivimäärällä korvattuna
+    # esikatselu väittäisi aineiston olevan sen kokoinen kuin mitä pyydettiin.
+    maara = (
+        f"{result.total} kohdetta yhteensä"
+        if result.total
+        else f"{len(result.rows)} kohdetta näytetään (palvelu ei kertonut kokonaismäärää)"
+    )
     return (
-        f"**WFS** — {total} kohdetta yhteensä\n\n"
-        + _format_md_table(headers, table_rows)
+        f"**WFS**{muoto} — {maara}\n\n"
+        + _format_md_table(result.headers, result.rows)
     )
 
 

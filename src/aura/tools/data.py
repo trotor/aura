@@ -23,7 +23,6 @@ from aura.tools.preview import (
     _preview_odata,
     _preview_pxweb,
     _preview_wfs,
-    _wfs_params,
 )
 from aura.tools.query import (
     _find_pxweb_url,
@@ -31,6 +30,7 @@ from aura.tools.query import (
     _resolve_values,
 )
 from aura.tools.spatial import CRS, Bbox, _bbox_param, _resolve_area
+from aura.wfs import fetch_features
 
 logger = logging.getLogger(__name__)
 
@@ -399,20 +399,8 @@ async def _wfs_geometry_name(url: str) -> str | None:
     CQL:n BBOX-funktioon — ja se tarvitsee kentän nimen. GeoJSON-vastaus
     kertoo sen kentässä ``geometry_name``.
     """
-    base_url, params = _wfs_params(url, 1)
-    async with httpx.AsyncClient(
-        timeout=_HTTP_TIMEOUT,
-        headers={"User-Agent": user_agent()},
-    ) as client:
-        resp = await client.get(base_url, params=params, follow_redirects=True)
-        resp.raise_for_status()
-        data = resp.json()
-
-    for feature in data.get("features", []):
-        name = feature.get("geometry_name")
-        if name:
-            return str(name)
-    return None
+    result = await fetch_features(url, 1, timeout=_HTTP_TIMEOUT)
+    return result.geometry_name
 
 
 async def _query_wfs(
@@ -444,28 +432,25 @@ async def _query_wfs(
 
     # Huom: bbox ei kulje omana parametrinaan — palvelin hylkää sen
     # yhdessä CQL_FILTERin kanssa.
-    base_url, params = _wfs_params(url, max_rows)
-    params["CQL_FILTER"] = " AND ".join(cql_parts)
-
-    async with httpx.AsyncClient(
-        timeout=_HTTP_TIMEOUT,
-        headers={"User-Agent": user_agent()},
-    ) as client:
-        resp = await client.get(base_url, params=params, follow_redirects=True)
-        resp.raise_for_status()
-        data = resp.json()
-
-    features = data.get("features", [])
-    if not features:
+    result = await fetch_features(
+        url, max_rows, cql_filter=" AND ".join(cql_parts), timeout=_HTTP_TIMEOUT
+    )
+    if result.error:
+        return f"WFS-palvelu vastasi virheellä: {result.error}"
+    if not result.rows:
         return "WFS-kysely ei palauttanut kohteita."
 
-    rows = [f.get("properties", {}) for f in features[:max_rows]]
-    headers = list(rows[0].keys()) if rows else []
-    table_rows = [[str(r.get(h, "")) for h in headers] for r in rows]
-    total = data.get("totalFeatures", data.get("numberMatched", "?"))
+    muoto = " (GML)" if result.output_format == "gml" else ""
+    # Kokonaismäärä vain jos palvelu kertoi sen. Rivimäärällä korvattuna
+    # esikatselu väittäisi aineiston olevan sen kokoinen kuin mitä pyydettiin.
+    maara = (
+        f"{result.total} kohdetta yhteensä (suodatettu)"
+        if result.total
+        else f"{len(result.rows)} kohdetta näytetään (palvelu ei kertonut kokonaismäärää)"
+    )
     return (
-        f"**WFS** — {total} kohdetta yhteensä (suodatettu)\n\n"
-        + _format_md_table(headers, table_rows)
+        f"**WFS**{muoto} — {maara}\n\n"
+        + _format_md_table(result.headers, result.rows)
     )
 
 
