@@ -11,7 +11,9 @@ from urllib.parse import urlparse
 
 #: Osoitteen polkuosassa esiintyvät vihjeet rekisteröintisivusta.
 #: Vertailu on kirjainkoosta riippumaton.
-_REGISTRATION_HINTS = ("register", "signup", "rekister", "tunnus", "login")
+#: Huomaa: "tunnus" on poistettu, koska se esiintyy datassa usein
+#: (kiinteistotunnus, y-tunnus, tunnus-id) eikä ole luotettava signaali.
+_REGISTRATION_HINTS = ("register", "signup", "rekister", "login")
 
 _BY_STATUS = {200: "none", 401: "apikey", 403: "restricted"}
 
@@ -47,8 +49,4 @@ def _is_registration_url(url: str) -> bool:
     """
     parsed = urlparse(url)
     path = parsed.path.lower()
-    # Tarkista polkusegmentit: /register, /tunnus, jne.
-    # Näin vältetään väärät positiiviset query-parametreissa
-    # ja osittaisissa segmentinimissä (esim. /tunnus-id).
-    segments = path.split("/")
-    return any(hint in segments for hint in _REGISTRATION_HINTS)
+    return any(hint in path for hint in _REGISTRATION_HINTS)

@@ -20,12 +20,6 @@ def test_koodi_kertoo_menetelman(status: int, odotus: str) -> None:
     assert dict(auth_from_status(status))["auth_method"] == odotus
 
 
-def test_rekisterointisivu_tunnistetaan() -> None:
-    arvot = dict(auth_from_status(200, "https://example.test/register?next=/data"))
-    assert arvot["auth_method"] == "registration"
-    assert arvot["auth_registration_url"].endswith("/register?next=/data")
-
-
 def test_tuntematon_koodi_ei_arvaa() -> None:
     """Väärä arvaus on pahempi kuin puuttuva tieto."""
     assert auth_from_status(500) == []
@@ -33,16 +27,43 @@ def test_tuntematon_koodi_ei_arvaa() -> None:
 
 
 @pytest.mark.parametrize(
-    "url",
+    ("url", "odotus_metodi"),
     [
-        "https://api.example.fi/data?key=login_token",  # login in query param
-        "https://example.fi/tunnus-id/123.csv",  # tunnus as part of segment
-        "https://example.fi/wfs?typeName=rekisteri:kohteet",  # rekisteri in query param
+        ("https://example.test/register?next=/data", "registration"),
+        ("https://example.fi/kayttajan-rekisterointi/", "registration"),
+        ("https://example.fi/signup.html", "registration"),
+        ("https://api.example.fi/data?key=login_token", None),
+        ("https://example.fi/tunnus-id/123.csv", None),
+        ("https://example.fi/wfs?typeName=rekisteri:kohteet", None),
     ],
 )
-def test_query_parametrit_eivat_aiheuta_valheita(url: str) -> None:
-    """Query-parametrit ja osittaiset segmentit eivät saa aiheuttaa väärää tunnistusta."""
+def test_rekisterointisivun_tunnistus_tarkasti(
+    url: str, odotus_metodi: str | None
+) -> None:
+    """Testaa rekisteröintisivun tunnistus kuudella tapauksella.
+
+    Positiiviset:
+    - /register polulla
+    - /rekisterointi osana polkua
+    - /signup osana tiedostonimeä
+
+    Negatiiviset:
+    - login query-parametrissa (polku ei sisällä vihjeitä)
+    - tunnus-id: tunnus poistettu hinteistä ambiguiteetin vuoksi
+    - rekisteri query-parametrissa (polku ei sisällä vihjeitä)
+    """
     result = auth_from_status(200, url)
-    # Ei saisi tunnistaa rekisteröintisivuksi
-    if result:
-        assert dict(result)["auth_method"] != "registration"
+    if odotus_metodi is None:
+        # Ei saisi tunnistaa rekisteröintisivuksi
+        if result:
+            result_dict = dict(result)
+            assert result_dict.get("auth_method") != "registration", (
+                f"URL '{url}' väärä positiivinen"
+            )
+    else:
+        # Saisi tunnistaa rekisteröintisivuksi
+        result_dict = dict(result)
+        assert result_dict["auth_method"] == odotus_metodi, (
+            f"URL '{url}' ei tunnistettu oikein"
+        )
+        assert "auth_registration_url" in result_dict
