@@ -23,6 +23,15 @@ VALID_ENRICHMENT_FIELDS = {
     "yso_concepts",
     "auth_method", "auth_registration_url", "auth_notes",
     "crs", "joinable_keys",
+    # Probe-vaiheen kentät (#146-palaute, P1). service_layers on WMS:n
+    # layer-lista: se ei ole skeema, koska WMS ei tarjoa sarakkeita, eikä
+    # sitä pidä esittää sellaisena. example_request on konkreettinen kutsu
+    # — access_instructions sisältää yhteydenotto-ohjeita, ja niiden
+    # sekoittaminen tekisi kummastakin arvaamattoman.
+    "service_layers", "example_request",
+    # Kielimallin ehdottama käyttötapaus. Erillään use_casesta, jotta
+    # kentän nimi kertoo mistä on kyse.
+    "use_case_suggested",
 }
 
 MAX_ENRICHMENT_VALUE_LENGTH = 10_000
