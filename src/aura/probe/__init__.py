@@ -263,3 +263,18 @@ async def run_probe(
             await http.aclose()
 
     return dict(summary)
+
+
+def format_probe_summary(summary: dict[str, int]) -> str:
+    """Muotoile ajon yhteenveto ihmiselle.
+
+    Epäonnistumiset näkyvät omina riveinään: kokonaisluku joka ei erottele
+    onnistumista virheestä kertoo vähemmän kuin ei mitään.
+    """
+    if not summary:
+        return "Ei probattavia kohteita (kaikki tuoreita tai ei sopivia resursseja)."
+    rivit = [f"Probattu {sum(summary.values())} resurssia:"]
+    for status in ("ok", "http_error", "timeout", "parse_error", "empty"):
+        if summary.get(status):
+            rivit.append(f"  {status:12} {summary[status]}")
+    return "\n".join(rivit)
