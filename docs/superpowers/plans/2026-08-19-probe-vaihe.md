@@ -304,10 +304,11 @@ lukijalle samalla tavalla.
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
-from aura.database import init_db, run_migrations
+from aura.database import init_db
 from aura.tools.enrichment import VALID_ENRICHMENT_FIELDS
 
 
@@ -324,6 +325,12 @@ def test_use_case_sailyy_sallittuna() -> None:
 
 
 def test_migraatio_siirtaa_ai_rivit() -> None:
+    """Migraation SQL ajetaan käsin, koska init_db on jo ajanut sen.
+
+    init_db ajaa kaikki migraatiot, joten testidata syntyy vasta migraation
+    jälkeen eikä toinen run_migrations-kutsu tekisi mitään. Tässä testataan
+    migraation SQL, ei migraatiokirjanpitoa.
+    """
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     init_db(conn)
@@ -340,7 +347,10 @@ def test_migraatio_siirtaa_ai_rivit() -> None:
     )
     conn.commit()
 
-    run_migrations(conn)
+    sql = Path("scripts/migrations/023_use_case_suggested.sql").read_text(
+        encoding="utf-8"
+    )
+    conn.executescript(sql)
 
     siirretty = conn.execute(
         "SELECT value FROM enrichments WHERE field = 'use_case_suggested'"

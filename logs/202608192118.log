@@ -1,0 +1,198 @@
+
+============================================================
+Automaattinen loggaus aloitettu: 2026-08-19 21:18:15
+============================================================
+
+*** Auto-log: logs/202608192118.log ***
+*** Automaattinen kirjautuminen... ***
+
++---- - - - -                                                          +
+|  Forgot your password? Retrieve it from http://www.bat.org/
+   BatMUD runs on 2x Octa-core Xeon 6334 w/ 256GB mem (help hardware)  |
++       
+    
+What is your name: dino
+
+/players/dino/.
+Disclaimer: This service is free and without warranty or guarantee of 
+            accuracy, reliability or security.
+
+Read: help topics, help multiple characters
+
+Remember to "news read inform" and "news read updates" for the latest enhancements!
+
+
+CODER NEWS:
+
+| NOTE! Read 'man wizard rules' and comply with it. Failure to do so will
+|       get yourself removed or banned. A wizards principal duty is to develop
+|       the game, not to fool around with the players!
+
+| MORE: If you have a Google account (gmail, or have made one for Adwords
+|       or such), please search for "batmud", "batclient" and "mud" + then
+|       click 'promote' for BatMUD's main links while logged on to google. 
+|       Thank you!
+
+| MORE: If you need lore references, or you have something you want to add, use:
+|       https://wiki.bat.org:8443/display/loreintersection/Tome+of+Lore
+
+
+Tail of /log/d/dino.rep file:
+===================================================
+           look_room()                     obj/look.c (obj/look) line 77
+                long()                   nroom/room.c (players/dino/areas/votk/y0x124) line 766
+          query_icon() players/dino/areas/votk/virtual_room.c (players/dino/areas/votk/y0x124) line 124
+                 map() players/dino/areas/votk/controller.c (players/dino/areas/votk/controller) line 341
+Armour was worn but custom shade was still on ginseng.
+
+Object: players/dino/areas/asylum/obj/belt#481300
+Caller: obj/race/p/centaur-ginseng
+Armour was worn but custom shade was still on ginseng.
+
+Object: players/dino/areas/asylum/obj/belt#726551
+Caller: obj/race/p/centaur-ginseng
+[Fri Jun 12 23:44:30 2026] Runtime error: Bad arg 1 to tell_object(): got 'number', expected 'string/object'.
+this_player (/obj/race/p/human-shar) env (/players/dino/areas/votk/prison/rooms/corridor1w)
+            cmd_push() players/dino/areas/votk/prison/rooms/corridor1w.c (players/dino/areas/votk/prison/rooms/corridor1w) line 104
+===================================================
+
+
+There are 12 open jobs and 11 unassigned jobs.
+
+You have 13 open bugs in the bugtrack system.
+
+You have 20 open typos in the typotrack system.
+
+You have 47 open ideas in the ideatrack system.
+
+You have new news in groups inform, general, bs, castle, fin.bs, flame,
+ guilds, guilds.tzarakk, helper, ideas-wanted, mudcon.campcon, mudcons, race,
+ tales, updates, wiz.event, wiz.general, wiz.idea, wiz.inform, wiz.job,
+ wiz.lpc, wiz.recruit, wiz.sql and wiz.www.
+
+
+Last messages from the 'inform' channel:
+[Sat 25 Jul 2026] Ulath [general]: As a bit of a forewarning, it may be that a few hours maintenance window is needed next weekend (31.07.-02.08.) at some point. I need to migrate the rest of the VMs (including flower and hc) from the last ESXi to our new proxmox environment
+[Thu 30 Jul 2026] Ulath [general]: Extra maintenance tomorrow, starting at 22:00. If there are changes, we'll post further updates.
+[Sat 01 Aug 2026] Ulath [general]: Both flower and HC migrated to proxmox - the lag spikes you may see are related to background operations where we migrate the rest of the VMs. Nothing to worry about.
+
+---------[ Society messages ]----------------------------------------------
+Topic for aussie+: Beware of the dropbears!
+Topic for kuosi+: Forest was good to Kuosi+, we go there again!
+Topic for trance+: Trance forever!
+---------------------------------------------------------------------------
+
+Moving to starting location.
+
+File name: /city/main/boardroom
+Data room.
+This room is for various information systems.
+You notice a mudlist on the wall. A clock hangs on the wall.
+Obvious exits are: e and w.
+voting box
+10 gold coins
+a torch
+User graph hanging on the wall
+Durand the terrible Spawn Orangutan Amor <burning> < *MASTER SYSTEM* > (horny)
+The Jeskko
+Blitzer
+Grizzt
+Ulath the Vice-Minister for Magic
+Heidel the Crayon Archwizard, making a mess
+The father of hate known as Sai
+
+[109-204-177-109.cust.valoonet.fi:109] Dino just fingered you 
+
+Next election to be held on Thu Aug 20 03:00:00 2026!
+(fsay) You say 'päivää.'
+  
+  Lvl | Player name   | Idletime          | Gametime          
+ -------------------------------------------------------------
+ < 40>  Merri           3h, 6m and 36s      5h, 35m and 50s            [V]
+ <600>  Gore            49m and 37s         8h, 50m and 54s            [V]
+ <600>  Durand          3h, 46m and 17s     3h, 47m and 21s            [V]
+ ( VI)  Xunisiih        40s                 7h, 5m and 18s             
+ < 55>  Grizzt          1h, 31m and 34s     9h, 1m and 17s             [V]
+ <600>  Blitzer         7h, 31m and 33s     8h, 22m and 54s            [V]
+ < 40>  Sai             1h, 36m and 20s     9h, 1m and 40s             [V]
+ <600>  Ulath           2m and 13s          9h, 1m and 21s             [V]
+ (  I)  Venturus        42s                 4m                         
+ {XIX}  Pirutar         4m and 17s          8h, 55m and 9s       [P]   
+ (VII)  Valger                              17m and 46s          [P]   
+
+Total players: 121.
+
+Displaying last tells to you.
+(09:33) Drakh tells you 'mutta vähä arvelinki sen haastattelun perusteella että vähä nuorempaa verta halusivat :)'
+(09:34) Drakh tells you 'prkl joku oksenti mun repun päälle coneilla perjantai-launtai yönä niin piti viskata roskiin :D'
+(09:34) Drakh tells you 'onneks ei ollu kovin kallis tuo reppu'
+(09:35) Drakh tells you 'mjoo siellä porukka vetää vähä sekasin kaikkee, ite join vaan olutta ja otin muutaman lasin viiniä'
+(09:35) Drakh tells you 'vissiin oli sai siellä jyväskylässä mikä nukku kyllä samassa huoneessa valgerin kans'
+(09:35) Drakh tells you 'vai olikohan omnos? noh enivei'
+(09:36) Drakh tells you 'heh joo varmasti'
+(09:37) Drakh tells you 'tuolla nyt suurin osa niin vanhaa jo että se pahin hölmöily on pois jo'
+(09:38) Drakh tells you 'joo valgeri kai miettiny tuota ihan tosissaa jos se löytäs sopivan paikan vaan niin alkas varmaa järjestää'
+(09:39) Drakh tells you 'pitäs vaan olla joku suht hyvä mesta mihin onnistus porukalla pääsee paikallekki ettei tarvii taksia ottaa'
+Ok.
+Going linkdead instead of quitting.
+Removed possible link dead request.
+Closing your connection in 5 seconds.
+Your worn and wielded equipment will be preserved.
+Equipment you carry will be saved over boot.
+
+*** Yhteys katkennut ***
+*** Yhdistetään uudelleen 2s kuluttua (1/6)... ***
+
+*** Ei yhteyttä palvelimelle - käytä /connect ***
+*** Yhteys muodostettu uudelleen! ***
+*** Automaattinen kirjautuminen... ***
+
+
+                 -=====--..__
+                  `\     ..!'\
+                   }  .|'.||                        .
+                 _/,|' .|'||                         :.
+                 `-.  |'  \\                        /!|.
+                    )|'    \\      {\-/}       __.!'.''|
+                    `--.._   \"-._  }oo(__...--'..' |'  |.
+                         `'-._"-_""%\/%;;.--''__  |'_  ||
+                              '--{%%%%}.--'''   '\!' \.|'
+                              _,!{%%%}               }|'
+                              "' {%}'!.              /'         Logo by:
+                                 L'   "                            Phoeb
+
+	       Welcome to BatMUD, Online since 14th April 1990!
+	  Email: batry@bat.org about any problems concerning BatMUD
+
+         The game is owned by B.A.T. ry, a self-funded organization. 
+
+  1 - enter the game                    s - game status
+  2 - visit the game                    w - who is playing at the moment
+  3 - create a new character            q - quit
+
++---- - - - -                                                          +
+|  Forgot your password? Retrieve it from http://www.bat.org/
+   BatMUD runs on 2x Octa-core Xeon 6334 w/ 256GB mem (help hardware)  |
++       
+    
+What is your name: dino
+
+Recovering character.
+File name: /city/main/boardroom
+Data room.
+This room is for various information systems.
+You notice a mudlist on the wall. A clock hangs on the wall.
+Obvious exits are: e and w.
+voting box
+10 gold coins
+a torch
+User graph hanging on the wall
+Durand
+The Jeskko
+Blitzer
+Grizzt
+Ulath the Vice-Minister for Magic
+Heidel the Crayon Archwizard, making a mess
+The father of hate known as Sai
+*** Suljetaan client... ***
+Next election to be held on Thu Aug 20 03:00:00 2026!
