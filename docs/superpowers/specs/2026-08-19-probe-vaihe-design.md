@@ -268,13 +268,16 @@ ok 67 (51 %), parse_error 45 (34 %), empty 16 (12 %), http_error 4 (3 %) —
 formaateittain WFS ok 25/52, WMS ok 18/30, CSV ok 24/30, **PXWEB ok 0/20**.
 
 Ajo ei ollut kitkaton, ja se kuuluu tähän yhtä lailla kuin onnistuminen.
-`probe --format WFS` kaatuu käsittelemättömään `IntegrityErroriin` kun
+`probe --format WFS` kaatui käsittelemättömään `IntegrityErroriin` kun
 resurssin URL:ssa on pilkuilla erotettu lista useampaa feature typeä (esim.
-Lounaistiedon `hame_keski_suomi`-aineisto): `_store()`-kutsua ei ole suojattu
-poikkeukselta kuten proberin omaa kutsua, ja koska kaatunut kohde jää
-pysyvästi "probaamattomaksi", pelkkä komennon uudelleenajo jää jumiin samaan
-kohteeseen eikä etene. Tässä mitatut luvut on kerätty ohittamalla tuo yksi
-kaatava kohde käsin kannasta — koodia ei korjattu, koska tehtävä oli mittaus.
+Lounaistiedon `hame_keski_suomi`-aineisto): `_store()`-kutsua ei ollut
+suojattu poikkeukselta kuten proberin omaa kutsua, ja koska kaatunut kohde
+jäi pysyvästi "probaamattomaksi", pelkkä komennon uudelleenajo jäi jumiin
+samaan kohteeseen eikä edennyt. Tässä mitatut luvut on kerätty ohittamalla
+tuo yksi kaatava kohde käsin kannasta — vika korjattiin myöhemmin
+commitissa `3a65f36` (dedup `parse_feature_types`-funktioon wfs.py:ssä,
+`_store()`-kutsu suojattu run_probe():ssa), joten uusi ajo ei enää jää
+jumiin tähän kohteeseen.
 PXWEB:n 0/20 ei yleisty koko formaattiin: kaikki 20 valikoitunutta kohdetta
 osuivat samaan isäntään (stat.hel.fi), jonka harvestoitu resurssi-URL osoittaa
 selattavaan HTML-sivuun eikä PxWeb-API:in ("Vastaus ei ole JSONia"); pistokoe
