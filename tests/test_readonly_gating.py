@@ -44,9 +44,13 @@ def test_write_tool_names_are_the_expected_set() -> None:
         {
             "harvest",
             "probe_sizes",
+            "probe_schemas",
             "enrich",
             "batch_enrich",
             "save_session_findings",
             "populate_reference",
+            "suggest_yso_tags",
+            "quality_report",
+            "health_check",
         }
     )

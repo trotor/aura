@@ -175,6 +175,101 @@ class TestAjo:
         assert rivi["detail"] == "HTTP 404"
 
     @pytest.mark.anyio
+    async def test_401_tuottaa_auth_method_apikey_vaikka_probe_epaonnistuu(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Päästä päähän (I1): 401 tallentuu auth_method='apikey'-enrichmentiksi.
+
+        ``auth_from_status()``:n yksikkötesti (test_probe_derive.py) testasi
+        vain puhdasta funktiota — se oli vihreä ``_store()``:n kuolleen
+        polun päällä, koska ``if not result.ok: return`` esti kutsun ennen
+        kuin auth_from_status() ehti ajaa muissa kuin 200 OK -tapauksissa.
+        Tämä testi kulkee koko ketjun run_probe -> _store -> kanta asti.
+        """
+
+        async def fake_probe(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.HTTP_ERROR, detail="HTTP 401", http_status=401
+            )
+
+        yhteenveto = await run_probe(
+            conn, now=NOW, limit=10, probers={"wfs": fake_probe, "csv": fake_probe}
+        )
+        assert yhteenveto["http_error"] == 2
+        rivi = conn.execute(
+            "SELECT value FROM enrichments WHERE field='auth_method' AND dataset_id='d1'"
+        ).fetchone()
+        assert rivi is not None
+        assert rivi["value"] == "apikey"
+
+    @pytest.mark.anyio
+    async def test_auth_kayttaa_final_urlia_ei_kohteen_alkuperaista_urlia(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Rekisteröintipäätelmä (I2) käyttää vastauksen final_url:ia.
+
+        Resurssin url on ``https://example.test/r-wfs`` — ei sisällä
+        rekisteröinti-vihjettä. Jos ``result.final_url`` ei propagoituisi
+        kantaan asti, uudelleenohjaus rekisteröintisivulle jäisi
+        näkymättömiin.
+        """
+
+        async def fake_probe(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.HTTP_ERROR,
+                detail="HTTP 401",
+                http_status=401,
+                final_url="https://example.test/account/login",
+            )
+
+        await run_probe(
+            conn, now=NOW, limit=10, probers={"wfs": fake_probe, "csv": fake_probe}
+        )
+        rivi = conn.execute(
+            "SELECT value FROM enrichments WHERE field='auth_method' AND dataset_id='d1'"
+        ).fetchone()
+        assert rivi["value"] == "registration"
+        url_rivi = conn.execute(
+            "SELECT value FROM enrichments"
+            " WHERE field='auth_registration_url' AND dataset_id='d1'"
+        ).fetchone()
+        assert url_rivi["value"] == "https://example.test/account/login"
+
+    @pytest.mark.anyio
+    async def test_tyhja_final_url_ei_arvaa_kohteen_urlista(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """(I2) Tyhjä final_url ei saa langeta takaisin target['url']:iin.
+
+        Resurssin url sisältää sanan 'login' vahingossa (esim.
+        tiedostonimen osana) — ennen korjausta ``_store()`` antoi
+        ``auth_from_status()``:lle aina ``target['url']:n`` kun proberi ei
+        täyttänyt final_url:ia, mikä olisi merkinnyt tämän
+        rekisteröintisivuksi vaikka mitään uudelleenohjausta ei nähty.
+        """
+        conn.execute(
+            "INSERT INTO resources (id, dataset_id, name, format, url)"
+            " VALUES ('r-login', 'd1', 'r-login', 'WFS',"
+            " 'https://example.test/login-2024.csv')"
+        )
+        conn.commit()
+
+        async def fake_probe(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.HTTP_ERROR, detail="HTTP 401", http_status=401
+            )
+
+        await run_probe(
+            conn, now=NOW, limit=10, probers={"wfs": fake_probe, "csv": fake_probe}
+        )
+        assert (
+            conn.execute(
+                "SELECT 1 FROM enrichments WHERE field='auth_registration_url'"
+            ).fetchone()
+            is None
+        )
+
+    @pytest.mark.anyio
     async def test_yhden_kaatuminen_ei_lopeta_ajoa(
         self, conn: sqlite3.Connection
     ) -> None:
@@ -345,3 +440,74 @@ class TestAjo:
             "SELECT field_name FROM resource_schema WHERE resource_id = 'r-csv'"
         ).fetchall()
         assert {r["field_name"] for r in kentat} == {"a"}
+
+    @pytest.mark.anyio
+    async def test_palautuspolun_oma_kirjoitusvirhe_ei_pysayta_ajoa(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """(C1) Jos siivouskin epäonnistuu, run_probe ei saa kaatua kokonaan.
+
+        ``_store()``:n oma virhe (kaksoiskappale-sarakenimi) laukaisee
+        palautuspolun, joka yrittää ``DELETE FROM resource_schema`` +
+        ``upsert_probe_result``. Jos senkin ``conn.execute()`` nostaa
+        OperationalErrorin (esim. "attempt to write a readonly database" —
+        täsmälleen se mitä probe_schemas nosti read-only-etäpalvelimella
+        ennen kuin se lisättiin WRITE_TOOL_NAMESiin), se ei saa karata
+        ``run_probe()``:sta asti eikä pysäyttää muiden kohteiden käsittelyä.
+        """
+
+        class _EpaonnistuvaSiivous:
+            """Oikea yhteys, paitsi r-wfs:n TOINEN resource_schema-DELETE.
+
+            upsert_resource_schema() tekee itsekin saman DELETE:n normaalina
+            osana onnistunutta kirjoitusta (poistaa vanhan skeeman ennen
+            uuden lisäystä) — sitä ei saa rikkoa, tai r-csv:n onnistunut
+            polku hajoaisi testissä turhaan. Vain run_probe():n
+            palautuspolun OMA, toinen DELETE r-wfs:lle epäonnistuu.
+            """
+
+            def __init__(self, real: sqlite3.Connection) -> None:
+                self._real = real
+                self._delete_calls: dict[str, int] = {}
+
+            def execute(self, sql: str, *args: Any) -> Any:
+                stripped = sql.strip()
+                if stripped.startswith("DELETE FROM resource_schema") and args:
+                    resource_id = args[0][0]
+                    count = self._delete_calls.get(resource_id, 0) + 1
+                    self._delete_calls[resource_id] = count
+                    if resource_id == "r-wfs" and count == 2:
+                        raise sqlite3.OperationalError(
+                            "attempt to write a readonly database"
+                        )
+                return self._real.execute(sql, *args)
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._real, name)
+
+        async def kaksoiskappale(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(
+                status=ProbeStatus.OK,
+                fields=[("nimi", "string"), ("nimi", "string")],
+                http_status=200,
+            )
+
+        async def onnistuva(resource: dict[str, Any], client: Any) -> ProbeResult:
+            return ProbeResult(status=ProbeStatus.OK, fields=[("a", "string")], http_status=200)
+
+        wrapped = _EpaonnistuvaSiivous(conn)
+        yhteenveto = await run_probe(
+            wrapped,  # type: ignore[arg-type]
+            now=NOW,
+            limit=10,
+            probers={"wfs": kaksoiskappale, "csv": onnistuva},
+        )
+        # Molemmat kohteet käsiteltiin loppuun asti — ajo ei kaatunut
+        # ensimmäiseen, vaikka sen palautuskin epäonnistui.
+        assert yhteenveto["ok"] == 1
+        assert yhteenveto["parse_error"] == 1
+
+        csv_rivi = conn.execute(
+            "SELECT status FROM probe_results WHERE resource_id = 'r-csv'"
+        ).fetchone()
+        assert csv_rivi["status"] == "ok"

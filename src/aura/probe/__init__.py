@@ -153,6 +153,17 @@ def _store(
         result.detail,
         now,
     )
+    # auth_method johdetaan statuskoodista ennen ok-vartijaa, ei sen
+    # jälkeen: 401/403 kertovat autentikoinnista juuri silloin kun probe
+    # epäonnistui ("http_error"), ja specin auth-taulukon neljästä rivistä
+    # kolme on juuri näitä. Aiemmin tämä kutsu oli vartijan jälkeen, jolloin
+    # se oli tavoittamatonta koodia paitsi 200 OK -tapauksessa.
+    # ``result.final_url`` on vastauksen osoite uudelleenohjausten jälkeen —
+    # ei ``target["url"]`` (pyyntöä edeltävä). Jos proberi ei täytä sitä,
+    # se on tyhjä eikä auth_from_status arvaa sen perusteella mitään.
+    for kentta, arvo in auth_from_status(result.http_status, result.final_url):
+        _add_once(conn, target["dataset_id"], kentta, arvo)
+
     if not result.ok:
         return
 
@@ -170,9 +181,6 @@ def _store(
             )
 
     for kentta, arvo in result.enrichments:
-        _add_once(conn, target["dataset_id"], kentta, arvo)
-
-    for kentta, arvo in auth_from_status(result.http_status, target["url"]):
         _add_once(conn, target["dataset_id"], kentta, arvo)
 
 
@@ -281,18 +289,32 @@ async def run_probe(
                 _store(conn, target, result, timestamp)
             except Exception as e:
                 logger.warning("[probe] %s tallennus epäonnistui: %s", target["id"], e)
-                conn.execute(
-                    "DELETE FROM resource_schema WHERE resource_id = ?", (target["id"],)
-                )
-                upsert_probe_result(
-                    conn,
-                    target["id"],
-                    target["dataset_id"],
-                    probe_type,
-                    ProbeStatus.PARSE_ERROR,
-                    str(e)[:100],
-                    timestamp,
-                )
+                try:
+                    conn.execute(
+                        "DELETE FROM resource_schema WHERE resource_id = ?",
+                        (target["id"],),
+                    )
+                    upsert_probe_result(
+                        conn,
+                        target["id"],
+                        target["dataset_id"],
+                        probe_type,
+                        ProbeStatus.PARSE_ERROR,
+                        str(e)[:100],
+                        timestamp,
+                    )
+                except Exception as cleanup_error:
+                    # Palautuspolku ei myöskään saa kaataa koko ajoa. Jos
+                    # kantaan ei tässä vaiheessa voi kirjoittaa lainkaan
+                    # (esim. read-only-yhteys), tämä siivous itse nostaisi
+                    # raa'an sqlite3.OperationalErrorin, joka ilman tätä
+                    # try/exceptiä karkaisi run_probe():sta kokonaan ja
+                    # pysäyttäisi koko ajon ensimmäiseen kohteeseen.
+                    logger.warning(
+                        "[probe] %s tallennuksen palautuskin epäonnistui: %s",
+                        target["id"],
+                        cleanup_error,
+                    )
                 summary[ProbeStatus.PARSE_ERROR] += 1
             else:
                 summary[result.status] += 1

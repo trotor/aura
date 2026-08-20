@@ -67,14 +67,43 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
 
 # Toolit jotka kirjoittavat tietokantaan → poistetaan read-only-remotessa.
 # (log_finding/list_findings ovat session-muistia, eivät kirjoita kantaan.)
+#
+# TÄTÄ JOUKKOA EI VOI PÄÄTELLÄ TÄYSIN AUTOMAATTISESTI: joku toolit
+# kirjoittavat vain dynaamisen kutsun kautta (esim. populate_reference
+# valitsee populaattorin rekisteristä, aura.probe.run_probe valitsee
+# proberin ``active.get(probe_type)``illä) — kutsun kohde ei näy nimenä
+# lähdekoodissa, joten staattinen analyysi ei löydä sitä. UUSI KIRJOITTAVA
+# TOOLI ON SIIS AINA LISÄTTÄVÄ TÄHÄN JOUKKOON KÄSIN.
+#
+# tests/test_write_tool_names_structural.py havaitsee suorat ja tavallisten
+# kutsujen kautta löytyvät kirjoitukset staattisesti ja kaatuu jos jokin
+# niistä puuttuu täältä — se olisi estänyt probe_schemas-puutteen (#C1-
+# loppukatselmus). Samalla ajolla löytyi kolme muuta samaa luokkaa olevaa
+# puutetta joita ei ollut aiemmin huomattu: suggest_yso_tags (kirjoittaa
+# save=True-polulla), quality_report (laskee ja tallentaa laatupisteet
+# lennossa jos niitä ei ole) ja health_check (tallentaa jokaisen
+# saatavuustarkistuksen). Kaikki neljä nostaisivat suojaamattoman
+# sqlite3.OperationalErrorin read-only-etäpalvelimella samaan tapaan kuin
+# probe_schemas — siksi kaikki lisätty samalla kertaa.
+#
+# query_data() TIETOISESTI EI OLE TÄSSÄ: se tallentaa opitun skeeman
+# sivuvaikutuksena (save_schema_from_markdown), mutta koko kutsu on jo
+# omassa ``except Exception: logger.debug(...)``-lohkossaan
+# (tools/data.py) — kirjoitus epäonnistuu hiljaa read-only-kannassa eikä
+# vaikuta palautettuun esikatseluun. Sen poistaminen veisi keskeisen
+# lukutoiminnon ilman hyötyä.
 WRITE_TOOL_NAMES = frozenset(
     {
         "harvest",
         "probe_sizes",
+        "probe_schemas",
         "enrich",
         "batch_enrich",
         "save_session_findings",
         "populate_reference",
+        "suggest_yso_tags",
+        "quality_report",
+        "health_check",
     }
 )
 

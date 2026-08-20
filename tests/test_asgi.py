@@ -7,6 +7,7 @@ Web-UI oli ajettavissa vain erillisellä ``aura web`` -komennolla.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,6 +17,8 @@ from fastapi.testclient import TestClient
 
 from aura.asgi import create_asgi_app
 from aura.database import init_db
+from aura.server import WRITE_TOOL_NAMES
+from aura.server import mcp as _mcp
 
 
 @pytest.fixture
@@ -41,10 +44,29 @@ def client(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClien
 def readonly_client(
     db_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
+    """Read-only-app testiä varten.
+
+    ``create_asgi_app()`` kutsuu ``apply_readonly_gating(mcp)`` PROSESSIN
+    globaaliin ``mcp``-singletoniin — ``remove_tool`` mutatoi sitä
+    paikallaan eikä ``monkeypatch.setenv``in palautus tee sitä
+    tekemättömäksi. Ilman palautusta myöhemmät testit samassa
+    pytest-ajossa (esim. test_limits.py) näkisivät kirjoittavat toolit
+    pysyvästi poissa, vaikka AURA_READONLY ei ole niiden omassa
+    kontekstissa asetettu lainkaan.
+    """
     monkeypatch.setenv("AURA_DB", str(db_path))
     monkeypatch.setenv("AURA_READONLY", "1")
-    with TestClient(create_asgi_app()) as c:
-        yield c
+    saved_tools = {
+        name: asyncio.run(_mcp.local_provider.get_tool(name))
+        for name in WRITE_TOOL_NAMES
+    }
+    try:
+        with TestClient(create_asgi_app()) as c:
+            yield c
+    finally:
+        for name, tool in saved_tools.items():
+            if tool is not None and asyncio.run(_mcp.local_provider.get_tool(name)) is None:
+                _mcp.local_provider.add_tool(tool)
 
 
 class TestLandingPage:

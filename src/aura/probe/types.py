@@ -35,6 +35,12 @@ class ProbeResult:
         fields: Sarakkeet ``(nimi, tyyppi)`` — menevät resource_schemaan.
         enrichments: ``(kenttä, arvo)`` — menevät enrichmenteiksi.
         http_status: Viimeisin statuskoodi, josta auth_method johdetaan.
+        final_url: Vastauksen URL uudelleenohjausten jälkeen (``resp.url``).
+            Tyhjä jos proberi ei sitä täytä (esim. se ei pitele
+            httpx.Response-oliota suoraan). ``auth_from_status`` ei arvaa
+            rekisteröintiosoitetta tyhjästä final_url:sta — se vain jättää
+            sen päättelemättä eikä käytä pyyntöä edeltävää URL:ia sijaisena,
+            koska uudelleenohjauksen kohde on eri tieto kuin lähtöosoite.
     """
 
     status: str
@@ -42,6 +48,7 @@ class ProbeResult:
     fields: list[tuple[str, str]] = field(default_factory=list)
     enrichments: list[tuple[str, str]] = field(default_factory=list)
     http_status: int | None = None
+    final_url: str = ""
 
     @property
     def ok(self) -> bool:
