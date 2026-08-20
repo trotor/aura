@@ -79,19 +79,26 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
 # kutsujen kautta löytyvät kirjoitukset staattisesti ja kaatuu jos jokin
 # niistä puuttuu täältä — se olisi estänyt probe_schemas-puutteen (#C1-
 # loppukatselmus). Samalla ajolla löytyi kolme muuta samaa luokkaa olevaa
-# puutetta joita ei ollut aiemmin huomattu: suggest_yso_tags (kirjoittaa
-# save=True-polulla), quality_report (laskee ja tallentaa laatupisteet
-# lennossa jos niitä ei ole) ja health_check (tallentaa jokaisen
-# saatavuustarkistuksen). Kaikki neljä nostaisivat suojaamattoman
-# sqlite3.OperationalErrorin read-only-etäpalvelimella samaan tapaan kuin
-# probe_schemas — siksi kaikki lisätty samalla kertaa.
+# puutetta joita ei ollut aiemmin huomattu: suggest_yso_tags, quality_report
+# ja health_check nostivat suojaamattoman sqlite3.OperationalErrorin
+# read-only-etäpalvelimella samaan tapaan kuin probe_schemas.
 #
-# query_data() TIETOISESTI EI OLE TÄSSÄ: se tallentaa opitun skeeman
-# sivuvaikutuksena (save_schema_from_markdown), mutta koko kutsu on jo
-# omassa ``except Exception: logger.debug(...)``-lohkossaan
-# (tools/data.py) — kirjoitus epäonnistuu hiljaa read-only-kannassa eikä
-# vaikuta palautettuun esikatseluun. Sen poistaminen veisi keskeisen
-# lukutoiminnon ilman hyötyä.
+# quality_report JA query_data EIVÄT OLE TÄSSÄ, vaikka rakenteellinen testi
+# löysi kummankin: molempien kirjoitus on nyt suojattu omalla
+# ``except Exception``illä eikä vaikuta palautettuun tulokseen, joten
+# lukupolku toimii myös read-only-kannassa.
+# - query_data() (tools/data.py): tallentaa opitun skeeman sivuvaikutuksena
+#   (save_schema_from_markdown) — kirjoitus epäonnistuu hiljaa.
+# - quality_report() (tools/quality.py): laskee laatupisteet lennossa jos
+#   niitä ei ole VIELÄ kannassa, ja yrittää tallentaa ne — mutta
+#   toimitettavassa kannassa jokainen datasetti on jo pisteytetty
+#   (DISTINCT dataset_id FROM quality_scores == datasets-taulun rivimäärä,
+#   12918 == 12918), joten kirjoitushaara on julkisella instanssilla
+#   käytännössä kuollut. Gating olisi poistanut täysin toimivan
+#   lukutyökalun turhaan. Vastaus muodostetaan lennossa lasketuista
+#   pisteistä, ei kannasta uudelleenluettuna, joten luku toimii vaikka
+#   tallennus epäonnistuisi.
+# Kummankin poikkeuksen syy on dokumentoitu myös itse funktion vieressä.
 WRITE_TOOL_NAMES = frozenset(
     {
         "harvest",
@@ -102,7 +109,6 @@ WRITE_TOOL_NAMES = frozenset(
         "save_session_findings",
         "populate_reference",
         "suggest_yso_tags",
-        "quality_report",
         "health_check",
     }
 )

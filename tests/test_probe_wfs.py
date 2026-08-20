@@ -10,6 +10,7 @@ yksinkertaistanut juuri sen eron pois.
 
 from __future__ import annotations
 
+import urllib.parse
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -212,6 +213,45 @@ class TestProbe:
         assert "outputFormat=GML32" in example
         assert "outputFormat=application/json" not in example
         assert "outputFormat=GMLONLY" not in example
+
+    @pytest.mark.anyio
+    async def test_example_request_urlenkoodaa_valilyonnilliset_formaatit(self) -> None:
+        """GML-fallback-arvo voi sisältää välilyönnin ja puolipisteen.
+
+        Ennen korjausta example_request rakennettiin käsin
+        ``"&".join(f"{k}={v}")``:lla, joka ei enkoodaa mitään. Jos GML-
+        fallback poimii kykyjen ensimmäisen formaatin sellaisenaan
+        (esim. "text/xml; subtype=gml/3.2" — todellinen WFS-palvelin voi
+        mainostaa tätä), julkaistu kutsu olisi rikki: väli katkaisisi
+        query-merkkijonon ja mikään palvelin ei hyväksyisi sitä.
+        """
+        caps = (
+            "<WFS_Capabilities>"
+            "<FeatureType><Name>kohde</Name></FeatureType>"
+            '<Operation name="GetFeature">'
+            '<Parameter name="outputFormat"><AllowedValues>'
+            "<Value>text/xml; subtype=gml/3.2</Value>"
+            "<Value>GML32</Value>"
+            "</AllowedValues></Parameter>"
+            "</Operation>"
+            "</WFS_Capabilities>"
+        )
+        client = _client([
+            (200, caps),
+            (200, _fixture("wfs_describefeaturetype_arcgis.xml")),
+        ])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        example = dict(tulos.enrichments)["example_request"]
+
+        assert " " not in example, (
+            f"julkaistu kutsu sisältää enkoodaamattoman välilyönnin: {example}"
+        )
+        parsed = urllib.parse.urlparse(example)
+        assert parsed.scheme and parsed.netloc, f"ei jäsenny kelvolliseksi URL:ksi: {example}"
+        query = urllib.parse.parse_qs(parsed.query)
+        assert query["outputFormat"] == ["text/xml; subtype=gml/3.2"], (
+            "arvon on säilyttävä muuttumattomana enkoodauksen jälkeen puretussa muodossa"
+        )
 
     @pytest.mark.anyio
     async def test_url_oma_typename_voittaa_kykyjen_ensimmaisen(self) -> None:

@@ -1,11 +1,12 @@
 """Testit MCP-palvelimelle."""
 
 import sqlite3
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from aura.database import init_db, upsert_dataset
+from aura.database import get_connection, init_db, upsert_dataset
 from aura.models import Dataset, Resource
 from aura.server import (
     _resolve_region,
@@ -447,6 +448,45 @@ class TestQualityReport:
         with patch("aura.server._get_conn", return_value=conn):
             result = quality_report("ei-olemassa")
         assert "ei löytynyt" in result
+
+    def test_quality_report_readonly_kanta_ei_kaadu(self, tmp_path: Path) -> None:
+        """(loppykatselmuksen jälkitarkastus) Read-only-kanta ei saa kaataa lukua.
+
+        Toimitettavassa kannassa jokainen datasetti on jo pisteytetty
+        (DISTINCT dataset_id FROM quality_scores == datasets-taulun
+        rivimäärä), joten lennossa-laskentahaara on julkisella
+        read-only-instanssilla käytännössä kuollut — mutta jos siihen
+        silti osutaan (esim. juuri harvestoitu datasetti), lukupolun on
+        toimittava. Tallennus epäonnistuu hiljaa; vastaus muodostetaan
+        lennossa lasketuista pisteistä eikä kannasta uudelleenluettuna.
+        """
+        db = tmp_path / "ro.db"
+        conn = get_connection(db)
+        init_db(conn)
+        _seed_db(conn)
+        conn.commit()
+        conn.close()
+
+        ro_conn = get_connection(db, readonly=True)
+        try:
+            with patch("aura.server._get_conn", return_value=ro_conn):
+                result = quality_report("test-1")
+        finally:
+            ro_conn.close()
+
+        assert "Laatuarvio" in result
+        assert "/100" in result
+
+        # Kirjoitusyritys epäonnistui hiljaa read-only-yhteydellä: rivi ei
+        # päätynyt kantaan.
+        check_conn = get_connection(db, readonly=True)
+        try:
+            row = check_conn.execute(
+                "SELECT COUNT(*) FROM quality_scores WHERE dataset_id = 'test-1'"
+            ).fetchone()
+            assert row[0] == 0
+        finally:
+            check_conn.close()
 
 
 class TestQualityOverview:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastmcp import Context
 
 import aura.server as _server
@@ -9,6 +11,8 @@ from aura.database import get_dataset
 from aura.limits import MAX_LIST_LIMIT, clamp
 from aura.quality import get_quality_scores
 from aura.server import mcp
+
+logger = logging.getLogger(__name__)
 
 # Yhteinen vakio laatudimensioiden nimille (käytetään useassa paikassa)
 DIMENSION_LABELS: dict[str, str] = {
@@ -50,9 +54,29 @@ def quality_report(
         ).fetchone()
         enr_count = enr_row[0] if enr_row else 0
         scores = calculate_quality(dataset, resources, enr_count)
-        save_quality_scores(conn, ds_id, scores)
-        conn.commit()
-        quality = get_quality_scores(conn, ds_id)
+
+        # Tallennus on parhaan yrityksen sivuvaikutus, ei lukupolun
+        # edellytys. Toimitettavassa kannassa jokainen datasetti on jo
+        # pisteytetty (DISTINCT dataset_id FROM quality_scores == COUNT
+        # datasets), joten tämä haara on julkisella read-only-instanssilla
+        # käytännössä kuollut — mutta jos se joskus osuu (esim. juuri
+        # harvestoitu datasetti), lukupolun on toimittava silti. Sama
+        # perustelu kuin query_data():lla (tools/data.py): kirjoitus ei saa
+        # estää lukua.
+        try:
+            save_quality_scores(conn, ds_id, scores)
+            conn.commit()
+        except Exception:
+            logger.debug("Laatupisteiden tallennus epäonnistui", exc_info=True)
+
+        # Muodosta vastaus juuri lasketuista pisteistä sen sijaan että
+        # luettaisiin kanta uudelleen — read-only-kannassa yllä oleva
+        # tallennus ei koskaan onnistu, joten uudelleenluku palauttaisi
+        # aina None:n.
+        quality = {
+            dim: {"score": score, "details": details}
+            for dim, (score, details) in scores.items()
+        }
 
     if not quality:
         return "Laatupisteitä ei voitu laskea."

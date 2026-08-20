@@ -211,7 +211,12 @@ async def probe(
     _base, params = request_params(
         url, 20, type_name=type_name, output_format=output_format
     )
-    example = base_url + "?" + "&".join(f"{k}={v}" for k, v in params.items())
+    # urlencode(), ei käsin f-stringillä liitetty query: outputFormat voi
+    # olla esim. "text/xml; subtype=gml/3.2" (GML-fallback-haara) —
+    # välilyönti ja puolipiste enkoodaamattomina tuottaisivat kutsun jota
+    # mikään palvelin ei hyväksyisi. Julkaistun kutsun PITÄÄ toimia, ei
+    # vain näyttää oikealta.
+    example = base_url + "?" + urllib.parse.urlencode(params)
     enrichments.append(("example_request", example))
 
     return ProbeResult(
