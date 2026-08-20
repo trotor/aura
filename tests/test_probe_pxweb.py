@@ -151,6 +151,26 @@ async def test_http_virhe_kirjautuu_koodina() -> None:
 
 
 @pytest.mark.anyio
+async def test_yhteysvirhe_kirjautuu_http_errorina_ei_parse_errorina() -> None:
+    """ConnectError ei ole timeout eikä statuskoodi.
+
+    Ks. tabular.py:n vastaava testi
+    ``test_muu_verkkovirhe_kirjautuu_http_errorina``. Ilman erillistä
+    ``except httpx.HTTPError`` -haaraa tämä olisi pudonnut run_probe():n
+    yleiseen except Exceptioniin parse_erroriksi (TTL 30 vrk oikean 7
+    vrk:n sijaan). PxWeb 429:t olivat jo aiemmin mittausajon suurin
+    epäonnistumisluokka — muut yhteysvirheet ansaitsevat saman kohtelun.
+    """
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=httpx.ConnectError("nimenselvitys epäonnistui"))
+
+    tulos = await probe({"url": "https://example.test/px"}, client)
+    assert tulos.status == ProbeStatus.HTTP_ERROR
+    assert "nimenselvitys" in tulos.detail
+    assert tulos.http_status is None
+
+
+@pytest.mark.anyio
 async def test_ei_jsonia_on_parse_error() -> None:
     """Palvelin voi vastata HTML-virhesivulla 200-koodilla — .json() nostaa ValueErrorin."""
     resp = MagicMock()

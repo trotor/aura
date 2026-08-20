@@ -92,6 +92,54 @@ async def test_http_virhe_kirjautuu_koodina() -> None:
 
 
 @pytest.mark.anyio
+async def test_yhteysvirhe_kirjautuu_http_errorina_ei_parse_errorina() -> None:
+    """ConnectError ei ole timeout eikä statuskoodi.
+
+    Ks. tabular.py:n vastaava testi
+    ``test_muu_verkkovirhe_kirjautuu_http_errorina``. Ilman erillistä
+    ``except httpx.HTTPError`` -haaraa tämä olisi pudonnut run_probe():n
+    yleiseen except Exceptioniin parse_erroriksi (TTL 30 vrk oikean 7
+    vrk:n sijaan).
+    """
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=httpx.ConnectError("nimenselvitys epäonnistui"))
+
+    tulos = await probe({"url": "https://example.test/wms"}, client)
+    assert tulos.status == ProbeStatus.HTTP_ERROR
+    assert "nimenselvitys" in tulos.detail
+    assert tulos.http_status is None
+
+
+@pytest.mark.anyio
+async def test_service_layers_rajataan_ja_kertoo_kokonaismaaran() -> None:
+    """475 layeria (Helsingin WMS) ei saa mennä kantaan yhtenä isona pötkönä.
+
+    Katkaisu ei saa olla hiljainen: rajattu lista kertoo kokonaismäärän.
+    """
+    monta_layeria = "".join(
+        f"<Layer><Name>l{i}</Name><Title>Layer {i}</Title></Layer>" for i in range(75)
+    )
+    xml = (
+        '<WMS_Capabilities xmlns="http://www.opengis.net/wms"><Capability>'
+        f"<Layer><Title>Kaikki</Title>{monta_layeria}</Layer>"
+        "</Capability></WMS_Capabilities>"
+    )
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.text = xml
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=resp)
+
+    tulos = await probe({"url": "https://example.test/wms"}, client)
+    assert tulos.status == ProbeStatus.OK
+    layers = json.loads(dict(tulos.enrichments)["service_layers"])
+    assert len(layers) == 51, "50 layeria + yksi katkaisuilmoitus"
+    assert layers[49]["name"] == "l49"
+    assert "75" in layers[-1]["title"]
+    assert "25" in layers[-1]["title"]
+
+
+@pytest.mark.anyio
 async def test_tyhja_capabilities_kirjautuu_yleisena_syyna() -> None:
     """Ei layereita eikä tunnistettavaa virhettä — geneerinen syy kelpaa."""
     resp = MagicMock()

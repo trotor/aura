@@ -21,7 +21,14 @@ from typing import Any
 import httpx
 
 from aura.probe.types import ProbeResult, ProbeStatus
-from aura.wfs import _local, _root, exception_text, parse_capabilities, request_params
+from aura.wfs import (
+    _local,
+    _root,
+    exception_text,
+    parse_capabilities,
+    pick_output_format,
+    request_params,
+)
 
 #: XSD-perustyypit Auran tyyppinimiksi. Tuntematon tyyppi on "string":
 #: väärä arvaus olisi pahempi kuin yleisin oikea.
@@ -130,18 +137,27 @@ async def probe(
         caps_resp = await client.get(base_url, params=caps_params, follow_redirects=True)
     except httpx.TimeoutException:
         return ProbeResult(status=ProbeStatus.TIMEOUT, detail="GetCapabilities")
+    except httpx.HTTPError as e:
+        # ConnectError, SSL- ja DNS-virheet — ei timeout eikä statuskoodi.
+        # Ilman tätä ne putoavat run_probe():n yleiseen except Exceptioniin
+        # parse_erroriksi ja saavat 30 vrk TTL:n 7:n sijaan.
+        return ProbeResult(status=ProbeStatus.HTTP_ERROR, detail=str(e)[:100])
     if caps_resp.status_code >= 400:
         return ProbeResult(
             status=ProbeStatus.HTTP_ERROR,
             detail=f"HTTP {caps_resp.status_code}",
             http_status=caps_resp.status_code,
+            final_url=str(caps_resp.url),
         )
 
     caps = parse_capabilities(caps_resp.text)
     if not caps.feature_types:
         virhe = exception_text(caps_resp.text) or "GetCapabilities ei sisältänyt featuretyyppejä"
         return ProbeResult(
-            status=ProbeStatus.PARSE_ERROR, detail=virhe, http_status=caps_resp.status_code
+            status=ProbeStatus.PARSE_ERROR,
+            detail=virhe,
+            http_status=caps_resp.status_code,
+            final_url=str(caps_resp.url),
         )
 
     # Resurssin oma typeName voittaa kykyjen ensimmäisen: sama periaate
@@ -157,18 +173,24 @@ async def probe(
         dft_resp = await client.get(base_url, params=dft_params, follow_redirects=True)
     except httpx.TimeoutException:
         return ProbeResult(status=ProbeStatus.TIMEOUT, detail="DescribeFeatureType")
+    except httpx.HTTPError as e:
+        return ProbeResult(status=ProbeStatus.HTTP_ERROR, detail=str(e)[:100])
     if dft_resp.status_code >= 400:
         return ProbeResult(
             status=ProbeStatus.HTTP_ERROR,
             detail=f"HTTP {dft_resp.status_code}",
             http_status=dft_resp.status_code,
+            final_url=str(dft_resp.url),
         )
 
     fields = parse_feature_types(dft_resp.text)
     if not fields:
         virhe = exception_text(dft_resp.text) or "DescribeFeatureType ei sisältänyt kenttiä"
         return ProbeResult(
-            status=ProbeStatus.EMPTY, detail=virhe, http_status=dft_resp.status_code
+            status=ProbeStatus.EMPTY,
+            detail=virhe,
+            http_status=dft_resp.status_code,
+            final_url=str(dft_resp.url),
         )
 
     enrichments: list[tuple[str, str]] = []
@@ -176,7 +198,19 @@ async def probe(
     if crs:
         enrichments.append(("crs", crs))
 
-    _base, params = request_params(url, 20, type_name=type_name)
+    # ArcGIS hylkää oletusarvoisen application/json-arvauksen HTTP 200:lla
+    # (ExceptionReport) — se ei tue sitä lainkaan, vain omaa nimeään
+    # "GEOJSON" (ks. aura.wfs-moduulin docstring). Julkaistun example_
+    # requestin on siis käytettävä palvelun oikeasti kykyjen mukaan
+    # tukemaa formaattia, samaan tapaan kuin fetch_features() tekee:
+    # ensin JSON-yhteensopiva formaatti, ja jos sellaista ei ole, kykyjen
+    # ensimmäinen tarjoama (käytännössä GML, jonka esikatselu osaa lukea).
+    output_format = pick_output_format(caps.output_formats) or (
+        caps.output_formats[0] if caps.output_formats else None
+    )
+    _base, params = request_params(
+        url, 20, type_name=type_name, output_format=output_format
+    )
     example = base_url + "?" + "&".join(f"{k}={v}" for k, v in params.items())
     enrichments.append(("example_request", example))
 
@@ -185,6 +219,7 @@ async def probe(
         fields=fields,
         enrichments=enrichments,
         http_status=dft_resp.status_code,
+        final_url=str(dft_resp.url),
     )
 
 

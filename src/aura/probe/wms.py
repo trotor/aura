@@ -15,6 +15,11 @@ import httpx
 from aura.probe.types import ProbeResult, ProbeStatus
 from aura.wfs import _local, _root, exception_text
 
+#: Yläraja tallennettaville layereille. Helsingin WMS tuotti 475 layeria
+#: (44 977 tavua) yhtenä enrichmenttinä, ja describe() tulostaa sen
+#: raakana JSONina — rajaton lista veisi koko vastauksen yhden kentän alle.
+_MAX_LAYERS = 50
+
 
 def parse_layers(body: str) -> list[dict[str, str]]:
     """Poimi kysyttävät layerit GetCapabilities-vastauksesta.
@@ -44,23 +49,43 @@ async def probe(resource: dict[str, Any], client: httpx.AsyncClient) -> ProbeRes
         resp = await client.get(base_url, params=params, follow_redirects=True)
     except httpx.TimeoutException:
         return ProbeResult(status=ProbeStatus.TIMEOUT, detail="GetCapabilities")
+    except httpx.HTTPError as e:
+        # ConnectError, SSL- ja DNS-virheet — ei timeout eikä statuskoodi.
+        # Ilman tätä ne putoavat run_probe():n yleiseen except Exceptioniin
+        # parse_erroriksi ja saavat 30 vrk TTL:n 7:n sijaan.
+        return ProbeResult(status=ProbeStatus.HTTP_ERROR, detail=str(e)[:100])
     if resp.status_code >= 400:
         return ProbeResult(
             status=ProbeStatus.HTTP_ERROR,
             detail=f"HTTP {resp.status_code}",
             http_status=resp.status_code,
+            final_url=str(resp.url),
         )
 
     layers = parse_layers(resp.text)
     if not layers:
         virhe = exception_text(resp.text) or "GetCapabilities ei sisältänyt layereita"
         return ProbeResult(
-            status=ProbeStatus.EMPTY, detail=virhe, http_status=resp.status_code
+            status=ProbeStatus.EMPTY,
+            detail=virhe,
+            http_status=resp.status_code,
+            final_url=str(resp.url),
         )
 
-    arvo = json.dumps(layers, ensure_ascii=False)
+    total = len(layers)
+    shown = layers[:_MAX_LAYERS]
+    if total > _MAX_LAYERS:
+        # Katkaisu ei saa olla hiljainen: lukijan on nähtävä kokonaismäärä,
+        # ei vain 50 ensimmäistä nimeä ilman selitystä.
+        loput = total - _MAX_LAYERS
+        shown = [
+            *shown,
+            {"name": "…", "title": f"{loput} muuta layeria piilotettu (yhteensä {total})"},
+        ]
+    arvo = json.dumps(shown, ensure_ascii=False)
     return ProbeResult(
         status=ProbeStatus.OK,
         enrichments=[("service_layers", arvo)],
         http_status=resp.status_code,
+        final_url=str(resp.url),
     )

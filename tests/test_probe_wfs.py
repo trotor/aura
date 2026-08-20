@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from aura.probe.types import ProbeStatus
@@ -165,6 +166,7 @@ def _client(responses: list[tuple[int, str]]) -> AsyncMock:
         resp = MagicMock()
         resp.status_code = status
         resp.text = body
+        resp.url = url
         return resp
 
     client = AsyncMock()
@@ -184,7 +186,32 @@ class TestProbe:
         assert tulos.status == ProbeStatus.OK
         assert any(nimi == "OBJECTID" for nimi, _ in tulos.fields)
         assert dict(tulos.enrichments)["crs"].endswith("3067")
-        assert "typeNames=" in dict(tulos.enrichments)["example_request"]
+        example = dict(tulos.enrichments)["example_request"]
+        assert "typeNames=" in example
+        # ArcGIS hylkää application/json-oletuksen HTTP 200:lla
+        # (ExceptionReport, todennettu GTK:n palvelimella) — julkaistun
+        # kutsun on käytettävä palvelun omaa GEOJSON-nimeä.
+        assert "outputFormat=GEOJSON" in example
+        assert "outputFormat=application/json" not in example
+        assert tulos.final_url == "https://example.test/wfs"
+
+    @pytest.mark.anyio
+    async def test_example_request_gml_fallback_kun_json_puuttuu(self) -> None:
+        """Jos palvelu ei tarjoa yhtään JSON-yhteensopivaa outputFormatia,
+        example_request käyttää kykyjen ensimmäistä tarjoamaa formaattia
+        (käytännössä GML) sen sijaan että arvaisi application/json:ia —
+        sama periaate kuin ``fetch_features()``:n neuvottelussa.
+        """
+        caps = _fixture("wfs_capabilities_arcgis.xml").replace("GEOJSON", "GMLONLY")
+        client = _client([
+            (200, caps),
+            (200, _fixture("wfs_describefeaturetype_arcgis.xml")),
+        ])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        example = dict(tulos.enrichments)["example_request"]
+        assert "outputFormat=GML32" in example
+        assert "outputFormat=application/json" not in example
+        assert "outputFormat=GMLONLY" not in example
 
     @pytest.mark.anyio
     async def test_url_oma_typename_voittaa_kykyjen_ensimmaisen(self) -> None:
@@ -224,3 +251,22 @@ class TestProbe:
         assert tulos.status == ProbeStatus.HTTP_ERROR
         assert tulos.detail == "HTTP 404"
         assert tulos.http_status == 404
+
+    @pytest.mark.anyio
+    async def test_yhteysvirhe_kirjautuu_http_errorina_ei_parse_errorina(self) -> None:
+        """ConnectError (esim. DNS-epäonnistuminen) ei ole timeout eikä statuskoodi.
+
+        Ilman erillistä ``except httpx.HTTPError`` -haaraa tämä putoaisi
+        ``run_probe()``:n yleiseen ``except Exception``iin parse_erroriksi,
+        jonka TTL on 30 vrk oikean 7 vrk:n (http_error_transient) sijaan —
+        ks. tabular.py:n vastaava testi
+        ``test_muu_verkkovirhe_kirjautuu_http_errorina``.
+        """
+        client = AsyncMock()
+        client.get = AsyncMock(
+            side_effect=httpx.ConnectError("nimenselvitys epäonnistui")
+        )
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        assert tulos.status == ProbeStatus.HTTP_ERROR
+        assert "nimenselvitys" in tulos.detail
+        assert tulos.http_status is None

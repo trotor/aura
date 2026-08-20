@@ -48,11 +48,17 @@ async def probe(resource: dict[str, Any], client: httpx.AsyncClient) -> ProbeRes
         resp = await client.get(url, follow_redirects=True)
     except httpx.TimeoutException:
         return ProbeResult(status=ProbeStatus.TIMEOUT, detail="metadata")
+    except httpx.HTTPError as e:
+        # ConnectError, SSL- ja DNS-virheet — ei timeout eikä statuskoodi.
+        # Ilman tätä ne putoavat run_probe():n yleiseen except Exceptioniin
+        # parse_erroriksi ja saavat 30 vrk TTL:n 7:n sijaan.
+        return ProbeResult(status=ProbeStatus.HTTP_ERROR, detail=str(e)[:100])
     if resp.status_code >= 400:
         return ProbeResult(
             status=ProbeStatus.HTTP_ERROR,
             detail=f"HTTP {resp.status_code}",
             http_status=resp.status_code,
+            final_url=str(resp.url),
         )
 
     try:
@@ -62,6 +68,7 @@ async def probe(resource: dict[str, Any], client: httpx.AsyncClient) -> ProbeRes
             status=ProbeStatus.PARSE_ERROR,
             detail="Vastaus ei ole JSONia",
             http_status=resp.status_code,
+            final_url=str(resp.url),
         )
 
     dims = parse_dimensions(payload)
@@ -70,10 +77,12 @@ async def probe(resource: dict[str, Any], client: httpx.AsyncClient) -> ProbeRes
             status=ProbeStatus.EMPTY,
             detail="Taululla ei ole dimensioita",
             http_status=resp.status_code,
+            final_url=str(resp.url),
         )
 
     return ProbeResult(
         status=ProbeStatus.OK,
         enrichments=[("data_fields", json.dumps(dims, ensure_ascii=False))],
         http_status=resp.status_code,
+        final_url=str(resp.url),
     )
