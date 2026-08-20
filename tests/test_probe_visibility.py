@@ -47,3 +47,23 @@ def test_onnistunut_probe_ei_lisaa_rivia(conn: sqlite3.Connection) -> None:
 
 def test_probaamaton_ei_lisaa_rivia(conn: sqlite3.Connection) -> None:
     assert _format_probe_failure(conn, "d1") == ""
+
+
+def test_paljon_epaonnistumisia_rajataan_ja_kertoo_lopun(
+    conn: sqlite3.Connection,
+) -> None:
+    """(I5) 428 probattavaa resurssia ei saa listautua yhtenä pötkönä.
+
+    Katkaisu ei saa olla hiljainen: lopun määrä on näyttävä lukuna.
+    """
+    for i in range(15):
+        upsert_probe_result(
+            conn, f"r{i}", "d1", "wfs", "http_error", f"HTTP {400 + i}",
+            f"2026-08-{i + 1:02d}T10:00:00",
+        )
+    conn.commit()
+    teksti = _format_probe_failure(conn, "d1")
+    rivit = [r for r in teksti.splitlines() if r.startswith("- ")]
+    # 10 näytettyä riviä + yksi "... ja N muuta" -rivi.
+    assert len(rivit) == 11
+    assert "5 muuta epäonnistunutta resurssia" in teksti
