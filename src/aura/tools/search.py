@@ -21,6 +21,37 @@ from aura.server import mcp
 from aura.telemetry import record_zero_result
 
 
+def _region_split(
+    results: list[dict[str, Any]], region_names: list[str]
+) -> tuple[int, int]:
+    """Jaa osumat: oma kattavuus vs. aluerajauksen laajennus.
+
+    Aluerajaus päästää läpi myös koko maan aineistot joissa alue on
+    dimensioarvo (ks. ``build_dataset_filters``). Ilman tätä erottelua
+    agentti päättelee koko maan taulusta paikallisen aineiston olemassaolon.
+    """
+    own = 0
+    for d in results:
+        coverage = " ".join(
+            parse_json_list(d.get("geographical_coverage", "[]"))
+        ).lower()
+        if any(name.lower() in coverage for name in region_names):
+            own += 1
+    return own, len(results) - own
+
+
+def _region_note(region: str, own: int, widened: int) -> str:
+    """Rivi joka kertoo mitä aluerajaus tosiasiassa teki."""
+    if widened:
+        return (
+            f"**Aluerajaus '{region}':** {own} aineistoa joiden oma kattavuus "
+            f"osuu, {widened} koko maan aineistoa joissa alue on dimensioarvo."
+        )
+    return (
+        f"**Aluerajaus '{region}':** {own} aineistoa joiden oma kattavuus osuu."
+    )
+
+
 @mcp.tool()
 async def search(
     query: str,
@@ -47,7 +78,11 @@ async def search(
         format: Suodata formaatin mukaan (esim. "CSV", "JSON", "GeoJSON")
         organization: Suodata organisaation mukaan (osa nimestä riittää)
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
-        region: Suodata alueellisesti (kunnan nimi, maakunta tai postinumero)
+        region: Rajaa alueellisesti (kunnan nimi, maakunta tai postinumero).
+            Huom: tämä **laajentaa** eikä pelkästään rajaa — mukaan tulevat
+            myös koko maan aineistot joissa alue on dimensioarvo, koska
+            esim. Kuopion väkiluku löytyy koko maan taulusta. Vastaus
+            kertoo kumpaakin montako.
     """
     limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
@@ -81,6 +116,9 @@ async def search(
         return f"Ei tuloksia haulle '{query}'. Kokeile eri hakusanoja tai suodattimia."
 
     parts = [f"Löytyi {len(results)} datasettiä haulle '{query}':\n"]
+    if region_names:
+        own, widened = _region_split(results, region_names)
+        parts.append(_region_note(region.strip(), own, widened) + "\n")
     for dataset in results:
         parts.append(format_dataset_summary(dataset))
         parts.append("---")
@@ -113,7 +151,10 @@ async def search_structured(
         format: Suodata formaatin mukaan (esim. "CSV")
         organization: Suodata organisaation mukaan
         access_level: Suodata saatavuuden mukaan ("open", "registration", "restricted")
-        region: Suodata alueellisesti (kunnan nimi, maakunta tai postinumero)
+        region: Rajaa alueellisesti (kunnan nimi, maakunta tai postinumero).
+            Laajentaa myös: koko maan aineistot joissa alue on dimensioarvo
+            tulevat mukaan. Vastauksen "region"-kenttä kertoo kumpaakin
+            montako.
     """
     import json
 
@@ -168,11 +209,26 @@ async def search_structured(
             }
         )
 
-    return json.dumps(
-        {"query": query, "count": len(structured), "offset": offset, "results": structured},
-        ensure_ascii=False,
-        indent=2,
-    )
+    payload: dict[str, Any] = {
+        "query": query,
+        "count": len(structured),
+        "offset": offset,
+    }
+    if region_names:
+        own, widened = _region_split(results, region_names)
+        payload["region"] = {
+            "query": region.strip(),
+            "resolved": region_names,
+            "matched_own_coverage": own,
+            "matched_nationwide": widened,
+            "note": (
+                "Aluerajaus laajentaa: matched_nationwide ovat koko maan "
+                "aineistoja joissa alue on dimensioarvo, ei alueellisia aineistoja."
+            ),
+        }
+    payload["results"] = structured
+
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()

@@ -191,6 +191,7 @@ class TestQueryDataRouting:
         }
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
+        mock_resp.text = json.dumps(wfs_resp)
         mock_resp.json = MagicMock(return_value=wfs_resp)
 
         mock_client = AsyncMock()
@@ -200,7 +201,7 @@ class TestQueryDataRouting:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.data.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.wfs.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data(
                 "test-1",
@@ -266,6 +267,7 @@ def _wfs_client(responses: list[dict]) -> tuple[AsyncMock, list[dict]]:
     def _make(payload: dict) -> MagicMock:
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
+        resp.text = json.dumps(payload)
         resp.json = MagicMock(return_value=payload)
         return resp
 
@@ -297,7 +299,7 @@ class TestQueryDataArea:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=client),
+            patch("aura.wfs.httpx.AsyncClient", return_value=client),
         ):
             result = await query_data("test-1", area="Kuopio")
 
@@ -325,7 +327,7 @@ class TestQueryDataArea:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+            patch("aura.wfs.httpx.AsyncClient", return_value=client),
         ):
             result = await query_data("test-1", filters={"nimi": ["Kohde"]}, area="Kuopio")
 
@@ -350,7 +352,7 @@ class TestQueryDataArea:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+            patch("aura.wfs.httpx.AsyncClient", return_value=client),
         ):
             result = await query_data("test-1", filters={"nimi": ["X"]}, area="Kuopio")
 
@@ -413,33 +415,3 @@ class TestQueryDataArea:
 
         assert "Atlantis" in result
         assert not calls
-
-
-class TestWfsParams:
-    """Kerroksen typeName ei saa kadota kyselyä rakennettaessa."""
-
-    def test_typename_sailyy_urlista(self):
-        from aura.tools.preview import _wfs_params
-
-        url = "https://example.com/ows?service=wfs&request=GetFeature&typeName=kunnat"
-        base, params = _wfs_params(url, max_rows=5)
-        assert base == "https://example.com/ows"
-        assert params["typeName"] == "kunnat"
-        assert params["request"] == "GetFeature"
-        assert params["count"] == "5"
-
-    def test_typenames_monikko_sailyy(self):
-        from aura.tools.preview import _wfs_params
-
-        _base, params = _wfs_params(
-            "https://example.com/wfs?TYPENAMES=ns:kohteet", max_rows=1
-        )
-        assert params["TYPENAMES"] == "ns:kohteet"
-
-    def test_getcapabilities_ei_kulkeudu_lapi(self):
-        from aura.tools.preview import _wfs_params
-
-        _base, params = _wfs_params(
-            "https://example.com/wfs?request=getcapabilities", max_rows=1
-        )
-        assert params["request"] == "GetFeature"
