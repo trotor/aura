@@ -227,8 +227,18 @@ class TestFormatConflicts:
 
     def test_multiple_fields(self) -> None:
         conflicts = [
-            {"field": "use_case", "value": "X", "confidence": "high", "created_at": "2024-01-01"},
-            {"field": "api_format", "value": "REST", "confidence": "medium", "created_at": "2024-01-01"},
+            {
+                "field": "use_case",
+                "value": "X",
+                "confidence": "high",
+                "created_at": "2024-01-01",
+            },
+            {
+                "field": "api_format",
+                "value": "REST",
+                "confidence": "medium",
+                "created_at": "2024-01-01",
+            },
         ]
         result = format_conflicts(conflicts)
         assert "Käyttötapaus" in result

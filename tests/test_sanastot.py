@@ -33,7 +33,10 @@ def _mock_response(data: dict | list) -> MagicMock:
 ORGANIZATIONS = [
     {
         "id": "org-dvv",
-        "label": {"fi": "Digi- ja väestötietovirasto", "en": "Digital and Population Data Services Agency"},
+        "label": {
+            "fi": "Digi- ja väestötietovirasto",
+            "en": "Digital and Population Data Services Agency",
+        },
     },
     {
         "id": "org-ym",
@@ -47,7 +50,10 @@ TERMINOLOGIES_PAGE_1 = {
         {
             "prefix": "jupo",
             "label": {"fi": "Julkisen hallinnon sanasto (JUPO)", "en": "JUPO Vocabulary"},
-            "description": {"fi": "Julkishallinnon yhteinen sanasto", "en": "Finnish public administration vocabulary"},
+            "description": {
+                "fi": "Julkishallinnon yhteinen sanasto",
+                "en": "Finnish public administration vocabulary",
+            },
             "status": "VALID",
             "modified": "2024-06-15T10:00:00Z",
             "uri": "https://iri.suomi.fi/terminology/jupo/",

@@ -612,11 +612,13 @@ class TestSaveSessionFindings:
 def _seed_ref_data(conn: sqlite3.Connection) -> None:
     """Populoi viiteaineistojen testitiedot."""
     conn.execute(
-        "INSERT OR REPLACE INTO ref_metadata (name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO ref_metadata "
+        "(name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
         ("municipalities", 3, "20260101", "2026-01-01 00:00:00"),
     )
     conn.execute(
-        "INSERT OR REPLACE INTO ref_metadata (name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO ref_metadata "
+        "(name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
         ("postal_codes", 3, "20260101", "2026-01-01 00:00:00"),
     )
     for code, name_fi, name_sv, region, ely, wa in [
@@ -626,7 +628,8 @@ def _seed_ref_data(conn: sqlite3.Connection) -> None:
     ]:
         conn.execute(
             "INSERT OR REPLACE INTO ref_municipalities "
-            "(code, name_fi, name_sv, region_code, region_name_fi, ely_code, ely_name_fi, wellbeing_area_code, wellbeing_area_name_fi) "
+            "(code, name_fi, name_sv, region_code, region_name_fi, ely_code, "
+            "ely_name_fi, wellbeing_area_code, wellbeing_area_name_fi) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (code, name_fi, name_sv, "01", region, "01", ely, "01", wa),
         )
@@ -636,7 +639,8 @@ def _seed_ref_data(conn: sqlite3.Connection) -> None:
         ("33100", "Tampere", "Tammerfors", "837"),
     ]:
         conn.execute(
-            "INSERT OR REPLACE INTO ref_postal_codes (code, name_fi, name_sv, municipality_code) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO ref_postal_codes "
+            "(code, name_fi, name_sv, municipality_code) VALUES (?, ?, ?, ?)",
             (postal_code, name_fi, name_sv, muni_code),
         )
     conn.commit()

@@ -243,8 +243,18 @@ class TestPreviewPxweb:
             {
                 "field": "data_fields",
                 "value": json.dumps([
-                    {"code": "Alue", "name": "Alue", "value_count": 310, "examples": ["Helsinki", "Tampere"]},
-                    {"code": "Vuosi", "name": "Vuosi", "value_count": 20, "examples": ["2020", "2021"]},
+                    {
+                        "code": "Alue",
+                        "name": "Alue",
+                        "value_count": 310,
+                        "examples": ["Helsinki", "Tampere"],
+                    },
+                    {
+                        "code": "Vuosi",
+                        "name": "Vuosi",
+                        "value_count": 20,
+                        "examples": ["2020", "2021"],
+                    },
                 ]),
             },
         ]
@@ -354,7 +364,7 @@ class TestPreviewDataTool:
         with patch("aura.tools.data._server._get_conn", return_value=conn):
             with patch("aura.tools.data._preview_csv", new_callable=AsyncMock) as mock_csv:
                 mock_csv.return_value = "mock csv"
-                result = await query_data("test-1", max_rows=1000)
+                await query_data("test-1", max_rows=1000)
                 # Varmistetaan että max_rows rajattiin 500:een
                 mock_csv.assert_called_once_with("https://example.com/test.csv", 500)
 
