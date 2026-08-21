@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?><xsd:schema xmlns:avoindata="https://www.hel.fi/avoindata" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:wfs="http://www.opengis.net/wfs/2.0" xmlns:xsd="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" targetNamespace="https://www.hel.fi/avoindata">
+  <xsd:import namespace="http://www.opengis.net/gml/3.2" schemaLocation="https://kartta.hel.fi/ws/geoserver/schemas/gml/3.2.1/gml.xsd"/>
+  <xsd:complexType name="Seutukartta_liikenne_metroasematType">
+    <xsd:complexContent>
+      <xsd:extension base="gml:AbstractFeatureType">
+        <xsd:sequence>
+          <xsd:element maxOccurs="1" minOccurs="1" name="tietopalvelu_id" nillable="false" type="xsd:int"/>
+          <xsd:element maxOccurs="1" minOccurs="0" name="metroasema" nillable="true" type="xsd:string"/>
+          <xsd:element maxOccurs="1" minOccurs="0" name="mtryhm" nillable="true" type="xsd:int"/>
+          <xsd:element maxOccurs="1" minOccurs="0" name="geom" nillable="true" type="gml:GeometryPropertyType"/>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:element name="Seutukartta_liikenne_metroasemat" substitutionGroup="gml:AbstractFeature" type="avoindata:Seutukartta_liikenne_metroasematType"/>
+</xsd:schema>

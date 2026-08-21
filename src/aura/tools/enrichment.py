@@ -23,6 +23,15 @@ VALID_ENRICHMENT_FIELDS = {
     "yso_concepts",
     "auth_method", "auth_registration_url", "auth_notes",
     "crs", "joinable_keys",
+    # Probe-vaiheen kentät (#146-palaute, P1). service_layers on WMS:n
+    # layer-lista: se ei ole skeema, koska WMS ei tarjoa sarakkeita, eikä
+    # sitä pidä esittää sellaisena. example_request on konkreettinen kutsu
+    # — access_instructions sisältää yhteydenotto-ohjeita, ja niiden
+    # sekoittaminen tekisi kummastakin arvaamattoman.
+    "service_layers", "example_request",
+    # Kielimallin ehdottama käyttötapaus. Erillään use_casesta, jotta
+    # kentän nimi kertoo mistä on kyse.
+    "use_case_suggested",
 }
 
 MAX_ENRICHMENT_VALUE_LENGTH = 10_000
@@ -56,6 +65,8 @@ def enrich(
                 (esim. '["Reittiopas", "Karttapalvelu"]')
             - quality_notes: huomioita datan laadusta
             - use_case: käyttötapausesimerkki
+            - use_case_suggested: kielimallin ehdottama käyttötapaus
+                (erillään ihmisen kirjoittamasta use_case-kentästä)
             - access_instructions: ohjeet datan hakemiseen
             - auth_method: autentikointimenetelmä (none, apikey, oauth, registration)
             - auth_registration_url: URL josta pääsy haetaan
@@ -63,6 +74,8 @@ def enrich(
             - crs: koordinaattijärjestelmä (esim. "EPSG:3067", "EPSG:4326")
             - joinable_keys: yhdistettävät avaimet JSON-listana
                 (esim. '[{"field":"kunta","key":"kuntakoodi","standard":"Tilastokeskus"}]')
+            - service_layers: WMS-palvelun layerit (nimi ja otsikko), ei sarakkeita
+            - example_request: konkreettinen esimerkkikutsu rajapintaan
             - organization_context: taustatietoa julkaisijasta
             - temporal_coverage: ajallinen kattavuus
             - update_frequency_actual: havaittu päivitystiheys

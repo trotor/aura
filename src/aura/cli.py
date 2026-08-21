@@ -13,8 +13,12 @@ from aura.constants import format_date
 from aura.prune import STALE_AFTER_DAYS
 
 
-def main() -> None:
-    """Auran CLI-päätoiminto."""
+def build_parser() -> argparse.ArgumentParser:
+    """Rakenna Auran CLI-parseri.
+
+    Eriytetty ``main()``:stä, jotta alikomentojen argumentit ovat
+    testattavissa ilman että komentoa oikeasti ajetaan.
+    """
     parser = argparse.ArgumentParser(
         prog="aura",
         description="Aura — Suomalaisen avoimen datan discovery-palvelu",
@@ -94,6 +98,23 @@ def main() -> None:
         default=180.0,
         help="HTTP-timeout sekunteina (oletus: 180)",
     )
+
+    # probe (+ infer-schemas alias)
+    for nimi, ohje in (
+        ("probe", "Johda skeema rajapinnoista (WFS, WMS, PxWeb, CSV, JSON)"),
+        ("infer-schemas", "Vanha nimi komennolle 'probe'"),
+    ):
+        p = subparsers.add_parser(nimi, help=ohje)
+        p.add_argument("--source", default="", help="Rajaa lähteeseen")
+        p.add_argument("--format", default="", help="Rajaa formaattiin (esim. WFS)")
+        p.add_argument("--limit", type=int, default=50, help="Kohteiden määrä (oletus 50)")
+        p.add_argument(
+            "--max-age-days",
+            type=int,
+            default=0,
+            help="Ohita TTL ja probaa kaikki tätä vanhemmat",
+        )
+        p.add_argument("--dry-run", action="store_true", help="Näytä kohteet, älä aja")
 
     # export-enrichments
     export_parser = subparsers.add_parser(
@@ -256,29 +277,6 @@ def main() -> None:
         help="Enimmäismäärä tauluja per lähde (0 = kaikki)",
     )
 
-    # infer-schemas
-    infer_schema_parser = subparsers.add_parser(
-        "infer-schemas",
-        help="Päättele datasettien kenttätiedot (schema introspection)",
-    )
-    infer_schema_parser.add_argument(
-        "--source",
-        default="",
-        help="Rajaa lähteeseen (esim. avoindata.fi)",
-    )
-    infer_schema_parser.add_argument(
-        "--limit",
-        type=int,
-        default=50,
-        help="Käsiteltävien datasettien enimmäismäärä (oletus: 50)",
-    )
-    infer_schema_parser.add_argument(
-        "--delay",
-        type=float,
-        default=0.3,
-        help="Viive sekunteina pyyntöjen välissä (oletus: 0.3)",
-    )
-
     # refresh
     refresh_parser = subparsers.add_parser(
         "refresh",
@@ -351,6 +349,12 @@ def main() -> None:
         "--force", action="store_true", help="Salli kuratoitujen rikastusten poisto"
     )
 
+    return parser
+
+
+def main() -> None:
+    """Auran CLI-päätoiminto."""
+    parser = build_parser()
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -849,12 +853,16 @@ def main() -> None:
             total += count
         print(f"\nYhteensä: {total} taulua rikastettu dimensiotiedoilla.")
 
-    elif args.command == "infer-schemas":
+    elif args.command in ("probe", "infer-schemas"):
+        if args.command == "infer-schemas":
+            print("Huom: 'infer-schemas' on nyt 'probe'. Vanha nimi toimii yhä.")
         asyncio.run(
-            _infer_schemas(
+            _probe(
                 source=args.source,
+                fmt=args.format,
                 limit=args.limit,
-                delay=args.delay,
+                dry_run=args.dry_run,
+                max_age_days=args.max_age_days,
             )
         )
 
@@ -1023,90 +1031,42 @@ async def _auto_tag(
         print(f"\nTagitettu {tagged} datasettiä, virheitä {errors}.")
 
 
-async def _infer_schemas(
+async def _probe(
     source: str = "",
+    fmt: str = "",
     limit: int = 50,
-    delay: float = 0.3,
+    dry_run: bool = False,
+    max_age_days: int = 0,
 ) -> None:
-    """Päättele datasettien kenttätiedot esikatselun perusteella (#124)."""
-    import aura.server  # noqa: F401 — resolve circular import before tools
-    from aura.database import get_connection, init_db
-    from aura.tools.preview import _pick_resource, _preview_csv, _preview_json
-    from aura.tools.schema import save_schema_from_markdown
+    """Aja probe-vaihe.
+
+    ``max_age_days`` ohittaa tilakohtaisen TTL:n kokonaan (ks.
+    ``aura.probe.select_targets``) — kuljetettava läpi molemmille reiteille,
+    myös kuiva-ajolle, tai lippu näyttää toimivalta tekemättä mitään.
+    """
+    from datetime import UTC, datetime
+
+    import aura.server  # noqa: F401 — ratkaise kiertoimport ennen tools-tuonteja
+    from aura.database import get_connection, run_migrations
+    from aura.probe import format_probe_summary, run_probe, select_targets
 
     conn = get_connection()
-    init_db(conn)
+    run_migrations(conn)
+    now = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
 
-    # Hae datasetit joilla on CSV/JSON-resursseja mutta ei vielä skeemaa
-    query = """
-        SELECT d.id, d.name, COALESCE(d.title_fi, d.title) as title
-        FROM datasets d
-        JOIN resources r ON r.dataset_id = d.id
-        LEFT JOIN resource_schema rs ON rs.dataset_id = d.id
-        WHERE UPPER(r.format) IN ('CSV', 'JSON', 'GEOJSON')
-          AND rs.dataset_id IS NULL
-    """
-    params: list[str] = []
-    if source:
-        query += " AND d.source = ?"
-        params.append(source)
-    query += " GROUP BY d.id ORDER BY d.name LIMIT ?"
-    params.append(str(limit))
-
-    datasets = conn.execute(query, params).fetchall()
-
-    if not datasets:
-        print("Kaikilla dataseteilla on jo skeematiedot (tai ei CSV/JSON-resursseja).")
+    if dry_run:
+        targets = select_targets(
+            conn, now=now, source=source, fmt=fmt, limit=limit, max_age_days=max_age_days
+        )
+        print(f"{len(targets)} kohdetta:")
+        for t in targets[:20]:
+            print(f"  {t['format']:8} {t['url'][:90]}")
         return
 
-    print(f"Päätellään skeemoja {len(datasets)} datasetille...\n")
-
-    inferred = 0
-    errors = 0
-
-    for i, ds in enumerate(datasets, 1):
-        ds_id = ds["id"]
-        title = ds["title"] or ds["name"]
-
-        resources = conn.execute(
-            "SELECT * FROM resources WHERE dataset_id = ?",
-            (ds_id,),
-        ).fetchall()
-        resources = [dict(r) for r in resources]
-
-        resource = _pick_resource(resources, None, "CSV")
-        if resource is None:
-            resource = _pick_resource(resources, None, "JSON")
-        if resource is None:
-            continue
-
-        fmt = (resource.get("format") or "").upper()
-        url = resource.get("url", "")
-        res_id = resource.get("id", "")
-
-        if not url:
-            continue
-
-        try:
-            if fmt == "CSV":
-                body = await _preview_csv(url, 10)
-            else:
-                body = await _preview_json(url, 10)
-
-            save_schema_from_markdown(conn, res_id, ds_id, body)
-            inferred += 1
-        except Exception as e:
-            errors += 1
-            if errors <= 5:
-                print(f"  VIRHE: {title[:50]} — {e}")
-
-        if i % 10 == 0 or i == len(datasets):
-            print(f"  [{i}/{len(datasets)}] {inferred} skeemaa pääteltynä...")
-
-        if delay > 0 and i < len(datasets):
-            await asyncio.sleep(delay)
-
-    print(f"\nValmis: {inferred} skeemaa pääteltynä, {errors} virhettä.")
+    summary = await run_probe(
+        conn, source=source, fmt=fmt, limit=limit, now=now, max_age_days=max_age_days
+    )
+    print(format_probe_summary(summary))
 
 
 async def _refresh(
@@ -1205,7 +1165,7 @@ async def _refresh(
     # 6. Schema introspection (valinnainen)
     if run_schemas:
         otsikko("Schema introspection")
-        await _infer_schemas(source=src_filter, limit=100)
+        await _probe(source=src_filter, limit=100)
 
     # Varoitukset viimeisenä: pitkän ajon alussa tulostettu häviää vieritykseen.
     if outcome.warnings:

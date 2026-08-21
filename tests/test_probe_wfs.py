@@ -1,0 +1,312 @@
+"""Testit WFS-proberille.
+
+WFS on se aukko johon raportoija törmäsi: GTK:n aineistot ovat WFS:ää,
+eikä niiden skeemaa kaapattu missään.
+
+Fixturet ovat oikeita vastauksia kahdelta eri palvelintyypiltä.
+Nimiavaruusprefiksi eroaa (`xsd:` / `xs:`), ja käsin kirjoitettu XML olisi
+yksinkertaistanut juuri sen eron pois.
+"""
+
+from __future__ import annotations
+
+import urllib.parse
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
+import httpx
+import pytest
+
+from aura.probe.types import ProbeStatus
+from aura.probe.wfs import parse_feature_types, probe
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _fixture(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+class TestSarakkeidenLuku:
+    def test_geoserver_sarakkeet_ja_tyypit(self) -> None:
+        kentat = dict(_fixture("wfs_describefeaturetype_geoserver.xml") and
+                      parse_feature_types(_fixture("wfs_describefeaturetype_geoserver.xml")))
+        assert kentat["tietopalvelu_id"] == "integer"
+        assert kentat["metroasema"] == "string"
+
+    def test_geoserver_ei_sisalla_kaareelementtia(self) -> None:
+        """Koko kenttäjoukko tarkasti: kääre-elementti ei saa livahtaa sarakkeeksi.
+
+        GeoServer nimeää featuretyypin kääre-complexTypen kaavalla
+        ``<Kerros>Type`` — ei ``<Kerros>FeatureType`` kuten ArcGIS. Pelkkä
+        yksittäisten avainten tarkistus ei olisi paljastanut tätä: koko
+        joukko on ainoa tapa varmistaa ettei paluu ``endswith("FeatureType")``
+        -heuristiikkaan menisi läpi huomaamatta.
+        """
+        kentat = dict(parse_feature_types(_fixture("wfs_describefeaturetype_geoserver.xml")))
+        assert kentat == {
+            "tietopalvelu_id": "integer",
+            "metroasema": "string",
+            "mtryhm": "integer",
+            "geom": "geometry",
+        }
+        assert "Seutukartta_liikenne_metroasemat" not in kentat
+
+    def test_arcgis_sarakkeet_ja_tyypit(self) -> None:
+        kentat = dict(parse_feature_types(_fixture("wfs_describefeaturetype_arcgis.xml")))
+        assert kentat["OBJECTID"] == "integer"
+
+    def test_arcgis_kaikki_yksitoista_saraketta(self) -> None:
+        """Koko kenttäjoukko tarkasti: kahdeksan merkkijonokenttää ei saa kadota.
+
+        ArcGIS ei kirjoita ``type``-attribuuttia merkkijonokentille lainkaan
+        — tyyppi on vain sisäkkäisessä ``xsd:simpleType``-rajoituksessa.
+        Ilman sen lukemista kentät katoaisivat äänettömästi ``if not
+        raw_type: continue`` -tyyppiseen ehtoon.
+        """
+        kentat = dict(parse_feature_types(_fixture("wfs_describefeaturetype_arcgis.xml")))
+        assert kentat == {
+            "OBJECTID": "integer",
+            "GTK_ID": "string",
+            "FAULT_RELIABILITY": "string",
+            "UPTHROWN_SIDE": "string",
+            "SITE_NAME": "string",
+            "COMPLEX_NAME": "string",
+            "SYSTEM_NAME": "string",
+            "SEGMENT_NAME": "string",
+            "REFERENCE": "string",
+            "SHAPE": "geometry",
+            "SHAPE.LEN": "float",
+        }
+
+    def test_geometria_merkitaan_geometriaksi(self) -> None:
+        """Koordinaattikenttä ei ole sarake, mutta sen olemassaolo on tietoa."""
+        kentat = dict(parse_feature_types(_fixture("wfs_describefeaturetype_geoserver.xml")))
+        assert kentat.get("geom") == "geometry"
+
+    def test_tyyppikartta_kattaa_xsd_perustyypit(self) -> None:
+        xml = (
+            '<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
+            "<xsd:sequence>"
+            '<xsd:element name="a" type="xsd:double"/>'
+            '<xsd:element name="b" type="xsd:dateTime"/>'
+            '<xsd:element name="c" type="xsd:boolean"/>'
+            "</xsd:sequence>"
+            "</xsd:schema>"
+        )
+        assert dict(parse_feature_types(xml)) == {
+            "a": "float", "b": "date", "c": "boolean",
+        }
+
+    def test_nimetty_simpletype_ei_pudota_saraketta(self) -> None:
+        """INSPIRE-tyylinen koodistokenttä (esim. ``ns:TilaType``) on sarake, ei runko.
+
+        Nimen perusteella tehty ohitus ("päättyy 'Type'-merkkijonoon")
+        pudottaisi tämän kentän kokonaan, koska sillä on nimetty
+        simpleType joka päättyy samalla tavalla kuin featuretyypin oma
+        kääre-complexType. Sijainti (sequence-lohkon sisällä) ratkaisee.
+        """
+        xml = (
+            '<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+            'xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:ns="http://example.test">'
+            '<xsd:element name="Kohde" type="ns:KohdeFeatureType" '
+            'substitutionGroup="gml:AbstractFeature"/>'
+            '<xsd:complexType name="KohdeFeatureType">'
+            "<xsd:complexContent>"
+            '<xsd:extension base="gml:AbstractFeatureType">'
+            "<xsd:sequence>"
+            '<xsd:element name="tila" type="ns:TilaType"/>'
+            '<xsd:element name="nimi" type="xsd:string"/>'
+            "</xsd:sequence>"
+            "</xsd:extension>"
+            "</xsd:complexContent>"
+            "</xsd:complexType>"
+            "</xsd:schema>"
+        )
+        assert dict(parse_feature_types(xml)) == {"tila": "string", "nimi": "string"}
+
+    def test_tyhja_vastaus_ei_kaada(self) -> None:
+        assert parse_feature_types("") == []
+
+    def test_useamman_feature_typen_yhteinen_sarake_ei_toistu(self) -> None:
+        """``typeNames=a,b`` palauttaa erillisen sequence-lohkon per tyyppi.
+
+        Eri feature typeillä on aidosti usein samannimisiä attribuutteja
+        (havaittu Lounaistiedon hame_keski_suomi-aineistolla: kaksi
+        toistuvaa ``nimi``-saraketta kaatoi ``upsert_resource_schema``:n
+        IntegrityErroriin, koska sen avain on resource_id+field_name eikä
+        feature type erottele). Ensimmäinen esiintymä voittaa; tyyppi ei
+        katoa, vaikka nimi toistuisi.
+        """
+        xml = (
+            '<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
+            "<xsd:sequence>"
+            '<xsd:element name="nimi" type="xsd:string"/>'
+            '<xsd:element name="a_vain" type="xsd:integer"/>'
+            "</xsd:sequence>"
+            "<xsd:sequence>"
+            '<xsd:element name="nimi" type="xsd:string"/>'
+            '<xsd:element name="b_vain" type="xsd:double"/>'
+            "</xsd:sequence>"
+            "</xsd:schema>"
+        )
+        kentat = parse_feature_types(xml)
+        assert kentat == [
+            ("nimi", "string"),
+            ("a_vain", "integer"),
+            ("b_vain", "float"),
+        ]
+
+
+def _client(responses: list[tuple[int, str]]) -> AsyncMock:
+    calls: list[dict] = []
+
+    async def _get(url, params=None, **kwargs):
+        calls.append({"params": dict(params or {})})
+        status, body = responses[min(len(calls) - 1, len(responses) - 1)]
+        resp = MagicMock()
+        resp.status_code = status
+        resp.text = body
+        resp.url = url
+        return resp
+
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=_get)
+    client.calls = calls
+    return client
+
+
+class TestProbe:
+    @pytest.mark.anyio
+    async def test_onnistunut_probe_tuottaa_kentat_ja_crs(self) -> None:
+        client = _client([
+            (200, _fixture("wfs_capabilities_arcgis.xml")),
+            (200, _fixture("wfs_describefeaturetype_arcgis.xml")),
+        ])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        assert tulos.status == ProbeStatus.OK
+        assert any(nimi == "OBJECTID" for nimi, _ in tulos.fields)
+        assert dict(tulos.enrichments)["crs"].endswith("3067")
+        example = dict(tulos.enrichments)["example_request"]
+        assert "typeNames=" in example
+        # ArcGIS hylkää application/json-oletuksen HTTP 200:lla
+        # (ExceptionReport, todennettu GTK:n palvelimella) — julkaistun
+        # kutsun on käytettävä palvelun omaa GEOJSON-nimeä.
+        assert "outputFormat=GEOJSON" in example
+        assert "outputFormat=application/json" not in example
+        assert tulos.final_url == "https://example.test/wfs"
+
+    @pytest.mark.anyio
+    async def test_example_request_gml_fallback_kun_json_puuttuu(self) -> None:
+        """Jos palvelu ei tarjoa yhtään JSON-yhteensopivaa outputFormatia,
+        example_request käyttää kykyjen ensimmäistä tarjoamaa formaattia
+        (käytännössä GML) sen sijaan että arvaisi application/json:ia —
+        sama periaate kuin ``fetch_features()``:n neuvottelussa.
+        """
+        caps = _fixture("wfs_capabilities_arcgis.xml").replace("GEOJSON", "GMLONLY")
+        client = _client([
+            (200, caps),
+            (200, _fixture("wfs_describefeaturetype_arcgis.xml")),
+        ])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        example = dict(tulos.enrichments)["example_request"]
+        assert "outputFormat=GML32" in example
+        assert "outputFormat=application/json" not in example
+        assert "outputFormat=GMLONLY" not in example
+
+    @pytest.mark.anyio
+    async def test_example_request_urlenkoodaa_valilyonnilliset_formaatit(self) -> None:
+        """GML-fallback-arvo voi sisältää välilyönnin ja puolipisteen.
+
+        Ennen korjausta example_request rakennettiin käsin
+        ``"&".join(f"{k}={v}")``:lla, joka ei enkoodaa mitään. Jos GML-
+        fallback poimii kykyjen ensimmäisen formaatin sellaisenaan
+        (esim. "text/xml; subtype=gml/3.2" — todellinen WFS-palvelin voi
+        mainostaa tätä), julkaistu kutsu olisi rikki: väli katkaisisi
+        query-merkkijonon ja mikään palvelin ei hyväksyisi sitä.
+        """
+        caps = (
+            "<WFS_Capabilities>"
+            "<FeatureType><Name>kohde</Name></FeatureType>"
+            '<Operation name="GetFeature">'
+            '<Parameter name="outputFormat"><AllowedValues>'
+            "<Value>text/xml; subtype=gml/3.2</Value>"
+            "<Value>GML32</Value>"
+            "</AllowedValues></Parameter>"
+            "</Operation>"
+            "</WFS_Capabilities>"
+        )
+        client = _client([
+            (200, caps),
+            (200, _fixture("wfs_describefeaturetype_arcgis.xml")),
+        ])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        example = dict(tulos.enrichments)["example_request"]
+
+        assert " " not in example, (
+            f"julkaistu kutsu sisältää enkoodaamattoman välilyönnin: {example}"
+        )
+        parsed = urllib.parse.urlparse(example)
+        assert parsed.scheme and parsed.netloc, f"ei jäsenny kelvolliseksi URL:ksi: {example}"
+        query = urllib.parse.parse_qs(parsed.query)
+        assert query["outputFormat"] == ["text/xml; subtype=gml/3.2"], (
+            "arvon on säilyttävä muuttumattomana enkoodauksen jälkeen puretussa muodossa"
+        )
+
+    @pytest.mark.anyio
+    async def test_url_oma_typename_voittaa_kykyjen_ensimmaisen(self) -> None:
+        """Resurssin URL:n typeName ohittaa GetCapabilities-vastauksen ensimmäisen.
+
+        GTK:n capabilities-fixture listaa kolme featuretyyppiä, joista
+        ``postglasiaalisiirros`` on ensimmäinen. Resurssin oma URL osoittaa
+        kuitenkin toiseen kerrokseen (``merenpohjan_naytepaikat``) —
+        ``request_params()`` tekisi saman valinnan GetFeature-kutsulle,
+        joten ``probe()``:n on tehtävä sama valinta DescribeFeatureTypelle.
+        """
+        client = _client([
+            (200, _fixture("wfs_capabilities_arcgis.xml")),
+            (200, _fixture("wfs_describefeaturetype_arcgis.xml")),
+        ])
+        url = (
+            "https://example.test/wfs?service=WFS&typeName="
+            "Rajapinnat_GTK_Maapera_WFS:merenpohjan_naytepaikat"
+        )
+        tulos = await probe({"url": url}, client)
+        assert tulos.status == ProbeStatus.OK
+        dft_params = client.calls[1]["params"]
+        assert dft_params["typeNames"] == "Rajapinnat_GTK_Maapera_WFS:merenpohjan_naytepaikat"
+
+    @pytest.mark.anyio
+    async def test_virhevastaus_kirjautuu_syyna(self) -> None:
+        """HTTP 200 + ExceptionReport on WFS:n tavallisin kieltäytyminen."""
+        client = _client([(200, _fixture("wfs_exception_arcgis.xml"))])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        assert tulos.status == ProbeStatus.PARSE_ERROR
+        assert "typeNames" in tulos.detail or "application/json" in tulos.detail
+
+    @pytest.mark.anyio
+    async def test_http_virhe_kirjautuu_koodina(self) -> None:
+        client = _client([(404, "")])
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        assert tulos.status == ProbeStatus.HTTP_ERROR
+        assert tulos.detail == "HTTP 404"
+        assert tulos.http_status == 404
+
+    @pytest.mark.anyio
+    async def test_yhteysvirhe_kirjautuu_http_errorina_ei_parse_errorina(self) -> None:
+        """ConnectError (esim. DNS-epäonnistuminen) ei ole timeout eikä statuskoodi.
+
+        Ilman erillistä ``except httpx.HTTPError`` -haaraa tämä putoaisi
+        ``run_probe()``:n yleiseen ``except Exception``iin parse_erroriksi,
+        jonka TTL on 30 vrk oikean 7 vrk:n (http_error_transient) sijaan —
+        ks. tabular.py:n vastaava testi
+        ``test_muu_verkkovirhe_kirjautuu_http_errorina``.
+        """
+        client = AsyncMock()
+        client.get = AsyncMock(
+            side_effect=httpx.ConnectError("nimenselvitys epäonnistui")
+        )
+        tulos = await probe({"url": "https://example.test/wfs"}, client)
+        assert tulos.status == ProbeStatus.HTTP_ERROR
+        assert "nimenselvitys" in tulos.detail
+        assert tulos.http_status is None

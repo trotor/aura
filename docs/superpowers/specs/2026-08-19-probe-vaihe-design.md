@@ -260,8 +260,35 @@ Kolme tasoa, kaikki ilman verkkoa:
    kattavuuden.
 
 Onnistumisen mitta: WFS- ja WMS-kohteiden kattavuus nousee nollasta, ja
-CSV/JSON-kattavuus 54:stä. Tarkat luvut mitataan ensimmäisen täyden ajon jälkeen
-— ne ovat tulos, ei tavoite jonka voisi asettaa etukäteen.
+CSV/JSON-kattavuus 54:stä. Ensimmäinen mittausajo (2026-08-20, kopiolla
+tuotantokannasta, 132 resurssia: WFS 52, WMS 30, CSV 30, PXWEB 20) nosti
+`resource_schema`-taulun 772 rivistä / 54 datasetista 1777 riviin / 74
+datasettiin ja `joinable_keys`-enrichmentit 26:sta 34:ään. Tilajakauma:
+ok 67 (51 %), parse_error 45 (34 %), empty 16 (12 %), http_error 4 (3 %) —
+formaateittain WFS ok 25/52, WMS ok 18/30, CSV ok 24/30, **PXWEB ok 0/20**.
+
+Ajo ei ollut kitkaton, ja se kuuluu tähän yhtä lailla kuin onnistuminen.
+`probe --format WFS` kaatui käsittelemättömään `IntegrityErroriin` kun
+resurssin URL:ssa on pilkuilla erotettu lista useampaa feature typeä (esim.
+Lounaistiedon `hame_keski_suomi`-aineisto): `_store()`-kutsua ei ollut
+suojattu poikkeukselta kuten proberin omaa kutsua, ja koska kaatunut kohde
+jäi pysyvästi "probaamattomaksi", pelkkä komennon uudelleenajo jäi jumiin
+samaan kohteeseen eikä edennyt. Tässä mitatut luvut on kerätty ohittamalla
+tuo yksi kaatava kohde käsin kannasta — vika korjattiin myöhemmin
+commitissa `3a65f36` (dedup `parse_feature_types`-funktioon wfs.py:ssä,
+`_store()`-kutsu suojattu run_probe():ssa), joten uusi ajo ei enää jää
+jumiin tähän kohteeseen.
+PXWEB:n 0/20 ei yleisty koko formaattiin: kaikki 20 valikoitunutta kohdetta
+osuivat samaan isäntään (stat.hel.fi), jonka harvestoitu resurssi-URL osoittaa
+selattavaan HTML-sivuun eikä PxWeb-API:in ("Vastaus ei ole JSONia"); pistokoe
+vahvisti että statfin/luke-API:t palauttavat oikeaa JSONia samalla proberilla.
+WMS:n 12 epäonnistumisesta 11 on sama yksittäinen URL-vika (`https://…:80/…`
+— TLS-skeema HTTP-portissa) yhdellä isännällä. WFS:n 15 "empty"-tapausta ovat
+kaikki INSPIRE-yhteensopivia palveluita (Ruokavirasto, FMI:n tallennetut
+kyselyt) joiden DescribeFeatureType viittaa skeemaan `xsd:import`/`include`:lla
+sen sijaan että määrittelisi kentät paikallisesti — proberi ei seuraa
+viittausta, ja "empty" on siksi oikea, ei virheellinen, luokitus. Luku ei siis
+tiivisty yhdeksi kattavuusprosentiksi vaan tähän profiiliin.
 
 ## Riippuvuudet ja järjestys
 

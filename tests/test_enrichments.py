@@ -248,6 +248,42 @@ class TestFormatEnrichments:
         assert "paikkatietoaineisto, avoin data" in result
         assert "id, nimi, pinta_ala" in result
 
+    def test_probe_vaiheen_kentat_saavat_labelit_ja_service_layers_listautuu(self):
+        """(I5) service_layers/example_request/use_case_suggested eivät saa
+
+        näkyä raa'alla kenttänimellä eivätkä yhtenä JSON-pötkönä.
+        """
+        enrichments = [
+            {
+                "field": "service_layers",
+                "value": '[{"name": "kunnat", "title": "Kunnat"}]',
+                "confidence": "high",
+                "source_type": "probe",
+            },
+            {
+                "field": "example_request",
+                "value": "https://example.test/wfs?outputFormat=GEOJSON",
+                "confidence": "high",
+                "source_type": "probe",
+            },
+            {
+                "field": "use_case_suggested",
+                "value": "Kuntarajojen visualisointi",
+                "confidence": "medium",
+                "source_type": "ai_analysis",
+            },
+        ]
+        result = format_enrichments(enrichments)
+        assert "service_layers:" not in result
+        assert "example_request:" not in result
+        assert "use_case_suggested:" not in result
+        assert "WMS-layerit" in result
+        assert "Esimerkkikutsu" in result
+        assert "Ehdotettu käyttötapaus" in result
+        # service_layers on _LIST_FIELDSissä: raaka JSON-taulukko ei saa
+        # näkyä sellaisenaan yhtenä pötkönä.
+        assert '[{"name"' not in result
+
 
 class TestConflictingEnrichments:
     """get_conflicting_enrichments()."""

@@ -237,12 +237,21 @@ class TestCliSourcesUpdate:
 
 
 class TestSchemaInfer:
-    """Schema introspection CLI (#124)."""
+    """Schema introspection CLI (#124).
 
-    def test_infer_schemas_function_exists(self) -> None:
-        from aura.cli import _infer_schemas
+    ``_infer_schemas`` siirtyi probe-vaiheeseen (``aura/probe/tabular.py``) ja
+    korvautui CLI:ssä ``_probe``:lla, joka kutsuu ``aura.probe.run_probe``.
+    """
 
-        assert callable(_infer_schemas)
+    def test_probe_function_exists(self) -> None:
+        from aura.cli import _probe
+
+        assert callable(_probe)
+
+    def test_refresh_schemas_step_uses_probe(self) -> None:
+        from aura.cli import _refresh
+
+        assert "_probe(" in inspect.getsource(_refresh)
 
 
 class TestRefreshCommand:

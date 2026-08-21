@@ -54,4 +54,8 @@ output/
 # Playwright MCP -työkalun väliaikaistiedostot
 .playwright-mcp/
 
+# Lokitiedostot (esim. vahingossa committoitu MUD-pelisessioloki
+# logs/202608192118.log — ei projektin sisältöä)
+logs/
+
 # NOTE: data/aura.db is NOT ignored — it's part of the project

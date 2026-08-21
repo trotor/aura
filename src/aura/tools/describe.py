@@ -75,6 +75,7 @@ async def describe(dataset_id: str, ctx: Context | None = None) -> str:
 
     # Kenttätiedot (schema introspection)
     result += _format_schema_section(conn, ds_id)
+    result += _format_probe_failure(conn, ds_id)
 
     # Laatupisteet
     quality = get_quality_scores(conn, ds_id)
@@ -167,6 +168,45 @@ def _format_schema_section(conn: Any, dataset_id: str) -> str:
         for f in fields:
             parts.append(f"- `{f['field_name']}` ({f['field_type']})")
 
+    return "\n".join(parts)
+
+
+#: Yläraja näytettäville epäonnistuneille probe-riveille. Yhdellä
+#: datasetilla voi olla satoja probattavia resursseja (esim. 428 kpl) —
+#: kaikkien listaaminen hukuttaisi muun describe()-vastauksen.
+_MAX_PROBE_FAILURES = 10
+
+
+def _format_probe_failure(conn: Any, dataset_id: str) -> str:
+    """Kerro epäonnistuneesta skeemanhausta, tai tyhjä jos ei ole.
+
+    Puuttuva skeema näyttää muuten samalta kuin skeema jota ei ole
+    yritettykään hakea. Ero on agentille olennainen: ensimmäinen on
+    palvelun vika, toinen katalogin.
+
+    Rajaa näytettävät rivit ``_MAX_PROBE_FAILURES``:ään ja kertoo lopun
+    lukumääränä — katkaisu ei saa olla hiljainen.
+    """
+    total = conn.execute(
+        "SELECT COUNT(*) FROM probe_results WHERE dataset_id = ? AND status != 'ok'",
+        (dataset_id,),
+    ).fetchone()[0]
+    if not total:
+        return ""
+    rows = conn.execute(
+        "SELECT probe_type, status, detail, probed_at FROM probe_results"
+        " WHERE dataset_id = ? AND status != 'ok' ORDER BY probed_at DESC"
+        " LIMIT ?",
+        (dataset_id, _MAX_PROBE_FAILURES),
+    ).fetchall()
+    parts = ["\n\n### Skeemaa ei saatu selville\n"]
+    for row in rows:
+        paiva = (row["probed_at"] or "")[:10]
+        syy = row["detail"] or row["status"]
+        parts.append(f"- {row['probe_type'].upper()}: {syy} ({paiva})")
+    loput = total - len(rows)
+    if loput > 0:
+        parts.append(f"- … ja {loput} muuta epäonnistunutta resurssia")
     return "\n".join(parts)
 
 

@@ -235,3 +235,24 @@ async def probe_sizes(source: str = "all", ctx: Context | None = None) -> str:
 
     probe_results = await probe_all(source=source, timeout=180.0)
     return format_probe_report(probe_results)
+
+
+@mcp.tool()
+async def probe_schemas(
+    source: str = "", limit: int = 50, ctx: Context | None = None
+) -> str:
+    """Johda datasettien skeema suoraan rajapinnoista (WFS, WMS, PxWeb, CSV).
+
+    Kirjoittaa tuloksen kantaan: sarakkeet resurssin skeemaksi, dimensiot ja
+    layerit rikastuksiksi. Epäonnistuminen kirjataan syineen, ja se näkyy
+    describe()-vastauksessa.
+
+    Args:
+        source: Rajaa lähteeseen (esim. "gtk"). Tyhjä = kaikki.
+        limit: Probattavien resurssien enimmäismäärä (oletus 50).
+    """
+    from aura.probe import format_probe_summary, run_probe
+
+    conn = _server._get_conn(ctx)
+    summary = await run_probe(conn, source=source, limit=limit)
+    return format_probe_summary(summary)

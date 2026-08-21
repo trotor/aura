@@ -880,13 +880,21 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         """,
     ).fetchall()
 
-    return {
+    stats = {
         "total_datasets": total,
         "total_organizations": orgs,
         "total_formats": formats,
         "top_organizations": [dict(r) for r in top_orgs],
         "top_formats": [dict(r) for r in top_formats],
     }
+
+    probe_rows = conn.execute(
+        "SELECT status, COUNT(*) AS n FROM probe_results GROUP BY status"
+    ).fetchall()
+    stats["probe_total"] = sum(r["n"] for r in probe_rows)
+    stats["probe_ok"] = next((r["n"] for r in probe_rows if r["status"] == "ok"), 0)
+
+    return stats
 
 
 # --- Organizations ---
@@ -1258,6 +1266,47 @@ def upsert_resource_schema(
         """,
         [(resource_id, dataset_id, name, ftype) for name, ftype in fields],
     )
+
+
+def upsert_probe_result(
+    conn: sqlite3.Connection,
+    resource_id: str,
+    dataset_id: str,
+    probe_type: str,
+    status: str,
+    detail: str,
+    probed_at: str,
+) -> None:
+    """Kirjaa probe-yrityksen tulos. Korvaa saman resurssin edellisen.
+
+    Taulu kantaa viimeisimmän tilan, ei historiaa: kirjanpidossa vanha tila
+    ei kerro mitään jota uusi ei kertoisi paremmin. Historia kuuluu
+    enrichmenteihin, joissa se jo on.
+    """
+    conn.execute(
+        """
+        INSERT INTO probe_results
+            (resource_id, dataset_id, probe_type, status, detail, probed_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(resource_id) DO UPDATE SET
+            dataset_id = excluded.dataset_id,
+            probe_type = excluded.probe_type,
+            status     = excluded.status,
+            detail     = excluded.detail,
+            probed_at  = excluded.probed_at
+        """,
+        (resource_id, dataset_id, probe_type, status, detail, probed_at),
+    )
+
+
+def get_probe_result(
+    conn: sqlite3.Connection, resource_id: str
+) -> dict[str, Any] | None:
+    """Hae resurssin viimeisin probe-tulos."""
+    row = conn.execute(
+        "SELECT * FROM probe_results WHERE resource_id = ?", (resource_id,)
+    ).fetchone()
+    return dict(row) if row else None
 
 
 def get_resource_schema(

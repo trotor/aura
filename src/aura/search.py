@@ -71,10 +71,16 @@ ENRICHMENT_FIELD_LABELS: dict[str, str] = {
     "tags": "Tagit",
     "crs": "Koordinaattijärjestelmä",
     "joinable_keys": "Yhdistettävät avaimet",
+    "service_layers": "WMS-layerit",
+    "example_request": "Esimerkkikutsu",
+    "use_case_suggested": "Ehdotettu käyttötapaus",
 }
 
 # Kentät joiden arvo on JSON-taulukko
-_LIST_FIELDS = {"data_fields", "keywords", "tags", "related_services", "joinable_keys"}
+_LIST_FIELDS = {
+    "data_fields", "keywords", "tags", "related_services", "joinable_keys",
+    "service_layers",
+}
 
 
 def _format_enrichment_value(field: str, value: str) -> str:
@@ -243,5 +249,11 @@ def format_stats(stats: dict[str, Any]) -> str:
         parts.append("\n### Yleisimmät formaatit")
         for fmt in stats["top_formats"]:
             parts.append(f"- {fmt['format']}: {fmt['count']} resurssia")
+
+    if stats.get("probe_total"):
+        parts.append(
+            f"\n**Skeema johdettu:** {stats['probe_ok']}/{stats['probe_total']} "
+            "resurssista onnistuneesti"
+        )
 
     return "\n".join(parts)

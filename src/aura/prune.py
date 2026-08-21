@@ -38,6 +38,7 @@ RELATED_TABLES = (
     "quality_scores",
     "resource_health",
     "resource_schema",
+    "probe_results",
 )
 
 # Rikastukset joita harvesteri ei ole itse tuottanut. Näiden takana on ihmisen
