@@ -102,7 +102,16 @@ class PxWebHarvester(BaseHarvester):
 
         dataset_id = f"{self.dataset_id_prefix}-{table_id}"
         table_url = f"{base_url}{table_id}"
-        web_url = f"{self.web_base_url}/{self.root_path}/{path}/{table_id}"
+
+        # PxWebin selainkäyttöliittymä koodaa kansiopolun **kaksoisalaviivoilla**,
+        # ei kauttaviivoilla: API-polku ``StatFin/adopt`` on selaimessa
+        # ``StatFin/StatFin__adopt``. Kauttaviivamuoto vastaa 404:llä.
+        #
+        # Tämä oli rikki kaikilla PxWeb-lähteillä: 2 186 datasetin HTML-resurssi
+        # osoitti sivulle jota ei ole. Rikkinäinen linkki ei näy missään
+        # mittarissa, koska haku ja query_data käyttävät PXWEB-resurssia.
+        web_path = path.replace("/", "__")
+        web_url = f"{self.web_base_url}/{self.root_path}/{web_path}/{table_id}"
 
         # PxWeb ei tarjoa päivitystaajuutta — arvioidaan polun perusteella
         freq = "vuosittain"

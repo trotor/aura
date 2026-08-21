@@ -74,9 +74,16 @@ def test_serve_http_serves_both_web_and_mcp(
     monkeypatch.setattr("sys.argv", ["aura", "serve", "--http"])
     cli.main()
 
-    paths = {getattr(r, "path", None) for r in captured_uvicorn["app"].routes}
-    assert "/" in paths
-    assert "/health" in paths
+    # Kysytään käytöstä, ei rakennetta. Reittilistaan nojaava väite hajosi
+    # kahdesti kirjastojen mukana: fastmcp 3.4 mounttaa web-appin sen sijaan
+    # että sulauttaisi sen reitit, ja FastAPI 0.141 kääri include_router-reitit
+    # _IncludedRouter-objekteihin jotka eivät paljasta polkujaan lainkaan.
+    # Pyyntö kertoo saman asian eikä riipu siitä miten reitit on koottu.
+    from fastapi.testclient import TestClient
+
+    with TestClient(captured_uvicorn["app"]) as client:
+        assert client.get("/").status_code == 200, "ländäri ei vastaa"
+        assert client.get("/health").status_code == 200, "/health ei vastaa"
 
 
 def test_serve_http_does_not_call_mcp_run(

@@ -80,6 +80,34 @@ class TestPickResource:
         ]
         assert _pick_resource(resources)["url"] == "data.json"
 
+    def test_prefers_queryable_over_merely_machine_readable(self):
+        """XLSX on koneluettava mutta esikatselu ei osaa avata sitä.
+
+        Jos valinta seuraisi koneluettavuutta, tämä datasetti näyttäisi
+        viestin "formaatin esikatselu ei ole tuettu" vaikka samalla
+        datasetillä on luettava CSV.
+        """
+        resources = [
+            {"format": "XLSX", "url": "taulukko.xlsx"},
+            {"format": "CSV", "url": "data.csv"},
+        ]
+        assert _pick_resource(resources)["url"] == "data.csv"
+
+    def test_falls_back_to_first_when_nothing_queryable(self):
+        resources = [
+            {"format": "XLSX", "url": "taulukko.xlsx"},
+            {"format": "HTML", "url": "sivu.html"},
+        ]
+        assert _pick_resource(resources)["url"] == "taulukko.xlsx"
+
+    def test_image_services_are_not_picked(self):
+        """WMS on koneluettavien listalla mutta palauttaa kuvia."""
+        resources = [
+            {"format": "WMS", "url": "kartta"},
+            {"format": "WFS", "url": "kohteet"},
+        ]
+        assert _pick_resource(resources)["url"] == "kohteet"
+
     def test_skips_wms(self):
         resources = [
             {"format": "WMS", "url": "wms.xml"},
@@ -215,8 +243,18 @@ class TestPreviewPxweb:
             {
                 "field": "data_fields",
                 "value": json.dumps([
-                    {"code": "Alue", "name": "Alue", "value_count": 310, "examples": ["Helsinki", "Tampere"]},
-                    {"code": "Vuosi", "name": "Vuosi", "value_count": 20, "examples": ["2020", "2021"]},
+                    {
+                        "code": "Alue",
+                        "name": "Alue",
+                        "value_count": 310,
+                        "examples": ["Helsinki", "Tampere"],
+                    },
+                    {
+                        "code": "Vuosi",
+                        "name": "Vuosi",
+                        "value_count": 20,
+                        "examples": ["2020", "2021"],
+                    },
                 ]),
             },
         ]
@@ -326,7 +364,7 @@ class TestPreviewDataTool:
         with patch("aura.tools.data._server._get_conn", return_value=conn):
             with patch("aura.tools.data._preview_csv", new_callable=AsyncMock) as mock_csv:
                 mock_csv.return_value = "mock csv"
-                result = await query_data("test-1", max_rows=1000)
+                await query_data("test-1", max_rows=1000)
                 # Varmistetaan että max_rows rajattiin 500:een
                 mock_csv.assert_called_once_with("https://example.com/test.csv", 500)
 

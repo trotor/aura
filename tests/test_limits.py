@@ -70,10 +70,32 @@ class TestKuvausVastaaToteutusta:
         ],
     )
     def test_kuvaus_kertoo_katon(self, tool: str, cap: int) -> None:
+        """Katon on näyttävä agentille — mutta ei väliä missä kohtaa sopimusta.
+
+        fastmcp 3.1 antoi koko docstringin kuvauskenttänä, jolloin ``Args:``-osa
+        katoista tuli mukana. 3.4 typistää kuvauksen tiivistelmään ja siirtää
+        parametrien kuvaukset JSON-skeemaan, mikä on agentille parempi mutta
+        tekee pelkkään kuvaustekstiin nojaavasta väitteestä version­herkän.
+
+        Testi kysyy siksi sitä mikä oikeasti merkitsee: näkyykö katto jossain
+        kohtaa työkalun sopimusta.
+        """
+        import asyncio
+
+        import aura.server  # noqa: F401 — rikkoo kiertoimportin oikeassa järjestyksessä
+        from aura.server import mcp
+
         descriptions = self._descriptions()
         assert tool in descriptions, f"työkalua {tool} ei ole rekisteröity"
-        assert str(cap) in descriptions[tool], (
-            f"{tool}: katto {cap} puuttuu kuvauksesta — agentti ei tiedä rajaa"
+
+        sopimus = [descriptions[tool]]
+        rekisteroity = asyncio.run(mcp.get_tool(tool))
+        for kentta in (rekisteroity.parameters.get("properties") or {}).values():
+            sopimus.append(str(kentta.get("description", "")))
+
+        assert any(str(cap) in osa for osa in sopimus), (
+            f"{tool}: katto {cap} ei näy kuvauksessa eikä parametrien "
+            "skeemassa — agentti ei tiedä rajaa"
         )
 
 

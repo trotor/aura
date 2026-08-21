@@ -15,6 +15,43 @@ datasettiin. Lisäksi korjattiin 7 544 kuollutta resurssilinkkiä — noin
 neljännes koko katalogista.
 
 ### Added
+- **Nollatuloskirjaus** (`aura.telemetry`, `aura gaps`): mitä haettiin kun
+  mitään ei löytynyt. Katalogin aukkoja on tähän asti arvattu käsin — tämän
+  julkaisun Finavia, Traficomin tilastot ja Finlex löytyivät siksi että joku
+  *epäili* niiden puuttuvan, ei siksi että joku olisi etsinyt turhaan ja se
+  olisi jäänyt talteen. Tallennetaan vain hakusana ja laskuri: ei istuntoa,
+  ei tunnistetta, ei IP:tä, ei tapahtumakohtaista aikaleimaa. Sama kysely on
+  yksi rivi jonka `count` kasvaa. Oma kanta, ei katalogi — katalogi on
+  tuotannossa lukutilassa. **Oletuksena pois päältä**, kytketään
+  `AURA_TELEMETRY_DB`-muuttujalla, koska kyselytekstin tallentaminen on
+  tietosuojapäätös. Kirjoituksen epäonnistuminen ohitetaan hiljaisesti:
+  telemetria ei ole syy jonka takia haku saa kaatua
+- **Finlex kyselykelpoisena rajapintana** (`finlex`): viisi
+  aineistokokonaisuutta — ajantasainen lainsäädäntö, säädöskokoelma,
+  valtiosopimukset, hallituksen esitykset ja viranomaisten määräyskokoelmat.
+  Aiemmin katalogissa oli yksi rivi, jonka resurssilla ei ollut formaattia ja
+  osoitteena oli pelkkä palvelun juuri; `query_data` ei voinut tehdä sille
+  mitään. Säädöksiä ei tuoda datasetteinä: pelkän vuoden 2024 säädöksiä on
+  yli 600 dokumenttia ja rajapinta antaa enintään kymmenen riviä sivulta,
+  joten koko säädöskanta olisi enemmän kuin nykyinen katalogi. Rajapinnan
+  `titleContains` hoitaa saman elävänä
+- **Traficomin tilastotietokanta** (`traficom-tilastot`): 81 taulua
+  liikenteen viranomaistilastoa, jota ei ole StatFinissä — ajokortit,
+  ensirekisteröinnit, henkilöliikennetutkimus, ilmailulupakirjat, julkisen
+  liikenteen suoritetilasto, katsastuksen vikatilastot, kuljettajantutkinnot,
+  taksiliikenteen kustannusindeksi, vesiliikenne ja vesiliikenneonnettomuudet.
+  Traficomilla on **kolme** erillistä avoimen datan rajapintaa, ja tämä oli
+  ainoa kattamaton: kysymykseen "onko meillä Traficomin data" sai kahdesta
+  ensimmäisestä (OData 32/32, avoindata.fi 28/28) täyden vastauksen.
+  Standardi PxWeb, joten `PxWebHarvester` riitti sellaisenaan
+- **Finavian lentoliikennetilastot** (`finavia`): kahdeksan datasettiä,
+  neljätoista Excel-tiedostoa — matkustajat ja rahti lentoasemittain sekä
+  Helsinki-Vantaalta, lentojen ja matkustajalentojen määrät, kansainvälinen
+  reitti- ja tilausliikenne maittain. Kuukausiversio ja pitkä aikasarja
+  (1998–2025 / 2013–2025) ovat saman tilaston kaksi resurssia, eivät kahta
+  datasettiä. Suomen lentoliikennetilastot eivät ole avoimen datan
+  portaalissa: avoindata.fi tuntee Finavialta nolla datasettiä. Käyttöehtoja
+  ei ilmoiteta, joten lisenssikenttä jätetään tyhjäksi
 - **Yhdyssanojen pilkkominen** (`aura.decompound`): evaluaation suurin
   yksittäinen hakupuute. Lemmatisointi tuottaa koko yhdyssanan perusmuodon
   (`satotilastot` → `satotilasto`), mutta korpuksessa on osat — kysely
@@ -104,6 +141,26 @@ neljännes koko katalogista.
   alussa tulostettu häviää vieritykseen
 
 ### Fixed
+- **Taulukkoformaatit puuttuivat koneluettavien listalta**: 402 datasettiä sai
+  `format_score` 40/100 samalla kun WMS-kuvapalvelu sai täydet sata, vaikka
+  openpyxl lukee XLSX:n ja OOXML on ISO/IEC 29500 -standardi. Lista ohjasi
+  myös hakutulosten järjestystä ja alueprofiilin koneluettavuusosuutta.
+  Samalla erotettiin kaksi eri kysymystä, jotka olivat olleet yhdessä
+  joukossa: *koneluettavuus* (laatu, järjestys) ja *kyseltävyys*
+  (`query_data`). XLSX on koneluettava mutta esikatselu ei osaa avata sitä,
+  ja ilman erottelua sen lisääminen olisi saanut esikatselun valitsemaan
+  XLSX:n silloinkin kun samalla datasetillä on luettava CSV. Ero näkyi jo
+  koodissa poikkeuksena `fmt not in ("WMS", "WCS")`. Katalogin
+  accessibility-keskiarvo 86,3 → 86,7
+- **PxWeb-taulujen verkkosivulinkit olivat 404** kaikilla PxWeb-lähteillä:
+  2 195 datasetin HTML-resurssi osoitti sivulle jota ei ole. PxWebin
+  selainkäyttöliittymä koodaa kansiopolun kaksoisalaviivoilla, ei
+  kauttaviivoilla — API-polku `StatFin/adopt` on selaimessa
+  `StatFin/StatFin__adopt`. Vika ei näkynyt missään mittarissa, koska haku ja
+  `query_data` käyttävät PXWEB-resurssia; vain ihmiselle tarkoitettu linkki oli
+  rikki. Korjattu kantaluokassa ja ajettu statfin (1 532/1 534) ja luke
+  (663/663) uudelleen. Kaksi jäljelle jäänyttä ovat Tilastokeskuksen
+  lakkauttamia tauluja, jotka `prune` siivoaa
 - **`data_fields`-rikastuskenttä oli päätynyt kaatoluokaksi** (migraatio 020):
   1 864 rivistä vain 7 oli aineiston sarakenimiä. Loput olivat
   bbox-koordinaatteja (1 207) ja koordinaatistotunnuksia (650) — jälkimmäisille

@@ -47,8 +47,12 @@ class TestSearchWithRegionFilter:
 
     def test_search_with_region_filter(self) -> None:
         conn = _memory_db()
-        upsert_dataset(conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"]))
-        upsert_dataset(conn, _dataset_with_coverage("ds-2", "tre-data", "Tampere data", ["Tampere"]))
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"])
+        )
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-2", "tre-data", "Tampere data", ["Tampere"])
+        )
         conn.commit()
 
         results = search_datasets(conn, "testi", region_names=["Helsinki"])
@@ -57,9 +61,15 @@ class TestSearchWithRegionFilter:
 
     def test_region_filter_multiple_names(self) -> None:
         conn = _memory_db()
-        upsert_dataset(conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"]))
-        upsert_dataset(conn, _dataset_with_coverage("ds-2", "espoo-data", "Espoo data", ["Espoo"]))
-        upsert_dataset(conn, _dataset_with_coverage("ds-3", "tre-data", "Tampere data", ["Tampere"]))
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"])
+        )
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-2", "espoo-data", "Espoo data", ["Espoo"])
+        )
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-3", "tre-data", "Tampere data", ["Tampere"])
+        )
         conn.commit()
 
         # Simuloi maakunnan resolvointia: "Uusimaa" → [Helsinki, Espoo]
@@ -70,8 +80,12 @@ class TestSearchWithRegionFilter:
 
     def test_empty_region_returns_all(self) -> None:
         conn = _memory_db()
-        upsert_dataset(conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"]))
-        upsert_dataset(conn, _dataset_with_coverage("ds-2", "tre-data", "Tampere data", ["Tampere"]))
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"])
+        )
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-2", "tre-data", "Tampere data", ["Tampere"])
+        )
         conn.commit()
 
         results = search_datasets(conn, "testi", region_names=None)
@@ -80,7 +94,9 @@ class TestSearchWithRegionFilter:
     def test_region_case_insensitive_via_like(self) -> None:
         """LIKE on SQLitessä oletuksena case-insensitive ASCII-merkeille."""
         conn = _memory_db()
-        upsert_dataset(conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"]))
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"])
+        )
         conn.commit()
 
         results = search_datasets(conn, "testi", region_names=["helsinki"])
@@ -88,8 +104,12 @@ class TestSearchWithRegionFilter:
 
     def test_region_with_other_filters(self) -> None:
         conn = _memory_db()
-        upsert_dataset(conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"]))
-        upsert_dataset(conn, _dataset_with_coverage("ds-2", "tre-data", "Tampere data", ["Tampere"]))
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-1", "hki-data", "Helsinki data", ["Helsinki"])
+        )
+        upsert_dataset(
+            conn, _dataset_with_coverage("ds-2", "tre-data", "Tampere data", ["Tampere"])
+        )
         conn.commit()
 
         # Region + source filter

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime
+from typing import Any
 
 from fastmcp import Context
 
@@ -159,7 +161,7 @@ def list_sources(ctx: Context | None = None) -> str:
     return _format_sources_from_harvesters(conn)
 
 
-def _format_sources_from_db(sources: list[dict]) -> str:
+def _format_sources_from_db(sources: list[dict[str, Any]]) -> str:
     """Muotoile lähteet sources-taulusta."""
     parts = ["# Datalähteet\n"]
     now = datetime.now(tz=UTC)
@@ -188,7 +190,7 @@ def _format_sources_from_db(sources: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def _format_sources_from_harvesters(conn) -> str:
+def _format_sources_from_harvesters(conn: sqlite3.Connection) -> str:
     """Fallback: lue lähteet harvestereista."""
     from aura.harvesters import get_all_harvesters
 

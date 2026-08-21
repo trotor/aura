@@ -18,8 +18,9 @@ def _memory_db() -> sqlite3.Connection:
 
 
 # Simuloitu PCF-data (latin-1, fixed-width, 220 merkkiä/rivi)
-# Kentät: PONOT(5)+pvm(8)+koodi(5)+nimi_fi(30)+nimi_sv(30)+lyh_fi(12)+lyh_sv(12)
-#         +voimassa(8)+tyyppi(1)+alue(5)+alue_fi(30)+alue_sv(30)+kunta(3)+kunta_fi(20)+kunta_sv(20)+kieli(1)
+# Kentät: PONOT(5)+pvm(8)+koodi(5)+nimi_fi(30)+nimi_sv(30)+lyh_fi(12)+lyh_sv(12)+
+#         voimassa(8)+tyyppi(1)+alue(5)+alue_fi(30)+alue_sv(30)+kunta(3)+kunta_fi(20)+
+#         kunta_sv(20)+kieli(1)
 SAMPLE_PCF_LINES = (
     "PONOT2026022100100HELSINKI                      HELSINGFORS                   "
     "HKI         HFORS       198810011FI1B1Helsinki-Uusimaa              "

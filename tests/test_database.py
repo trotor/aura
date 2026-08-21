@@ -148,7 +148,9 @@ def test_resource_upsert_preserves_health():
     upsert_dataset(conn, ds)
     conn.commit()
 
-    health_rows = conn.execute("SELECT resource_id FROM resource_health ORDER BY resource_id").fetchall()
+    health_rows = conn.execute(
+        "SELECT resource_id FROM resource_health ORDER BY resource_id"
+    ).fetchall()
     assert [r[0] for r in health_rows] == ["r-1", "r-2"]
 
     # Resurssin nimi päivittyi

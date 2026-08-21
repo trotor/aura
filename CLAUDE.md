@@ -40,8 +40,10 @@ BaseHarvester (base.py)
 │   └── LukeOpendataHarvester (luke_opendata.py)
 ├── PxWebHarvester (pxweb.py) — rekursiivinen puunavigaatio
 │   ├── StatfinHarvester (statfin.py)
-│   └── LukeHarvester (luke.py)
+│   ├── LukeHarvester (luke.py)
+│   └── TraficomTilastotHarvester (traficom_tilastot.py) — liikennetilastot
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
+│   ├── FinaviaHarvester (finavia.py) — lentoliikennetilastot (XLSX)
 │   ├── GtkHarvester (gtk.py)
 │   ├── KunnatHarvester (kunnat.py) — 36 kunnan WMS/WFS/ArcGIS
 │   ├── LipasHarvester (lipas.py) — Jyväskylän yliopisto liikuntapaikat
@@ -105,7 +107,7 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 | `search_structured(query, ...)` | Hae JSON-muodossa agenteille |
 | `search_by_region(region, query)` | Hae alueellisesti (kunta, maakunta, postinumero) |
 | `describe(dataset_id)` | Datasetin yksityiskohtaiset tiedot |
-| `query_data(dataset_id, ...)` | Esikatsele datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData) |
+| `query_data(dataset_id, ..., area)` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData). `area` rajaa WFS-kyselyn kuntaan, karttalehteen tai bbox:iin |
 | `recommend(topic, limit)` | Suosittele parhaita datasettejä aiheesta |
 | `compare(dataset_ids)` | Vertaile datasettejä rinnakkain (2–5 kpl) |
 | `find_related(dataset_id, limit)` | Etsi samankaltaiset datasetit |
@@ -117,6 +119,9 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 |---------|--------|
 | `area_profile(region)` | Alueprofiili: datasetit, laatu, puutteet |
 | `compare_municipalities(municipalities, theme)` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
+| `municipality_bbox(query)` | Kunnan rajauslaatikko (EPSG:3067) aluerajaukseen |
+| `find_map_sheets(scale, ...)` | Karttalehdet jotka osuvat alueelle (municipality, bbox, point, prefix) |
+| `map_sheet(sheet_id)` | Karttalehden bbox, centroidi, vanhempi ja lapset |
 
 **Laatu:**
 

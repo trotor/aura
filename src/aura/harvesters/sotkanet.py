@@ -130,7 +130,8 @@ class SotkanetHarvester(BaseHarvester):
         """Hae kaikki indikaattorit (yksi pyyntö, ~2.4 MB)."""
         try:
             response = await self._fetch(client, f"{API_BASE}/indicators")
-            return response.json()
+            indicators: list[dict[str, Any]] = response.json()
+            return indicators
         except Exception:
             logger.exception("[sotkanet] Indikaattorilistan haku epäonnistui")
             return []
@@ -160,7 +161,8 @@ class SotkanetHarvester(BaseHarvester):
     ) -> dict[str, Any]:
         """Hae indikaattorin yksityiskohtaiset metatiedot."""
         response = await self._fetch(client, f"{API_BASE}/indicators/{indicator_id}")
-        return response.json()
+        detail: dict[str, Any] = response.json()
+        return detail
 
     def _build_dataset(
         self,

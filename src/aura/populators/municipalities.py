@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 API_BASE = "https://data.stat.fi/api/classifications/v2"
 
+#: Sotkanetin aluerekisteri. Antaa 540 aluetta 15 kategoriassa; meitä
+#: kiinnostavat KUNTA, MAAKUNTA ja HYVINVOINTIALUE, joissa ``code`` on
+#: Tilastokeskuksen koodi ja ``id`` Sotkanetin oma tunnus.
+SOTKANET_REGIONS_URL = "https://sotkanet.fi/rest/1.1/regions"
+
 
 class MunicipalityPopulator(BasePopulator):
     """Populoi Suomen kuntatiedot Tilastokeskuksen luokituspalvelusta."""
@@ -35,27 +40,31 @@ class MunicipalityPopulator(BasePopulator):
 
             # 3. Hae vastaavuustaulut (osaa puuttua uusimmasta versiosta)
             region_map = await self._fetch_correspondence(
-                client, "kunta", "maakunta", version,
+                client,
+                "kunta",
+                "maakunta",
+                version,
             )
             region_names = (
-                await self._fetch_items(client, "maakunta", version, "fi")
-                if region_map else {}
+                await self._fetch_items(client, "maakunta", version, "fi") if region_map else {}
             )
 
             ely_map = await self._fetch_correspondence(
-                client, "kunta", "ely", version,
+                client,
+                "kunta",
+                "ely",
+                version,
             )
-            ely_names = (
-                await self._fetch_items(client, "ely", version, "fi")
-                if ely_map else {}
-            )
+            ely_names = await self._fetch_items(client, "ely", version, "fi") if ely_map else {}
 
             hva_map = await self._fetch_correspondence(
-                client, "kunta", "hyvinvointialue", version,
+                client,
+                "kunta",
+                "hyvinvointialue",
+                version,
             )
             hva_names = (
-                await self._fetch_items(client, "hyvinvointialue", version, "fi")
-                if hva_map else {}
+                await self._fetch_items(client, "hyvinvointialue", version, "fi") if hva_map else {}
             )
 
         # 4. Yhdistä ja tallenna
@@ -88,7 +97,9 @@ class MunicipalityPopulator(BasePopulator):
                     updated_at = excluded.updated_at
                 """,
                 (
-                    code, name_fi, name_sv,
+                    code,
+                    name_fi,
+                    name_sv,
                     region_code,
                     region_names.get(region_code, "") if region_code else None,
                     ely_code,
@@ -100,14 +111,78 @@ class MunicipalityPopulator(BasePopulator):
             count += 1
 
         self.conn.commit()
+
+        # Sotkanet-tunnukset omana vaiheenaan: ne ovat lisätieto, ei
+        # kuntataulun ydin. Jos Sotkanet on nurin, kuntien nimet ja
+        # aluejaot on silti tallennettava.
+        await self._populate_sotkanet_ids()
+
         self._update_metadata(count, version=version)
         logger.info("[%s] Tallennettu %d kuntaa", self.name, count)
         return count
 
+    async def _populate_sotkanet_ids(self) -> int:
+        """Liitä Sotkanetin omat aluetunnukset kuntariveille.
+
+        Sotkanet ei kysele kuntakoodilla vaan omalla tunnuksellaan:
+        Kuopio on kuntakoodiltaan 297 mutta Sotkanetissa alue 161.
+
+        Palauttaa päivitettyjen rivien määrän; 0 jos haku epäonnistui.
+        """
+        try:
+            async with self._make_client(timeout=60.0) as client:
+                resp = await self._fetch(client, SOTKANET_REGIONS_URL)
+                regions: list[dict[str, Any]] = resp.json()
+        except Exception as exc:  # noqa: BLE001 — lisätieto ei saa kaataa ajoa
+            logger.warning(
+                "[%s] Sotkanet-aluetunnuksia ei saatu (%s); kuntataulu on muuten ajan tasalla",
+                self.name,
+                exc,
+            )
+            return 0
+
+        by_category: dict[str, dict[str, int]] = {}
+        for r in regions:
+            code, rid = r.get("code"), r.get("id")
+            if code and rid is not None:
+                by_category.setdefault(str(r.get("category")), {})[str(code)] = int(rid)
+
+        kunnat = by_category.get("KUNTA", {})
+        maakunnat = by_category.get("MAAKUNTA", {})
+        hvat = by_category.get("HYVINVOINTIALUE", {})
+
+        updated = 0
+        for row in self.conn.execute(
+            "SELECT code, region_code, wellbeing_area_code FROM ref_municipalities"
+        ).fetchall():
+            self.conn.execute(
+                "UPDATE ref_municipalities SET sotkanet_id = ?,"
+                " sotkanet_region_id = ?, sotkanet_wellbeing_area_id = ?"
+                " WHERE code = ?",
+                (
+                    kunnat.get(row["code"]),
+                    maakunnat.get(row["region_code"]) if row["region_code"] else None,
+                    hvat.get(row["wellbeing_area_code"]) if row["wellbeing_area_code"] else None,
+                    row["code"],
+                ),
+            )
+            updated += 1
+        self.conn.commit()
+        logger.info(
+            "[%s] Sotkanet-tunnukset: %d kuntaa, %d maakuntaa, %d hyvinvointialuetta",
+            self.name,
+            len(kunnat),
+            len(maakunnat),
+            len(hvat),
+        )
+        return updated
+
     async def _find_latest_version(self, client: httpx.AsyncClient) -> str:
         """Hae uusin kunta-luokitusversio listaamalla kaikki luokitukset."""
         resp = await self._fetch(
-            client, f"{API_BASE}/classifications", params={"format": "json"},
+            client,
+            f"{API_BASE}/classifications",
+            params={"format": "json"},
         )
         urls: list[str] = resp.json()
 
@@ -136,7 +211,8 @@ class MunicipalityPopulator(BasePopulator):
         class_id = f"{classification}_1_{version}"
         url = f"{API_BASE}/classifications/{class_id}/classificationItems"
         resp = await self._fetch(
-            client, url,
+            client,
+            url,
             params={"content": "data", "meta": "max", "lang": lang, "format": "json"},
         )
         items: list[dict[str, Any]] = resp.json()
@@ -172,13 +248,18 @@ class MunicipalityPopulator(BasePopulator):
 
         try:
             resp = await self._fetch(
-                client, url, params={"format": "json"},
+                client,
+                url,
+                params={"format": "json"},
             )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 logger.warning(
                     "[%s] Vastaavuustaulu %s -> %s ei löytynyt versiolle %s",
-                    self.name, source_cls, target_cls, version,
+                    self.name,
+                    source_cls,
+                    target_cls,
+                    version,
                 )
                 return {}
             raise

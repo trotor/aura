@@ -103,8 +103,6 @@ class TestAutoTagDryRun:
 
         # Patchaa get_connection palauttamaan muisti-db
 
-        original_get_conn = None
-
         # Monkey-patch database functions
         import aura.database as db_mod
 

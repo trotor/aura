@@ -64,6 +64,7 @@ class TestTokenBucket:
         """Ensimmäiset tokenin kulutukset onnistuvat välittömästi."""
         bucket = TokenBucket(rate=5.0)
         import time
+
         start = time.monotonic()
         for _ in range(5):
             await bucket.acquire()
@@ -78,6 +79,7 @@ class TestTokenBucket:
         for _ in range(10):
             await bucket.acquire()
         import time
+
         start = time.monotonic()
         await bucket.acquire()  # pitää odottaa refill
         elapsed = time.monotonic() - start
@@ -94,8 +96,12 @@ class TestHealthResult:
 
     def test_available_result(self):
         r = HealthResult(
-            resource_id="r1", dataset_id="d1", url="https://x.fi",
-            status_code=200, is_available=True, response_time_ms=50,
+            resource_id="r1",
+            dataset_id="d1",
+            url="https://x.fi",
+            status_code=200,
+            is_available=True,
+            response_time_ms=50,
         )
         assert r.is_available
         assert r.status_code == 200
@@ -181,7 +187,9 @@ class TestCheckResource:
         client.get = AsyncMock(return_value=get_resp)
 
         result = await check_resource(
-            client, "r1", "d1",
+            client,
+            "r1",
+            "d1",
             "https://example.com/geoserver/wfs?service=WFS",
         )
         assert result.is_available
@@ -197,9 +205,12 @@ class TestDatabase:
         _sample_dataset(conn)
 
         result = HealthResult(
-            resource_id="res-1", dataset_id="test-ds",
+            resource_id="res-1",
+            dataset_id="test-ds",
             url="https://example.com/test.csv",
-            status_code=200, is_available=True, response_time_ms=42,
+            status_code=200,
+            is_available=True,
+            response_time_ms=42,
         )
         save_health_result(conn, result)
         conn.commit()
@@ -222,9 +233,11 @@ class TestDatabase:
 
         # Tallenna tarkistus
         result = HealthResult(
-            resource_id="res-1", dataset_id="test-ds",
+            resource_id="res-1",
+            dataset_id="test-ds",
             url="https://example.com/test.csv",
-            status_code=200, is_available=True,
+            status_code=200,
+            is_available=True,
         )
         save_health_result(conn, result)
         conn.commit()
@@ -254,13 +267,17 @@ class TestDatabase:
         _sample_dataset(conn)
 
         for res_id, available in [("res-1", True), ("res-2", False)]:
-            save_health_result(conn, HealthResult(
-                resource_id=res_id, dataset_id="test-ds",
-                url=f"https://example.com/{res_id}",
-                status_code=200 if available else 404,
-                is_available=available,
-                response_time_ms=100,
-            ))
+            save_health_result(
+                conn,
+                HealthResult(
+                    resource_id=res_id,
+                    dataset_id="test-ds",
+                    url=f"https://example.com/{res_id}",
+                    status_code=200 if available else 404,
+                    is_available=available,
+                    response_time_ms=100,
+                ),
+            )
         conn.commit()
 
         summary = get_health_summary(conn)
@@ -272,12 +289,17 @@ class TestDatabase:
         conn = _memory_db()
         _sample_dataset(conn)
 
-        save_health_result(conn, HealthResult(
-            resource_id="res-1", dataset_id="test-ds",
-            url="https://example.com/test.csv",
-            status_code=404, is_available=False,
-            error_message="HTTP 404",
-        ))
+        save_health_result(
+            conn,
+            HealthResult(
+                resource_id="res-1",
+                dataset_id="test-ds",
+                url="https://example.com/test.csv",
+                status_code=404,
+                is_available=False,
+                error_message="HTTP 404",
+            ),
+        )
         conn.commit()
 
         unavail = get_unavailable_resources(conn)
@@ -296,11 +318,19 @@ class TestCheckAll:
 
         # Mock check_resource palauttamaan onnistunut tulos
         async def _mock_check(
-            client: object, res_id: str, ds_id: str, url: str,
+            client: object,
+            res_id: str,
+            ds_id: str,
+            url: str,
+            resource_format: str | None = None,
         ) -> HealthResult:
             return HealthResult(
-                resource_id=res_id, dataset_id=ds_id, url=url,
-                status_code=200, is_available=True, response_time_ms=50,
+                resource_id=res_id,
+                dataset_id=ds_id,
+                url=url,
+                status_code=200,
+                is_available=True,
+                response_time_ms=50,
             )
 
         with patch("aura.health.check_resource", side_effect=_mock_check):
@@ -318,11 +348,19 @@ class TestCheckAll:
         _sample_dataset(conn)
 
         async def _mock_check(
-            client: object, res_id: str, ds_id: str, url: str,
+            client: object,
+            res_id: str,
+            ds_id: str,
+            url: str,
+            resource_format: str | None = None,
         ) -> HealthResult:
             return HealthResult(
-                resource_id=res_id, dataset_id=ds_id, url=url,
-                status_code=200, is_available=True, response_time_ms=30,
+                resource_id=res_id,
+                dataset_id=ds_id,
+                url=url,
+                status_code=200,
+                is_available=True,
+                response_time_ms=30,
             )
 
         with patch("aura.health.check_resource", side_effect=_mock_check):
@@ -334,5 +372,6 @@ class TestCheckAll:
         """Tyhjä summary → 0%."""
         s = HealthResult.__module__  # noqa: F841
         from aura.health import HealthSummary
+
         summary = HealthSummary()
         assert summary.availability_pct == 0.0

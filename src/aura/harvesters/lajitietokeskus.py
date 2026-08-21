@@ -17,10 +17,15 @@ class LajitietokeskusHarvester(StaticHarvester):
 
     Rajapinnat:
     - REST API (api.laji.fi) — vaatii rekisteröitymisen (access token)
-    - OGC API Features — paikkatietorajapinta
     - WMS — karttapalvelu
 
     API-avain: rekisteröidy osoitteessa https://api.laji.fi/v0/api-user
+
+    OGC API Features oli listalla osoitteella ``geo.laji.fi``, mutta
+    verkkotunnus ei ratkea DNS:ssä lainkaan (``api.laji.fi`` ratkeaa
+    samasta ympäristöstä, joten kyse ei ole verkkorajoituksesta).
+    Korvaavaa osoitetta ei löytynyt info.laji.fi:n paikkatietosivulta,
+    joten resurssit on poistettu eikä arvattu. (16.8.2026)
     """
 
     name = "lajitietokeskus"
@@ -40,12 +45,17 @@ class LajitietokeskusHarvester(StaticHarvester):
                 "Suomen kattavin eliölajien havaintoaineisto. Sisältää yli"
                 " 45 miljoonaa havaintoa sadoista eri lähteistä: kansalaishavainnot,"
                 " museokokoelmat, tutkimusaineistot ja viranomaisseurannat."
-                " Data on haettavissa REST API:n ja OGC API:n kautta."
+                " Data on haettavissa REST API:n kautta (vaatii API-avaimen)."
             ),
             "keywords_fi": [
-                "lajihavainnot", "eliölajit", "biodiversiteetti",
-                "luontohavainnot", "kansalaistiede", "seuranta",
-                "ympäristö", "luonto",
+                "lajihavainnot",
+                "eliölajit",
+                "biodiversiteetti",
+                "luontohavainnot",
+                "kansalaistiede",
+                "seuranta",
+                "ympäristö",
+                "luonto",
             ],
             "update_frequency": "päivittäin",
             "estimated_size_bytes": 10 * 1024**3,
@@ -55,12 +65,6 @@ class LajitietokeskusHarvester(StaticHarvester):
                     "format": "API",
                     "url": f"{LAJI_API}/warehouse/query/unit/list",
                     "name_fi": "Havaintodata — REST API (vaatii API-avaimen)",
-                },
-                {
-                    "id": "lajifi-havaintodata-ogc",
-                    "format": "API",
-                    "url": "https://geo.laji.fi/",
-                    "name_fi": "Havaintodata — OGC API Features",
                 },
                 {
                     "id": "lajifi-havaintodata-portaali",
@@ -81,8 +85,12 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " synonyymit ja luokitteluhierarkian yli 45 000 lajille."
             ),
             "keywords_fi": [
-                "taksonomia", "lajinimet", "eliölajit", "luokittelu",
-                "biologia", "luonnontieteet",
+                "taksonomia",
+                "lajinimet",
+                "eliölajit",
+                "luokittelu",
+                "biologia",
+                "luonnontieteet",
             ],
             "update_frequency": "jatkuva",
             "resources": [
@@ -112,8 +120,12 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " Kokoelmat kattavat kasvi-, eläin- ja sieninäytteitä."
             ),
             "keywords_fi": [
-                "kokoelmat", "museot", "näytteet", "luonnontieteet",
-                "eliölajit", "digitointi",
+                "kokoelmat",
+                "museot",
+                "näytteet",
+                "luonnontieteet",
+                "eliölajit",
+                "digitointi",
             ],
             "resources": [
                 {
@@ -135,8 +147,13 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " levinneisyydestä Suomessa yhtenäiskoordinaattiruuduittain."
             ),
             "keywords_fi": [
-                "kasvit", "putkilokasvit", "levinneisyys", "kasvitiede",
-                "kartasto", "atlas", "luonto",
+                "kasvit",
+                "putkilokasvit",
+                "levinneisyys",
+                "kasvitiede",
+                "kartasto",
+                "atlas",
+                "luonto",
             ],
             "license_id": "cc-by-4.0",
             "license_title": "Creative Commons Attribution 4.0",
@@ -168,8 +185,14 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " Atlaskartoitukset: 1974–79, 1986–89, 2006–2010, 2022–2025."
             ),
             "keywords_fi": [
-                "linnut", "pesimälinnut", "levinneisyys", "atlas",
-                "lintukartoitus", "eläintiede", "seuranta", "luonto",
+                "linnut",
+                "pesimälinnut",
+                "levinneisyys",
+                "atlas",
+                "lintukartoitus",
+                "eläintiede",
+                "seuranta",
+                "luonto",
             ],
             "license_id": "cc-by-4.0",
             "license_title": "Creative Commons Attribution 4.0",
@@ -200,8 +223,12 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " kaikki arvioidut eliöryhmät."
             ),
             "keywords_fi": [
-                "uhanalaisuus", "punainen lista", "IUCN",
-                "luonnonsuojelu", "lajiensuojelu", "biodiversiteetti",
+                "uhanalaisuus",
+                "punainen lista",
+                "IUCN",
+                "luonnonsuojelu",
+                "lajiensuojelu",
+                "biodiversiteetti",
                 "eliölajit",
             ],
             "resources": [
@@ -209,9 +236,7 @@ class LajitietokeskusHarvester(StaticHarvester):
                     "id": "lajifi-uhanalaisarviointi-api",
                     "format": "API",
                     "url": f"{LAJI_API}/red-list-evaluation-groups",
-                    "name_fi": (
-                        "Uhanalaisarviointi — REST API (vaatii API-avaimen)"
-                    ),
+                    "name_fi": ("Uhanalaisarviointi — REST API (vaatii API-avaimen)"),
                 },
                 {
                     "id": "lajifi-uhanalaisarviointi-portaali",
@@ -233,8 +258,11 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " vieraslajistrategian lajit."
             ),
             "keywords_fi": [
-                "vieraslajit", "haitalliset vieraslajit",
-                "invasiiviset lajit", "luonnonsuojelu", "torjunta",
+                "vieraslajit",
+                "haitalliset vieraslajit",
+                "invasiiviset lajit",
+                "luonnonsuojelu",
+                "torjunta",
             ],
             "resources": [
                 {
@@ -258,16 +286,15 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " ja WMS-muodoissa."
             ),
             "keywords_fi": [
-                "paikkatieto", "GIS", "elinympäristö", "ennustekartat",
-                "YKJ", "koordinaatisto", "eliömaakunnat",
+                "paikkatieto",
+                "GIS",
+                "elinympäristö",
+                "ennustekartat",
+                "YKJ",
+                "koordinaatisto",
+                "eliömaakunnat",
             ],
             "resources": [
-                {
-                    "id": "lajifi-paikkatieto-ogc",
-                    "format": "API",
-                    "url": "https://geo.laji.fi/",
-                    "name_fi": "Paikkatietotuotteet — OGC API Features",
-                },
                 {
                     "id": "lajifi-paikkatieto-info",
                     "format": "HTML",
@@ -288,8 +315,12 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " GBIF-solmupisteenä ja välittää aineistoja GBIF:iin."
             ),
             "keywords_fi": [
-                "GBIF", "kansainvälinen", "biodiversiteetti",
-                "havainnot", "esiintymistieto", "avoin data",
+                "GBIF",
+                "kansainvälinen",
+                "biodiversiteetti",
+                "havainnot",
+                "esiintymistieto",
+                "avoin data",
             ],
             "license_id": "cc-by-4.0",
             "license_title": "Creative Commons Attribution 4.0",
@@ -321,8 +352,12 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " Rekisteröidy: https://api.laji.fi/v0/api-user"
             ),
             "keywords_fi": [
-                "API", "rajapinta", "REST", "kehittäjät",
-                "avoin data", "lajitiedot",
+                "API",
+                "rajapinta",
+                "REST",
+                "kehittäjät",
+                "avoin data",
+                "lajitiedot",
             ],
             "update_frequency": "jatkuva",
             "access_level": "registration",
@@ -352,8 +387,12 @@ class LajitietokeskusHarvester(StaticHarvester):
                 " haun suoraan R-ympäristöön tilastollista analyysia varten."
             ),
             "keywords_fi": [
-                "R", "tilastointi", "data-analyysi", "ohjelmointi",
-                "lajitiedot", "tutkimus",
+                "R",
+                "tilastointi",
+                "data-analyysi",
+                "ohjelmointi",
+                "lajitiedot",
+                "tutkimus",
             ],
             "resources": [
                 {

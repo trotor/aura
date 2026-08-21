@@ -23,12 +23,14 @@ from aura.tools.preview import (
     _preview_odata,
     _preview_pxweb,
     _preview_wfs,
+    _wfs_params,
 )
 from aura.tools.query import (
     _find_pxweb_url,
     _parse_json_stat2,
     _resolve_values,
 )
+from aura.tools.spatial import CRS, Bbox, _bbox_param, _resolve_area
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,32 @@ _HTTP_TIMEOUT = 30.0
 _MAX_DOWNLOAD_BYTES = 1_048_576  # 1 MB
 _MAX_RESULT_ROWS = 500
 _STREAM_CHUNK_LIMIT = 8192
+
+
+def _area_unsupported(
+    fmt: str,
+    dataset: dict[str, Any],
+    query_protocol: str,
+    area: str,
+) -> str | None:
+    """Kerro miksi aluerajaus ei sovi tälle resurssille — tai None jos sopii.
+
+    Bbox-rajaus on WFS:n kieltä. Muille formaateille se on kerrottava ääneen:
+    hiljaa ohitettuna vastaus näyttäisi rajatulta vaikka kattaisi koko maan.
+    """
+    if fmt == "PXWEB" or (query_protocol == "pxweb" and _find_pxweb_url(dataset)):
+        return (
+            "PxWeb-taulua ei rajata bbox:illa — alue on taulun oma dimensio. "
+            f'Käytä sen sijaan: filters={{"Alue": ["{area}"]}}. '
+            "Kutsu ilman filttereitä listaa taulun dimensiot ja niiden arvot."
+        )
+    if fmt != "WFS":
+        return (
+            f"Aluerajaus (area) toimii vain WFS-resursseilla; tämän resurssin "
+            f"formaatti on {fmt or 'tuntematon'}. Suodata sen sijaan "
+            "filters-parametrilla, tai valitse WFS-resurssi format_hint='WFS'."
+        )
+    return None
 
 
 @mcp.tool()
@@ -46,6 +74,7 @@ async def query_data(
     resource_index: int | None = None,
     format_hint: str = "",
     max_rows: int = 20,
+    area: str = "",
     ctx: Context | None = None,
 ) -> str:
     """Hae tai esikatsele datasetin sisältöä.
@@ -60,6 +89,10 @@ async def query_data(
         resource_index: Resurssin indeksi (oletus: valitaan automaattisesti)
         format_hint: Haluttu formaatti (esim. "CSV", "JSON")
         max_rows: Tulosrivien enimmäismäärä (oletus 20, max 500)
+        area: Aluerajaus WFS-kyselyyn — kunnan nimi tai koodi ('Tampere',
+            '837'), karttalehtitunnus ('L4133A') tai bbox EPSG:3067:ssä
+            ('minx,miny,maxx,maxy'). Muunnetaan bbox:ksi kannasta, joten
+            municipality_bbox():n ja map_sheet():n tuloste kelpaa sellaisenaan.
     """
     max_rows = min(max_rows, _MAX_RESULT_ROWS)
     conn = _server._get_conn(ctx)
@@ -67,6 +100,13 @@ async def query_data(
 
     if dataset is None:
         return f"Datasettiä '{dataset_id}' ei löytynyt."
+
+    area_bbox: Bbox | None = None
+    area_label = ""
+    if area:
+        area_bbox, area_label = _resolve_area(conn, area)
+        if area_bbox is None:
+            return area_label
 
     resources = dataset.get("resources", [])
     source_name = dataset.get("source", "")
@@ -80,6 +120,13 @@ async def query_data(
     resource = _pick_resource(resources, resource_index, format_hint)
     if resource is not None:
         fmt = (resource.get("format") or "").upper()
+
+    # Aluerajaus on tarkistettava ennen verkkokutsua: hylätty rajaus ei saa
+    # tuottaa rajaamatonta tulosta, joka näyttäisi rajatulta.
+    if area_bbox is not None:
+        problem = _area_unsupported(fmt, dataset, query_protocol, area)
+        if problem:
+            return problem
 
     # Reititys formaatin ja protokollan mukaan
     try:
@@ -96,7 +143,10 @@ async def query_data(
         if not url:
             return f"Resurssilla '{res_name}' ei ole URL:ia."
 
-        header = f"### {res_name}\n**Formaatti:** {fmt} | **URL:** {url}\n\n"
+        header = f"### {res_name}\n**Formaatti:** {fmt} | **URL:** {url}\n"
+        if area_bbox is not None:
+            header += f"**Aluerajaus:** {area_label} — bbox {_bbox_param(area_bbox)}\n"
+        header += "\n"
 
         # OData (tarkista ennen JSON/API koska query_protocol voi ohjata)
         if fmt == "ODATA" or query_protocol == "odata":
@@ -122,9 +172,10 @@ async def query_data(
         # WFS
         elif fmt == "WFS":
             if filters:
-                body = await _query_wfs(url, filters, max_rows)
+                body = await _query_wfs(url, filters, max_rows, area_bbox)
             else:
-                body = await _preview_wfs(url, max_rows)
+                bbox_param = _bbox_param(area_bbox) if area_bbox else None
+                body = await _preview_wfs(url, max_rows, bbox_param)
 
         # WMS/WCS/HTML — vain linkki
         elif fmt in ("WMS", "WCS"):
@@ -339,10 +390,36 @@ async def _query_odata(
 # --- WFS ---
 
 
+async def _wfs_geometry_name(url: str) -> str | None:
+    """Selvitä geometriakentän nimi yhdellä kohteella.
+
+    Tarvitaan vain kun sekä filtterit että aluerajaus ovat käytössä: palvelin
+    hylkää ``bbox``- ja ``cql_filter``-parametrit yhdessä ("bbox and cql_filter
+    both specified but are mutually exclusive"), joten rajaus on taitettava
+    CQL:n BBOX-funktioon — ja se tarvitsee kentän nimen. GeoJSON-vastaus
+    kertoo sen kentässä ``geometry_name``.
+    """
+    base_url, params = _wfs_params(url, 1)
+    async with httpx.AsyncClient(
+        timeout=_HTTP_TIMEOUT,
+        headers={"User-Agent": user_agent()},
+    ) as client:
+        resp = await client.get(base_url, params=params, follow_redirects=True)
+        resp.raise_for_status()
+        data = resp.json()
+
+    for feature in data.get("features", []):
+        name = feature.get("geometry_name")
+        if name:
+            return str(name)
+    return None
+
+
 async def _query_wfs(
     url: str,
     filters: dict[str, list[str]],
     max_rows: int,
+    bbox: Bbox | None = None,
 ) -> str:
     """Kyselöi WFS-palvelua CQL_FILTER-parametrilla."""
     cql_parts = []
@@ -353,15 +430,22 @@ async def _query_wfs(
             or_parts = [f"{field}='{v}'" for v in values]
             cql_parts.append(f"({' OR '.join(or_parts)})")
 
-    base_url = url.split("?")[0]
-    params = {
-        "service": "WFS",
-        "version": "2.0.0",
-        "request": "GetFeature",
-        "outputFormat": "application/json",
-        "count": str(max_rows),
-        "CQL_FILTER": " AND ".join(cql_parts),
-    }
+    if bbox is not None:
+        geom = await _wfs_geometry_name(url)
+        if geom is None:
+            return (
+                "Aluerajausta ei voitu yhdistää filttereihin: palvelu ei kertonut "
+                "geometriakentän nimeä. Aja kysely joko ilman filttereitä "
+                "(area toimii silloin yksin) tai ilman area-parametria."
+            )
+        cql_parts.append(
+            f"BBOX({geom},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'{CRS}')"
+        )
+
+    # Huom: bbox ei kulje omana parametrinaan — palvelin hylkää sen
+    # yhdessä CQL_FILTERin kanssa.
+    base_url, params = _wfs_params(url, max_rows)
+    params["CQL_FILTER"] = " AND ".join(cql_parts)
 
     async with httpx.AsyncClient(
         timeout=_HTTP_TIMEOUT,

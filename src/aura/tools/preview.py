@@ -9,11 +9,12 @@ import csv
 import io
 import json
 import logging
+import urllib.parse
 from typing import Any
 
 import httpx
 
-from aura.constants import MACHINE_READABLE_FORMATS, user_agent
+from aura.constants import PREVIEWABLE_FORMATS, user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,10 @@ def _pick_resource(
         for r in resources:
             if (r.get("format") or "").upper() == hint:
                 return r
-    # Suosi koneluettavia formaatteja
+    # Suosi formaatteja joille kysely osaa tehdä jotain. Koneluettavuus on
+    # eri asia: XLSX on koneluettava mutta esikatselu ei osaa avata sitä.
     for r in resources:
-        fmt = (r.get("format") or "").upper()
-        if fmt in MACHINE_READABLE_FORMATS and fmt not in ("WMS", "WCS"):
+        if (r.get("format") or "").upper() in PREVIEWABLE_FORMATS:
             return r
     return resources[0]
 
@@ -212,9 +213,17 @@ async def _preview_pxweb(
     return "\n".join(parts)
 
 
-async def _preview_wfs(url: str, max_rows: int) -> str:
-    """Esikatsele WFS-palvelu: hae muutama feature."""
-    # Rakenna GetFeature-pyyntö
+def _wfs_params(
+    url: str, max_rows: int, bbox: str | None = None
+) -> tuple[str, dict[str, str]]:
+    """Rakenna WFS GetFeature -pyyntö säilyttäen kerroksen nimi URL:sta.
+
+    Resurssin URL on useimmiten GetCapabilities-osoite, jonka query-osa on
+    turha — mutta osassa lähteitä se kantaa myös ``typeName``-parametrin.
+    Jos se pudotetaan, palvelin vastaa "The query should specify either
+    typeName..." eikä virheestä näe että kerros katosi kyselyä
+    rakennettaessa. Siksi kerroksen nimi poimitaan talteen.
+    """
     base_url = url.split("?")[0]
     params = {
         "service": "WFS",
@@ -223,6 +232,18 @@ async def _preview_wfs(url: str, max_rows: int) -> str:
         "outputFormat": "application/json",
         "count": str(max_rows),
     }
+    query = urllib.parse.urlparse(url).query
+    for key, values in urllib.parse.parse_qs(query).items():
+        if key.lower() in ("typename", "typenames") and values:
+            params[key] = values[0]
+    if bbox:
+        params["bbox"] = bbox
+    return base_url, params
+
+
+async def _preview_wfs(url: str, max_rows: int, bbox: str | None = None) -> str:
+    """Esikatsele WFS-palvelu: hae muutama feature (valinnaisella bbox-rajauksella)."""
+    base_url, params = _wfs_params(url, max_rows, bbox)
     try:
         async with httpx.AsyncClient(
             timeout=_HTTP_TIMEOUT,

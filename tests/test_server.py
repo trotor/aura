@@ -146,8 +146,10 @@ class TestDescribe:
     async def test_describe_found(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._get_yso", return_value=None):
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch("aura.server._get_yso", return_value=None),
+        ):
             result = await describe("test-1")
         assert "Helsingin väestö" in result
         assert "vaesto.csv" in result
@@ -279,8 +281,10 @@ class TestRecommend:
     async def test_recommend_finds_results(self) -> None:
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._expand_query", return_value=""):
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch("aura.server._expand_query", return_value=""),
+        ):
             result = await recommend("väestö")
         assert "Suositellut" in result
         assert "Helsingin väestö" in result
@@ -380,19 +384,23 @@ class TestBatchEnrich:
         conn = _memory_db()
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
-            result = batch_enrich([
-                {"dataset_id": "test-1", "field": "use_case", "value": "Tutkimus"},
-                {"dataset_id": "test-2", "field": "quality_notes", "value": "Hyvä"},
-            ])
+            result = batch_enrich(
+                [
+                    {"dataset_id": "test-1", "field": "use_case", "value": "Tutkimus"},
+                    {"dataset_id": "test-2", "field": "quality_notes", "value": "Hyvä"},
+                ]
+            )
         assert "Tallennettu 2" in result
 
     def test_batch_enrich_with_errors(self) -> None:
         conn = _memory_db()
         with patch("aura.server._get_conn", return_value=conn):
-            result = batch_enrich([
-                {"dataset_id": "", "field": "use_case", "value": "x"},
-                {"dataset_id": "test-1", "field": "bad_field", "value": "x"},
-            ])
+            result = batch_enrich(
+                [
+                    {"dataset_id": "", "field": "use_case", "value": "x"},
+                    {"dataset_id": "test-1", "field": "bad_field", "value": "x"},
+                ]
+            )
         assert "Virheet" in result
         assert "puuttuva" in result
         assert "tuntematon" in result
@@ -579,6 +587,7 @@ class TestSaveSessionFindings:
         assert "quality_notes" in result
         # Findings should be cleared
         from aura.server import _fallback_findings
+
         assert len(_fallback_findings) == 0
 
     def test_save_deduplicates(self) -> None:
@@ -603,11 +612,13 @@ class TestSaveSessionFindings:
 def _seed_ref_data(conn: sqlite3.Connection) -> None:
     """Populoi viiteaineistojen testitiedot."""
     conn.execute(
-        "INSERT OR REPLACE INTO ref_metadata (name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO ref_metadata "
+        "(name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
         ("municipalities", 3, "20260101", "2026-01-01 00:00:00"),
     )
     conn.execute(
-        "INSERT OR REPLACE INTO ref_metadata (name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO ref_metadata "
+        "(name, record_count, version, populated_at) VALUES (?, ?, ?, ?)",
         ("postal_codes", 3, "20260101", "2026-01-01 00:00:00"),
     )
     for code, name_fi, name_sv, region, ely, wa in [
@@ -617,7 +628,8 @@ def _seed_ref_data(conn: sqlite3.Connection) -> None:
     ]:
         conn.execute(
             "INSERT OR REPLACE INTO ref_municipalities "
-            "(code, name_fi, name_sv, region_code, region_name_fi, ely_code, ely_name_fi, wellbeing_area_code, wellbeing_area_name_fi) "
+            "(code, name_fi, name_sv, region_code, region_name_fi, ely_code, "
+            "ely_name_fi, wellbeing_area_code, wellbeing_area_name_fi) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (code, name_fi, name_sv, "01", region, "01", ely, "01", wa),
         )
@@ -627,7 +639,8 @@ def _seed_ref_data(conn: sqlite3.Connection) -> None:
         ("33100", "Tampere", "Tammerfors", "837"),
     ]:
         conn.execute(
-            "INSERT OR REPLACE INTO ref_postal_codes (code, name_fi, name_sv, municipality_code) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO ref_postal_codes "
+            "(code, name_fi, name_sv, municipality_code) VALUES (?, ?, ?, ?)",
             (postal_code, name_fi, name_sv, muni_code),
         )
     conn.commit()
@@ -759,19 +772,36 @@ class TestBuildRegionQuery:
     """_build_region_query()-apufunktion testit."""
 
     def test_without_fts(self) -> None:
+        """Coverage-ehto esiintyy kahdesti: on_aluetaso-lipussa ja WHERE:ssä.
+
+        Lippu kertoo onko osuma alueen oma aineisto vai valtakunnallinen
+        taulu jossa kunta on dimensiona, ja se lasketaan samasta ehdosta
+        negaationa — siksi parametrit toistuvat.
+        """
         from aura.tools.search import _build_region_query
+
         sql, params = _build_region_query(["Helsinki", "Espoo"], None, 10)
         assert "LIKE ?" in sql
-        assert sql.count("LIKE ?") == 2
-        assert params == ["%Helsinki%", "%Espoo%", 10]
+        assert sql.count("LIKE ?") == 4
+        assert "on_aluetaso" in sql
+        assert params == ["%Helsinki%", "%Espoo%", "%Helsinki%", "%Espoo%", 10]
         assert "MATCH" not in sql
 
     def test_with_fts(self) -> None:
+        """Sidontajärjestys seuraa SQL-tekstiä: SELECT ennen FROM-lauseen MATCHia."""
         from aura.tools.search import _build_region_query
+
         sql, params = _build_region_query(["Tampere"], "liikenne", 5)
         assert "MATCH ?" in sql
         assert "LIKE ?" in sql
-        assert params == ["liikenne", "%Tampere%", "liikenne", 5]
+        assert params == ["%Tampere%", "liikenne", "%Tampere%", "liikenne", 5]
+
+    def test_region_level_mukana_ehdossa(self) -> None:
+        """Ilman tätä valtakunnalliset kuntatasoiset aineistot jäisivät pois."""
+        from aura.tools.search import _build_region_query
+
+        sql, _ = _build_region_query(["Kuopio"], None, 10)
+        assert "region_level" in sql
 
 
 class TestSearchByRegion:
@@ -893,7 +923,8 @@ class TestStructuralVerification:
         _seed_db(conn)
         with patch("aura.server._get_conn", return_value=conn):
             result = await search_structured(
-                "helsinki", source="hri.fi",
+                "helsinki",
+                source="hri.fi",
             )
         data = json.loads(result)
         for r in data["results"]:
@@ -916,16 +947,16 @@ class TestStructuralVerification:
         """describe() näyttää resurssien formaatit ja URL:t."""
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._get_yso", return_value=None):
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch("aura.server._get_yso", return_value=None),
+        ):
             result = await describe("test-1")
         assert "CSV" in result
         assert "vaesto.csv" in result
         assert "Helsingin kaupunki" in result
         assert (
-            "cc-by-4.0" in result.lower()
-            or "CC BY 4.0" in result
-            or "Creative Commons" in result
+            "cc-by-4.0" in result.lower() or "CC BY 4.0" in result or "Creative Commons" in result
         )
 
     @pytest.mark.asyncio
@@ -933,8 +964,10 @@ class TestStructuralVerification:
         """describe() näyttää puuttuvat enrichment-kentät."""
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._get_yso", return_value=None):
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch("aura.server._get_yso", return_value=None),
+        ):
             result = await describe("test-1")
         assert "Puuttuvat tiedot" in result
 
@@ -962,8 +995,10 @@ class TestStructuralVerification:
     async def test_recommend_empty_db(self) -> None:
         """Tyhjä tietokanta antaa selkeän viestin."""
         conn = _memory_db()
-        with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._expand_query", return_value=""):
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch("aura.server._expand_query", return_value=""),
+        ):
             result = await recommend("liikenne")
         assert "Ei datasettejä" in result
 
@@ -972,8 +1007,10 @@ class TestStructuralVerification:
         """describe() löytää datasetin nimellä (ei pelkkä id)."""
         conn = _memory_db()
         _seed_db(conn)
-        with patch("aura.server._get_conn", return_value=conn), \
-             patch("aura.server._get_yso", return_value=None):
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch("aura.server._get_yso", return_value=None),
+        ):
             result = await describe("helsingin-vaesto")
         assert "Helsingin väestö" in result
 

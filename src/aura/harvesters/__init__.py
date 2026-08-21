@@ -8,6 +8,8 @@ from aura.harvesters.digitraffic import DigitrafficHarvester
 from aura.harvesters.digitransit import DigitransitHarvester
 from aura.harvesters.eduskunta import EduskuntaHarvester
 from aura.harvesters.finap import FinapHarvester
+from aura.harvesters.finavia import FinaviaHarvester
+from aura.harvesters.finlex import FinlexHarvester
 from aura.harvesters.fluentoutdoors import FluentOutdoorsHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
@@ -26,6 +28,7 @@ from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.paikkatietoikkuna import PaikkatietoikkunaHarvester
 from aura.harvesters.paituli import PaituliHarvester
 from aura.harvesters.pohtiva import PohtivaHarvester
+from aura.harvesters.ptv import PtvHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.sanastot import SanastotHarvester
 from aura.harvesters.smartsmear import SmartSmearHarvester
@@ -39,6 +42,7 @@ from aura.harvesters.stuk import StukHarvester
 from aura.harvesters.syke import SykeHarvester
 from aura.harvesters.taustakartat import TaustakartatHarvester
 from aura.harvesters.traficom import TraficomHarvester
+from aura.harvesters.traficom_tilastot import TraficomTilastotHarvester
 from aura.harvesters.tulospalvelu import TulospalveluHarvester
 from aura.harvesters.vaalirahoitus import VaalirahoitusHarvester
 from aura.harvesters.valtiokonttori import ValtiokonttoriHarvester
@@ -56,9 +60,12 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "digitransit": DigitransitHarvester,
     "eduskunta": EduskuntaHarvester,
     "finap": FinapHarvester,
+    "finavia": FinaviaHarvester,
+    "finlex": FinlexHarvester,
     "fmi": FmiHarvester,
     "gtk": GtkHarvester,
     "traficom": TraficomHarvester,
+    "traficom-tilastot": TraficomTilastotHarvester,
     "tulospalvelu": TulospalveluHarvester,
     "metsakeskus": MetsakeskusHarvester,
     "taustakartat": TaustakartatHarvester,
@@ -75,6 +82,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "paikkatietoikkuna": PaikkatietoikkunaHarvester,
     "paituli": PaituliHarvester,
     "pohtiva": PohtivaHarvester,
+    "ptv": PtvHarvester,
     "kunnat": KunnatHarvester,
     "lajitietokeskus": LajitietokeskusHarvester,
     "koodistot": KoodistotHarvester,

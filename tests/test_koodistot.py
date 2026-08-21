@@ -205,7 +205,8 @@ class TestProcessScheme:
         conn.commit()
 
         resources = conn.execute(
-            "SELECT format, url FROM resources WHERE dataset_id = 'koodistot-jhs-kunta' ORDER BY format"
+            "SELECT format, url FROM resources WHERE "
+            "dataset_id = 'koodistot-jhs-kunta' ORDER BY format"
         ).fetchall()
         assert len(resources) == 2
         formats = {r["format"] for r in resources}

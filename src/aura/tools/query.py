@@ -18,7 +18,8 @@ def _find_pxweb_url(dataset: dict[str, Any]) -> str | None:
     """Etsi PXWEB-resurssin URL datasetistä."""
     for r in dataset.get("resources", []):
         if (r.get("format") or "").upper() == "PXWEB":
-            return r.get("url")
+            url: str | None = r.get("url")
+            return url
     return None
 
 

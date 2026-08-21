@@ -248,3 +248,198 @@ class TestQueryDataSourceProtocol:
             )
 
         assert "Test" in result
+
+
+def _seed_kunta(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO ref_municipalities"
+        " (code, name_fi, name_sv, min_x, min_y, max_x, max_y)"
+        " VALUES ('297','Kuopio','Kuopio', 494427.8, 6940948.7, 588843.3, 7030987.9)"
+    )
+    conn.commit()
+
+
+def _wfs_client(responses: list[dict]) -> tuple[AsyncMock, list[dict]]:
+    """WFS-mock joka kirjaa jokaisen kutsun parametrit."""
+    calls: list[dict] = []
+
+    def _make(payload: dict) -> MagicMock:
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json = MagicMock(return_value=payload)
+        return resp
+
+    async def _get(url, params=None, **kwargs):
+        calls.append({"url": url, "params": params or {}})
+        return _make(responses[min(len(calls) - 1, len(responses) - 1)])
+
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=_get)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client, calls
+
+
+class TestQueryDataArea:
+    """Aluerajaus (#146): area kääntyy bbox:iksi ja päätyy WFS-kyselyyn."""
+
+    @pytest.mark.anyio
+    async def test_wfs_area_lisaa_bbox_parametrin(self):
+        conn = _memory_db()
+        _seed_kunta(conn)
+        _seed(conn, resources=[
+            Resource(id="r1", name="WFS", format="WFS", url="https://example.com/wfs"),
+        ])
+
+        client, calls = _wfs_client([
+            {"features": [{"properties": {"nimi": "Kohde"}}], "totalFeatures": 1},
+        ])
+
+        with (
+            patch("aura.tools.data._server._get_conn", return_value=conn),
+            patch("aura.tools.preview.httpx.AsyncClient", return_value=client),
+        ):
+            result = await query_data("test-1", area="Kuopio")
+
+        assert calls, "WFS-kutsua ei tehty"
+        bbox = calls[-1]["params"].get("bbox", "")
+        assert bbox.startswith("494427.8,6940948.7,588843.3,7030987.9")
+        assert bbox.endswith("EPSG:3067")
+        assert "Aluerajaus" in result and "Kuopio" in result
+
+    @pytest.mark.anyio
+    async def test_area_ja_filtterit_taittuvat_cqlaan(self):
+        """Palvelin hylkää bbox+cql_filter-yhdistelmän, joten rajaus menee CQL:ään."""
+        conn = _memory_db()
+        _seed_kunta(conn)
+        _seed(conn, resources=[
+            Resource(id="r1", name="WFS", format="WFS", url="https://example.com/wfs"),
+        ])
+
+        client, calls = _wfs_client([
+            # 1. luotain: geometriakentän nimi
+            {"features": [{"geometry_name": "geom", "properties": {"nimi": "Kohde"}}]},
+            # 2. varsinainen kysely
+            {"features": [{"properties": {"nimi": "Kohde"}}], "totalFeatures": 1},
+        ])
+
+        with (
+            patch("aura.tools.data._server._get_conn", return_value=conn),
+            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+        ):
+            result = await query_data("test-1", filters={"nimi": ["Kohde"]}, area="Kuopio")
+
+        params = calls[-1]["params"]
+        assert "bbox" not in params, "bbox ja cql_filter ovat toisensa poissulkevia"
+        cql = params.get("CQL_FILTER", "")
+        assert "BBOX(geom," in cql
+        assert "'EPSG:3067'" in cql
+        assert "nimi='Kohde'" in cql
+        assert "Kohde" in result
+
+    @pytest.mark.anyio
+    async def test_tuntematon_geometriakentta_kerrotaan(self):
+        """Hiljainen pudotus antaisi tuloksen väärältä alueelta."""
+        conn = _memory_db()
+        _seed_kunta(conn)
+        _seed(conn, resources=[
+            Resource(id="r1", name="WFS", format="WFS", url="https://example.com/wfs"),
+        ])
+
+        client, _calls = _wfs_client([{"features": [{"properties": {"nimi": "X"}}]}])
+
+        with (
+            patch("aura.tools.data._server._get_conn", return_value=conn),
+            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+        ):
+            result = await query_data("test-1", filters={"nimi": ["X"]}, area="Kuopio")
+
+        assert "geometria" in result.lower()
+        assert "| X |" not in result, "rajaamaton tulos esitettiin rajattuna"
+
+    @pytest.mark.anyio
+    async def test_ei_paikkatietoformaatti_hylataan_ilman_verkkokutsua(self):
+        conn = _memory_db()
+        _seed_kunta(conn)
+        _seed(conn)  # CSV
+
+        client, calls = _wfs_client([{}])
+
+        with (
+            patch("aura.tools.data._server._get_conn", return_value=conn),
+            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+            patch("aura.tools.preview.httpx.AsyncClient", return_value=client),
+        ):
+            result = await query_data("test-1", area="Kuopio")
+
+        assert "CSV" in result
+        assert not calls, "hylätty aluerajaus ei saa aiheuttaa verkkokutsua"
+
+    @pytest.mark.anyio
+    async def test_pxweb_ohjaa_dimensiosuodattimeen(self):
+        conn = _memory_db()
+        _seed_kunta(conn)
+        _seed(conn, resources=[
+            Resource(id="r1", name="Taulu", format="PXWEB",
+                     url="https://example.com/px/table"),
+        ])
+
+        client, calls = _wfs_client([{}])
+
+        with (
+            patch("aura.tools.data._server._get_conn", return_value=conn),
+            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+        ):
+            result = await query_data("test-1", area="Kuopio")
+
+        assert "filters" in result and "Alue" in result
+        assert not calls
+
+    @pytest.mark.anyio
+    async def test_tuntematon_alue_ei_kysele_verkosta(self):
+        conn = _memory_db()
+        _seed(conn, resources=[
+            Resource(id="r1", name="WFS", format="WFS", url="https://example.com/wfs"),
+        ])
+
+        client, calls = _wfs_client([{}])
+
+        with (
+            patch("aura.tools.data._server._get_conn", return_value=conn),
+            patch("aura.tools.data.httpx.AsyncClient", return_value=client),
+            patch("aura.tools.preview.httpx.AsyncClient", return_value=client),
+        ):
+            result = await query_data("test-1", area="Atlantis")
+
+        assert "Atlantis" in result
+        assert not calls
+
+
+class TestWfsParams:
+    """Kerroksen typeName ei saa kadota kyselyä rakennettaessa."""
+
+    def test_typename_sailyy_urlista(self):
+        from aura.tools.preview import _wfs_params
+
+        url = "https://example.com/ows?service=wfs&request=GetFeature&typeName=kunnat"
+        base, params = _wfs_params(url, max_rows=5)
+        assert base == "https://example.com/ows"
+        assert params["typeName"] == "kunnat"
+        assert params["request"] == "GetFeature"
+        assert params["count"] == "5"
+
+    def test_typenames_monikko_sailyy(self):
+        from aura.tools.preview import _wfs_params
+
+        _base, params = _wfs_params(
+            "https://example.com/wfs?TYPENAMES=ns:kohteet", max_rows=1
+        )
+        assert params["TYPENAMES"] == "ns:kohteet"
+
+    def test_getcapabilities_ei_kulkeudu_lapi(self):
+        from aura.tools.preview import _wfs_params
+
+        _base, params = _wfs_params(
+            "https://example.com/wfs?request=getcapabilities", max_rows=1
+        )
+        assert params["request"] == "GetFeature"

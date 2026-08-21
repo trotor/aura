@@ -29,7 +29,10 @@ SAMPLE_KUNNAT: dict = {
                 "LANDAREA": 213.75,
                 "TOTALAREA": 715.48,
             },
-            "geometry": {"type": "Polygon", "coordinates": [[[25.0, 60.2], [25.1, 60.2], [25.1, 60.1], [25.0, 60.2]]]},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[25.0, 60.2], [25.1, 60.2], [25.1, 60.1], [25.0, 60.2]]],
+            },
         },
         {
             "type": "Feature",
@@ -40,7 +43,10 @@ SAMPLE_KUNNAT: dict = {
                 "LANDAREA": 312.26,
                 "TOTALAREA": 528.03,
             },
-            "geometry": {"type": "Polygon", "coordinates": [[[24.6, 60.2], [24.7, 60.2], [24.7, 60.1], [24.6, 60.2]]]},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[24.6, 60.2], [24.7, 60.2], [24.7, 60.1], [24.6, 60.2]]],
+            },
         },
     ],
 }
@@ -55,7 +61,10 @@ SAMPLE_MAAKUNNAT: dict = {
                 "NAMEFIN": "Uusimaa",
                 "NAMESWE": "Nyland",
             },
-            "geometry": {"type": "Polygon", "coordinates": [[[24.5, 60.5], [25.5, 60.5], [25.5, 60.0], [24.5, 60.5]]]},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[24.5, 60.5], [25.5, 60.5], [25.5, 60.0], [24.5, 60.5]]],
+            },
         },
     ],
 }
