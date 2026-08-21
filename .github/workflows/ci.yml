@@ -13,7 +13,12 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
+      # lfs: data/aura.db on LFS-tiedosto. Ilman tätä CI saa osoitintiedoston
+      # ja jokainen kantaa koskeva testi kaatuu viestiin "file is not a
+      # database" — virhe joka ei kerro mitään syystä.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
