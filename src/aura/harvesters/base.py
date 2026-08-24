@@ -14,6 +14,7 @@ import httpx
 from aura.constants import user_agent
 from aura.database import add_enrichment, get_connection, init_db
 from aura.models import Dataset
+from aura.url_normalize import normalize_resource_url
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,9 @@ class BaseHarvester(ABC):
             "metadata_modified": now,
         }
         defaults.update(kwargs)
-        return Dataset(**defaults)
+        dataset = Dataset(**defaults)
+        _normalize_resource_urls(dataset)
+        return dataset
 
     # Paikkatietoformaatit joille CRS on relevantti
     _SPATIAL_FORMATS = {"WFS", "WMS", "WCS", "GEOJSON", "GPKG", "SHP", "GML", "KML"}
@@ -228,3 +231,21 @@ class BaseHarvester(ABC):
             source_type="harvest",
             source_detail=source_detail or self.name,
         )
+
+
+def _normalize_resource_urls(dataset: Dataset) -> None:
+    """Korjaa datasetin resurssien tunnetusti rikkinäiset URL:t paikallaan.
+
+    Tehdään täällä eikä yksittäisissä harvestereissa, koska ongelmaluokka ei
+    ole lähdekohtainen: ylävirran katalogi julkaisee toimimattoman osoitteen,
+    ja Aura tallentaa sen uskollisesti. Ks. aura.url_normalize — säännöt ovat
+    kapeita ja tuntematon osoite palautuu koskemattomana.
+    """
+    for resource in dataset.resources:
+        korjattu = normalize_resource_url(resource.url)
+        if korjattu != resource.url:
+            logger.info(
+                "[%s] URL normalisoitu: %s -> %s",
+                dataset.source or "?", resource.url, korjattu,
+            )
+            resource.url = korjattu
