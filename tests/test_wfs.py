@@ -29,9 +29,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-# aura.server ensin: pelkkä aura.tools.preview -import laukaisee kiertoimportin.
-import aura.server  # noqa: F401
-from aura.tools.preview import _preview_wfs
+from aura.preview import _preview_wfs
 from aura.wfs import (
     exception_text,
     parse_capabilities,
@@ -238,7 +236,7 @@ class TestEsikatseluUudelleenyritys:
             _fixture("wfs_capabilities_arcgis.xml"),   # 2. kyvyt
             geojson,                                    # 3. uusi yritys
         ])
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=client):
             out = await _preview_wfs("https://example.test/wfs", 3)
 
         assert "PGF1000" in out, out
@@ -252,7 +250,7 @@ class TestEsikatseluUudelleenyritys:
         client, calls = self._client([
             '{"type":"FeatureCollection","features":[{"properties":{"nimi":"X"}}]}'
         ])
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=client):
             out = await _preview_wfs("https://example.test/wfs", 3)
 
         assert "X" in out
@@ -267,7 +265,7 @@ class TestEsikatseluUudelleenyritys:
             caps,
             _fixture("wfs_features_gml32.xml"),
         ])
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=client):
             out = await _preview_wfs("https://example.test/wfs", 3)
 
         assert "PGF1000" in out, out
@@ -276,7 +274,7 @@ class TestEsikatseluUudelleenyritys:
     async def test_virhe_kerrotaan_palvelimen_sanoin(self) -> None:
         """'Expecting value: line 2 column 1' ei kertonut käyttäjälle mitään."""
         client, _calls = self._client([_fixture("wfs_exception_arcgis.xml")] * 3)
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=client):
             out = await _preview_wfs("https://example.test/wfs", 3)
 
         assert "typeNames" in out or "application/json" in out

@@ -11,14 +11,14 @@ import pytest
 
 from aura.database import init_db, upsert_dataset
 from aura.models import Dataset, Resource
-from aura.server import preview_data, query_data
-from aura.tools.preview import (
+from aura.preview import (
     _format_md_table,
     _pick_resource,
     _preview_csv,
     _preview_json,
     _preview_pxweb,
 )
+from aura.server import preview_data, query_data
 
 
 def _memory_db() -> sqlite3.Connection:
@@ -157,7 +157,7 @@ class TestPreviewCsv:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
             result = await _preview_csv("https://example.com/test.csv", 10)
 
         assert "nimi" in result
@@ -179,7 +179,7 @@ class TestPreviewCsv:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
             result = await _preview_csv("https://example.com/test.csv", 10)
 
         assert "nimi" in result
@@ -202,7 +202,7 @@ class TestPreviewJson:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
             result = await _preview_json("https://example.com/data.json", 10)
 
         assert "Helsinki" in result
@@ -226,7 +226,7 @@ class TestPreviewJson:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
             result = await _preview_json("https://example.com/data.geojson", 10)
 
         assert "GeoJSON" in result
@@ -284,7 +284,7 @@ class TestPreviewPxweb:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client):
+        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
             result = await _preview_pxweb("https://example.com/api", dataset, [])
 
         assert "Testtaulu" in result
@@ -351,7 +351,7 @@ class TestPreviewDataTool:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data("test-1")
         assert "Aikakatkaisu" in result

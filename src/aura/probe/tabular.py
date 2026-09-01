@@ -12,10 +12,9 @@ from typing import Any
 
 import httpx
 
-import aura.server  # noqa: F401 — resolve circular import before tools
+from aura.preview import _preview_csv, _preview_json
 from aura.probe.types import ProbeResult, ProbeStatus
-from aura.tools.preview import _preview_csv, _preview_json
-from aura.tools.schema import infer_type, parse_md_table
+from aura.schema_infer import infer_type, parse_md_table
 
 _PREVIEW_ROWS = 10
 

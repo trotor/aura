@@ -63,7 +63,7 @@ class TestQueryDataRouting:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data("test-1")
 
@@ -115,7 +115,7 @@ class TestQueryDataRouting:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data("test-1")
 
@@ -370,7 +370,7 @@ class TestQueryDataArea:
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
             patch("aura.tools.data.httpx.AsyncClient", return_value=client),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=client),
+            patch("aura.preview.httpx.AsyncClient", return_value=client),
         ):
             result = await query_data("test-1", area="Kuopio")
 
@@ -409,7 +409,7 @@ class TestQueryDataArea:
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
             patch("aura.tools.data.httpx.AsyncClient", return_value=client),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=client),
+            patch("aura.preview.httpx.AsyncClient", return_value=client),
         ):
             result = await query_data("test-1", area="Atlantis")
 

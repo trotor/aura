@@ -1,7 +1,17 @@
 """Schema introspection -apufunktiot.
 
 Poimii kenttätiedot markdown-taulukoista ja tallentaa kantaan.
-Ei importtaa aura.server:iä (välttää sirkulaariset importit).
+
+**Miksi tämä ei ole ``aura.tools``-paketissa.** Moduuli ei tuo
+``aura.server``:iä, mutta se ei yksin riitä: alimoduulin tuonti ajaa aina
+paketin ``__init__``:n, ja ``aura/tools/__init__.py`` tuo kaikki
+työkalumoduulit rekisteröidäkseen niiden ``@mcp.tool()``-funktiot. Niistä
+kymmenen tuo palvelimen. Täällä asuessaan tämä moduuli veti siis koko
+MCP-palvelimen mukanaan jokaiselle tuojalle — myös ``aura.probe``:lle, joka
+ei käytä palvelimesta mitään.
+
+Sijainti on siis osa sopimusta, ei makuasia. Ks. ``tests/test_probe_
+riippumattomuus.py``, joka kiinnittää sen.
 """
 
 from __future__ import annotations

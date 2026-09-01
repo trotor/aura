@@ -293,7 +293,7 @@ class TestQueryPxwebTool:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data("test-csv")
         assert "nimi" in result or "Helsinki" in result
@@ -314,7 +314,7 @@ class TestQueryPxwebTool:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data("statfin-test.px")
 
@@ -429,7 +429,7 @@ class TestQueryPxwebTool:
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.tools.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
         ):
             result = await query_data("luke-test.px")
 

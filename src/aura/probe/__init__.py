@@ -29,7 +29,7 @@ from aura.probe import wfs as wfs_probe
 from aura.probe import wms as wms_probe
 from aura.probe.derive import auth_from_status
 from aura.probe.types import ProbeResult, ProbeStatus
-from aura.tools.schema import detect_joinable_keys
+from aura.schema_infer import detect_joinable_keys
 
 logger = logging.getLogger(__name__)
 

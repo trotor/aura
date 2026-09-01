@@ -14,8 +14,7 @@ from fastmcp import Context
 import aura.server as _server
 from aura.constants import user_agent
 from aura.database import get_dataset, get_latest_enrichments, get_source
-from aura.server import mcp
-from aura.tools.preview import (
+from aura.preview import (
     _format_md_table,
     _pick_resource,
     _preview_csv,
@@ -24,6 +23,7 @@ from aura.tools.preview import (
     _preview_pxweb,
     _preview_wfs,
 )
+from aura.server import mcp
 from aura.tools.query import (
     _find_pxweb_url,
     _parse_json_stat2,
@@ -202,7 +202,7 @@ async def query_data(
     # Tallenna skeema sivuvaikutuksena (best-effort)
     if resource is not None:
         try:
-            from aura.tools.schema import save_schema_from_markdown
+            from aura.schema_infer import save_schema_from_markdown
 
             save_schema_from_markdown(
                 conn, resource.get("id", ""), dataset.get("id", ""), body,

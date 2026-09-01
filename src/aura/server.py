@@ -361,6 +361,7 @@ async def _expand_query(query: str, ctx: Context | None) -> str:
 
 # Rekisteröi kaikki @mcp.tool()-funktiot alimoduuleista
 import aura.tools  # noqa: E402, F401
+from aura.preview import preview_data  # noqa: E402, F401
 
 # Re-export kaikki toolit ja apufunktiot taaksepäinyhteensopivuutta varten
 # (testit importoivat suoraan: from aura.server import search, describe, ...)
@@ -382,7 +383,6 @@ from aura.tools.enrichment import (  # noqa: E402, F401
     suggest_yso_tags,
 )
 from aura.tools.health import health_check, health_report  # noqa: E402, F401
-from aura.tools.preview import preview_data  # noqa: E402, F401
 from aura.tools.quality import (  # noqa: E402, F401
     quality_gaps,
     quality_overview,

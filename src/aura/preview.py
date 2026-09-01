@@ -1,6 +1,10 @@
 """Data preview -apufunktiot.
 
-Käytetään query_data-työkalusta. Ei rekisteröi omia MCP-työkaluja.
+Käytetään ``query_data``-työkalusta ja ``aura.probe``:sta. Ei rekisteröi omia
+MCP-työkaluja.
+
+Sijaitsee ``aura.tools``-paketin **ulkopuolella** tarkoituksella — ks.
+``aura.schema_infer`` samasta syystä kirjoitettuna.
 """
 
 from __future__ import annotations

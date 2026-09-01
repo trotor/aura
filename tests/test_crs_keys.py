@@ -138,7 +138,7 @@ class TestJoinableKeys:
         assert "joinable_keys" in VALID_ENRICHMENT_FIELDS
 
     def test_detect_kuntakoodi(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["nimi", "kuntakoodi", "vuosi", "arvo"])
         names = [k["key"] for k in keys]
@@ -146,34 +146,34 @@ class TestJoinableKeys:
         assert "vuosi" in names
 
     def test_detect_municipality_code(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["municipality_code", "value"])
         names = [k["key"] for k in keys]
         assert "kuntakoodi" in names
 
     def test_detect_postinumero(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["postinumero", "kaupunki"])
         names = [k["key"] for k in keys]
         assert "postinumero" in names
 
     def test_detect_ytunnus(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["y_tunnus", "yritys_nimi"])
         names = [k["key"] for k in keys]
         assert "y-tunnus" in names
 
     def test_no_keys_for_generic_fields(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["nimi", "kuvaus", "arvo"])
         assert keys == []
 
     def test_no_duplicates(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys([
             "kuntakoodi", "kuntanumero", "municipality_code",
@@ -182,7 +182,7 @@ class TestJoinableKeys:
         assert names.count("kuntakoodi") == 1
 
     def test_save_schema_detects_keys(self) -> None:
-        from aura.tools.schema import save_schema_from_markdown
+        from aura.schema_infer import save_schema_from_markdown
 
         conn = _memory_db()
         ds = Dataset(id="ds-keys", name="keys-test")
@@ -213,14 +213,14 @@ class TestJoinableKeys:
         assert "joinable_keys" in _LIST_FIELDS
 
     def test_detect_ely_code(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["ely_koodi", "nimi"])
         names = [k["key"] for k in keys]
         assert "ELY-koodi" in names
 
     def test_detect_maakuntakoodi(self) -> None:
-        from aura.tools.schema import detect_joinable_keys
+        from aura.schema_infer import detect_joinable_keys
 
         keys = detect_joinable_keys(["region_code", "population"])
         names = [k["key"] for k in keys]
