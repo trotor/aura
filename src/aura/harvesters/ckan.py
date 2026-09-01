@@ -42,6 +42,9 @@ class CkanHarvester(BaseHarvester):
     async def harvest(self) -> int:
         total_harvested = 0
         consecutive_errors = 0
+        # Hakuindeksistä saadut nimet, jotta ne voi verrata lähteen omaan
+        # luetteloon ajon lopuksi.
+        nahdyt: set[str] = set()
         max_consecutive_errors = 3
 
         async with self._make_client() as client:
@@ -80,6 +83,7 @@ class CkanHarvester(BaseHarvester):
                     upsert_dataset(self.conn, dataset)
                     self._enrich_from_extras(dataset.id, raw)
                     self._auto_enrich_crs(dataset)
+                    nahdyt.add(str(raw.get("name") or ""))
                     total_harvested += 1
 
                 self.conn.commit()
@@ -91,8 +95,90 @@ class CkanHarvester(BaseHarvester):
                     total_count,
                 )
 
+            total_harvested += await self._reconcile(client, nahdyt)
+
         logger.info("[%s] Harvest valmis: %d datasettiä", self.name, total_harvested)
         return total_harvested
+
+    async def _reconcile(
+        self, client: httpx.AsyncClient, nahdyt: set[str]
+    ) -> int:
+        """Nouda ne paketit joita hakuindeksi ei tunne.
+
+        CKANin ``package_search`` palauttaa vain indeksoidut paketit, ja
+        ainakin avoindata.suomi.fi:llä osa on indeksin ulkopuolella:
+        mitattuna 1.9.2026 ``package_list`` tunsi 2 740 nimeä ja haku 2 561.
+        Erotuksesta **74 oli WFS/WMS-palveluita joilla on resursseja** —
+        muun muassa koko Ahvenanmaa.
+
+        Kyse ei ole suodatuksesta. ``fq=+type:apiset`` palauttaa nollan, eli
+        kohteita ei ole indeksissä lainkaan eikä mikään kyselyparametri tuo
+        niitä esiin. Ainoa reitti on ``package_list`` + ``package_show``.
+
+        Vertailu on samalla regressiotarkistus: aukko oli näkymätön juuri
+        siksi ettei mikään verrannut harvestoitua siihen mitä lähde sanoo
+        itsellään olevan.
+
+        Kustannus on verrannollinen aukkoon eikä katalogin kokoon: jos
+        luettelot täsmäävät, tämä maksaa yhden kutsun.
+        """
+        try:
+            response = await self._fetch(client, f"{self.ckan_base_url}/package_list")
+            nimet = response.json().get("result") or []
+        except Exception as exc:  # vertailu on lisä, ei edellytys
+            logger.warning(
+                "[%s] package_list ei vastannut, vertailu ohitetaan: %s",
+                self.name,
+                exc,
+            )
+            return 0
+
+        puuttuvat = [n for n in nimet if n not in nahdyt]
+        if not puuttuvat:
+            return 0
+        logger.info(
+            "[%s] Hakuindeksin ulkopuolella %d pakettia (%d / %d luettelossa)",
+            self.name,
+            len(puuttuvat),
+            len(nahdyt),
+            len(nimet),
+        )
+
+        lisatty = 0
+        for nimi in puuttuvat:
+            raw = await self._fetch_package(client, nimi)
+            # Resurssiton paketti ei ole aineisto: showcase on sovellus ja
+            # harvest on lähdekonfiguraatio. Kummallakin nolla resurssia.
+            if not raw or not raw.get("resources"):
+                continue
+            dataset = Dataset.from_ckan(raw, source=self.ckan_source)
+            upsert_dataset(self.conn, dataset)
+            self._enrich_from_extras(dataset.id, raw)
+            self._auto_enrich_crs(dataset)
+            lisatty += 1
+
+        self.conn.commit()
+        logger.info("[%s] Vertailu toi %d aineistoa lisää", self.name, lisatty)
+        return lisatty
+
+    async def _fetch_package(
+        self, client: httpx.AsyncClient, nimi: str
+    ) -> dict[str, Any] | None:
+        """Yksi paketti nimellä, tai None jos sitä ei saada."""
+        try:
+            response = await self._fetch(
+                client,
+                f"{self.ckan_base_url}/package_show",
+                params={"id": nimi},
+            )
+            data = response.json()
+        except Exception as exc:  # yksi rikkinäinen ei saa pysäyttää muita
+            logger.debug("[%s] package_show %s: %s", self.name, nimi, exc)
+            return None
+        if not data.get("success"):
+            return None
+        tulos: dict[str, Any] | None = data.get("result")
+        return tulos
 
     # CKAN extras → enrichment-kenttä
     EXTRAS_FIELD_MAP: dict[str, str] = {
