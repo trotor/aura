@@ -88,6 +88,30 @@ RATE_LIMIT_PER_SECOND = 2.0
 #: resurssikohtaista noutoa.
 HOST_CONCURRENCY = 8
 
+#: Montako peräkkäistä 429:ää ennen kuin isännästä luovutaan tämän ajon osalta.
+#:
+#: Mitattu tarve, ei varovaisuus: ensimmäinen kattava ajo (1.9.2026) teki
+#: ``statfin.stat.fi``:lle 1 534 pyyntöä, joista **1 494 hylättiin koodilla
+#: 429**. Tahdinsäätö toimi tuolloin oikein — lokista laskettuna 1,99
+#: pyyntöä sekunnissa — joten kyse ei ollut liian nopeasta tahdista vaan
+#: siitä että palvelun raja on tiukempi kuin kaksi kutsua sekunnissa.
+#:
+#: Ensimmäiset ~40 pyyntöä menivät läpi ja loput **13 minuuttia** hylättiin,
+#: mikä on aikaikkunakohtaisen kiintiön käyttäytyminen eikä liukuvan
+#: sekuntirajan. Sellaista ei voi odottaa pois järkevässä ajassa, joten
+#: oikea vastaus on luovuttaa ja jättää loput seuraavaan ajoon.
+#:
+#: Kolme on tarkoituksella pieni: kiintiön täytyttyä *jokainen* seuraava
+#: pyyntö hylätään, joten suurempi luku ostaisi vain lisää turhaa kuormaa.
+RATE_LIMIT_GIVE_UP = 3
+
+#: Pisin odotus jonka ``Retry-After`` saa aiheuttaa.
+#:
+#: Isäntiä on 174 ja yhtäaikaisia työntekijävuoroja kahdeksan. Kymmenen
+#: minuutin odotus varaisi vuoron muilta isänniltä enemmän kuin voittaisi
+#: tälle, joten pitkän ohjeen kohdalla luovutaan sen sijaan että odotetaan.
+RATE_LIMIT_MAX_WAIT = 30.0
+
 _COMMIT_EVERY = 50
 _TIMEOUT = 30.0
 
@@ -350,13 +374,32 @@ async def run_probe(
     )
     vuorot = asyncio.Semaphore(HOST_CONCURRENCY)
 
-    async def _tyontekija(kohteet: list[dict[str, Any]]) -> None:
+    async def _koeta(
+        kohde: dict[str, Any], prober: Prober
+    ) -> tuple[ProbeResult, capture.ResponseFacts]:
+        """Yksi probe-yritys. Poiminta alustetaan ennen jokaista.
+
+        Poiminta on taskikohtainen, joten rinnakkaiset työntekijät eivät
+        sekoita toistensa vastauksia keskenään.
+        """
+        havainnot = capture.aloita()
+        try:
+            return await prober(kohde, http), havainnot
+        except Exception as e:  # prober ei saa kaataa koko ajoa
+            logger.warning("[probe] %s kaatui: %s", kohde["id"], e)
+            return (
+                ProbeResult(status=ProbeStatus.PARSE_ERROR, detail=str(e)[:100]),
+                havainnot,
+            )
+
+    async def _tyontekija(isanta: str, kohteet: list[dict[str, Any]]) -> None:
         """Aja yhden isännän kohteet sarjallisesti, tahtia noudattaen."""
         async with vuorot:
             loop = asyncio.get_running_loop()
             vali = 1.0 / RATE_LIMIT_PER_SECOND
             edellinen: float | None = None
-            for kohde in kohteet:
+            perakkaisia_rajoituksia = 0
+            for jarjestys, kohde in enumerate(kohteet):
                 probe_type = PROBE_TYPES[(kohde["format"] or "").upper()]
                 prober = active.get(probe_type)
                 if prober is None:
@@ -366,24 +409,45 @@ async def run_probe(
                     if nyt - edellinen < vali:
                         await asyncio.sleep(vali - (nyt - edellinen))
                 edellinen = loop.time()
-                # Poiminta alustetaan ennen jokaista koetta. Se on
-                # taskikohtainen, joten rinnakkaiset työntekijät eivät sekoita
-                # toistensa vastauksia keskenään.
-                havainnot = capture.aloita()
-                try:
-                    tulos = await prober(kohde, http)
-                except Exception as e:  # prober ei saa kaataa koko ajoa
-                    logger.warning("[probe] %s kaatui: %s", kohde["id"], e)
-                    tulos = ProbeResult(
-                        status=ProbeStatus.PARSE_ERROR, detail=str(e)[:100]
-                    )
+
+                tulos, havainnot = await _koeta(kohde, prober)
+
+                # Palvelun oma ohje voittaa meidän arvauksemme — mutta vain
+                # jos se on lyhyt. Pitkä odotus varaisi työntekijävuoron
+                # muilta isänniltä enemmän kuin voittaisi tälle.
+                if havainnot.rajoitettu:
+                    odotus = havainnot.odotus()
+                    if odotus is not None and odotus <= RATE_LIMIT_MAX_WAIT:
+                        await asyncio.sleep(odotus)
+                        tulos, havainnot = await _koeta(kohde, prober)
+
+                if havainnot.rajoitettu:
+                    # 429:ää **ei kirjata**. Se ei kerro resurssista mitään —
+                    # palvelu ei edes katsonut sitä. Kirjattuna se väittäisi
+                    # aineiston olevan rikki, ja koska ``select_targets``
+                    # kohtelee kirjattua eri tavalla kuin probaamatonta, väärä
+                    # tila jäisi elämään TTL:n ajaksi. Puuttuva tila on tässä
+                    # rehellisempi kuin keksitty.
+                    perakkaisia_rajoituksia += 1
+                    if perakkaisia_rajoituksia >= RATE_LIMIT_GIVE_UP:
+                        logger.warning(
+                            "[probe] %s rajoittaa (%d peräkkäistä 429) — "
+                            "%d kohdetta jätetään seuraavaan ajoon",
+                            isanta,
+                            perakkaisia_rajoituksia,
+                            len(kohteet) - jarjestys - 1,
+                        )
+                        return
+                    continue
+
+                perakkaisia_rajoituksia = 0
                 await jono.put((kohde, probe_type, tulos, havainnot))
 
     async def _kaikki_isannat() -> None:
         # Vartija ajetaan finallyssä: ilman sitä työntekijän poikkeus
         # jättäisi kuluttajan odottamaan jonoa ikuisesti.
         try:
-            await asyncio.gather(*(_tyontekija(k) for k in ryhmat.values()))
+            await asyncio.gather(*(_tyontekija(h, k) for h, k in ryhmat.items()))
         finally:
             await jono.put(None)
 

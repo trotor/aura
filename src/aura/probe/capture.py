@@ -50,12 +50,28 @@ class ResponseFacts:
     content_type: str = ""
     content_length: int | None = None
     last_modified: str = ""
+    retry_after: str = ""
     _alku: float = 0.0
 
     @property
     def saatavilla(self) -> bool:
         """Onko resurssi noudettavissa."""
         return self.status_code is not None and 200 <= self.status_code < 300
+
+    @property
+    def rajoitettu(self) -> bool:
+        """Hylkäsikö palvelu pyynnön kuormituksen takia."""
+        return self.status_code == 429
+
+    def odotus(self) -> float | None:
+        """``Retry-After`` sekunteina, tai None jos otsaketta ei ole.
+
+        Vain sekuntimuoto tuetaan. Standardi sallii myös HTTP-päiväyksen,
+        mutta sitä ei ole tarpeen jäsentää arvaukseksi: jos otsake ei ole
+        luettavissa sekunteina, kutsuja käyttää omaa peräytymistään.
+        """
+        arvo = self.retry_after.strip()
+        return float(arvo) if arvo.isdigit() else None
 
 
 _nykyinen: ContextVar[ResponseFacts | None] = ContextVar(
@@ -89,6 +105,7 @@ async def _vastaus_koukku(response: Any) -> None:
     facts.url = str(response.url)
     facts.content_type = response.headers.get("content-type", "")
     facts.last_modified = response.headers.get("last-modified", "")
+    facts.retry_after = response.headers.get("retry-after", "")
     pituus = response.headers.get("content-length", "")
     if pituus.isdigit():
         facts.content_length = int(pituus)
