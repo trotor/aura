@@ -22,17 +22,21 @@ _PREVIEW_ROWS = 10
 async def probe(resource: dict[str, Any], client: httpx.AsyncClient) -> ProbeResult:
     """Päättele sarakkeet ja tyypit esikatselusta.
 
-    ``client`` on mukana rajapinnan yhtenäisyyden vuoksi; esikatselufunktiot
-    avaavat oman yhteytensä.
+    ``client`` **välitetään** esikatselufunktioille. Se ei ole muodollisuus:
+    orkestrointi kiinnittää asiakkaaseen tapahtumakoukut, jotka poimivat
+    vastauksesta saatavuustiedot samalla noudolla (``aura.probe.capture``).
+    Aiemmin nämä funktiot avasivat oman yhteytensä, jolloin koukut eivät
+    nähneet niitä — ja koska CSV ja JSON ovat suurin osa kohteista, juuri
+    niiltä jäi terveystieto saamatta.
     """
     url = resource.get("url", "")
     fmt = (resource.get("format") or "").upper()
 
     try:
         if fmt == "CSV":
-            body = await _preview_csv(url, _PREVIEW_ROWS)
+            body = await _preview_csv(url, _PREVIEW_ROWS, client)
         else:
-            body = await _preview_json(url, _PREVIEW_ROWS)
+            body = await _preview_json(url, _PREVIEW_ROWS, client)
     except httpx.TimeoutException:
         return ProbeResult(status=ProbeStatus.TIMEOUT, detail="esikatselu")
     except httpx.HTTPStatusError as e:

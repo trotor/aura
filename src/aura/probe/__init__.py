@@ -24,6 +24,7 @@ import httpx
 
 from aura.constants import user_agent
 from aura.database import add_enrichment, upsert_probe_result, upsert_resource_schema
+from aura.probe import capture
 from aura.probe import pxweb as pxweb_probe
 from aura.probe import tabular as tabular_probe
 from aura.probe import wfs as wfs_probe
@@ -35,6 +36,10 @@ from aura.schema_infer import detect_joinable_keys
 logger = logging.getLogger(__name__)
 
 Prober = Callable[[dict[str, Any], httpx.AsyncClient], Awaitable[ProbeResult]]
+
+#: Työntekijältä kirjoittajalle kulkeva paketti: kohde, sen probe_type,
+#: proberin tulos ja samasta noudosta poimitut vastauksen tosiasiat.
+_Paketti = tuple[dict[str, Any], str, ProbeResult, capture.ResponseFacts]
 
 #: Resurssiformaatti → probe_type.
 PROBE_TYPES: dict[str, str] = {
@@ -205,6 +210,62 @@ def _store(
         _add_once(conn, target["dataset_id"], kentta, arvo)
 
 
+def _store_health(
+    conn: Any, target: dict[str, Any], havainnot: capture.ResponseFacts, now: str
+) -> None:
+    """Kirjaa saatavuus ja datan muutosaika samasta vastauksesta.
+
+    Nämä ovat aiemmin vaatineet oman kierroksensa (``aura.health``), joka
+    hakee täsmälleen samat osoitteet uudelleen. Kun probe joka tapauksessa
+    noutaa jokaisen resurssin, toinen nouto on pelkkää kuormaa sekä meille
+    että 192 ulkopuoliselle palvelimelle.
+
+    ``Last-Modified`` tallennetaan rikastuksena ``data_modified``, koska se
+    vastaa eri kysymykseen kuin katalogin ``metadata_modified``: milloin
+    **data** muuttui, ei milloin metatietue muuttui. Laatupisteiden
+    ``timeliness`` (keskiarvo 58/100, toiseksi heikoin dimensio) lasketaan
+    tällä hetkellä jälkimmäisestä.
+    """
+    if havainnot.status_code is None:
+        # Pyyntö ei koskaan saanut vastausta (timeout, DNS, yhteysvirhe).
+        # Rivi kirjataan silti: "ei vastannut" on saatavuustieto sekin.
+        conn.execute(
+            "INSERT OR REPLACE INTO resource_health (resource_id, dataset_id,"
+            " url, status_code, response_time_ms, content_type, content_length,"
+            " is_available, error_message, checked_at)"
+            " VALUES (?, ?, ?, NULL, NULL, '', NULL, 0, ?, ?)",
+            (target["id"], target["dataset_id"], target["url"], "ei vastausta", now),
+        )
+        return
+
+    conn.execute(
+        "INSERT OR REPLACE INTO resource_health (resource_id, dataset_id, url,"
+        " status_code, response_time_ms, content_type, content_length,"
+        " is_available, error_message, checked_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?)",
+        (
+            target["id"],
+            target["dataset_id"],
+            havainnot.url or target["url"],
+            havainnot.status_code,
+            havainnot.response_time_ms,
+            havainnot.content_type,
+            havainnot.content_length,
+            1 if havainnot.saatavilla else 0,
+            now,
+        ),
+    )
+    if havainnot.last_modified:
+        _add_once(
+            conn,
+            target["dataset_id"],
+            "data_modified",
+            havainnot.last_modified,
+            confidence="high",
+            source_detail="Last-Modified-otsake",
+        )
+
+
 def _add_once(
     conn: Any,
     dataset_id: str,
@@ -275,14 +336,16 @@ async def run_probe(
 
     own_client = client is None
     http = client or httpx.AsyncClient(
-        timeout=_TIMEOUT, headers={"User-Agent": user_agent("probe")}
+        timeout=_TIMEOUT,
+        headers={"User-Agent": user_agent("probe")},
+        event_hooks=capture.event_hooks(),
     )
 
     # Valmiit tulokset kulkevat jonon kautta yhdelle kirjoittajalle. SQLite-
     # yhteys ei kestä rinnakkaista kirjoitusta, joten *pyynnöt* rinnakkaistuvat
     # mutta *kirjaus* pysyy sarjallisena. Katto pitää jonon lyhyenä, jottei
     # koko tulosjoukko kerry muistiin ennen kirjoitusta.
-    jono: asyncio.Queue[tuple[dict[str, Any], str, ProbeResult] | None] = asyncio.Queue(
+    jono: asyncio.Queue[_Paketti | None] = asyncio.Queue(
         maxsize=HOST_CONCURRENCY * 2
     )
     vuorot = asyncio.Semaphore(HOST_CONCURRENCY)
@@ -303,6 +366,10 @@ async def run_probe(
                     if nyt - edellinen < vali:
                         await asyncio.sleep(vali - (nyt - edellinen))
                 edellinen = loop.time()
+                # Poiminta alustetaan ennen jokaista koetta. Se on
+                # taskikohtainen, joten rinnakkaiset työntekijät eivät sekoita
+                # toistensa vastauksia keskenään.
+                havainnot = capture.aloita()
                 try:
                     tulos = await prober(kohde, http)
                 except Exception as e:  # prober ei saa kaataa koko ajoa
@@ -310,7 +377,7 @@ async def run_probe(
                     tulos = ProbeResult(
                         status=ProbeStatus.PARSE_ERROR, detail=str(e)[:100]
                     )
-                await jono.put((kohde, probe_type, tulos))
+                await jono.put((kohde, probe_type, tulos, havainnot))
 
     async def _kaikki_isannat() -> None:
         # Vartija ajetaan finallyssä: ilman sitä työntekijän poikkeus
@@ -327,8 +394,18 @@ async def run_probe(
             paketti = await jono.get()
             if paketti is None:
                 break
-            target, probe_type, result = paketti
+            target, probe_type, result, havainnot = paketti
             i += 1
+            # Saatavuustiedot samasta noudosta. Erillinen try, koska
+            # terveystiedon puuttuminen ei saa estää skeeman tallennusta.
+            try:
+                _store_health(conn, target, havainnot, timestamp)
+            except Exception as e:
+                logger.warning(
+                    "[probe] %s terveystiedon kirjaus epäonnistui: %s",
+                    target["id"],
+                    e,
+                )
 
             # _store() ei myöskään saa kaataa koko ajoa: esim. WFS-resurssi
             # jonka typeNames kattaa useamman feature typen voi silti tuoda

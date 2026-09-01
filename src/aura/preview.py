@@ -13,6 +13,8 @@ import csv
 import io
 import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -66,13 +68,35 @@ def _format_md_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(parts)
 
 
-async def _preview_csv(url: str, max_rows: int) -> str:
-    """Esikatsele CSV-resurssi."""
+@asynccontextmanager
+async def _asiakas(
+    client: httpx.AsyncClient | None,
+) -> AsyncIterator[httpx.AsyncClient]:
+    """Käytä annettua asiakasta, tai avaa ja sulje oma.
+
+    Annettua asiakasta **ei suljeta**: se kuuluu kutsujalle, joka voi käyttää
+    sitä vielä. Tämä on olennaista probe-ajossa, jossa yksi asiakas palvelee
+    tuhansia noutoja — ja jossa asiakkaaseen on kiinnitetty tapahtumakoukut,
+    jotka poimivat vastauksesta saatavuustiedot. Oma yhteys ohittaisi koukut,
+    jolloin ne tiedot jäisivät saamatta juuri niiltä resursseilta joita on
+    eniten.
+    """
+    if client is not None:
+        yield client
+        return
     async with httpx.AsyncClient(
         timeout=_HTTP_TIMEOUT,
         headers={"User-Agent": user_agent()},
-    ) as client:
-        async with client.stream("GET", url, follow_redirects=True) as resp:
+    ) as oma:
+        yield oma
+
+
+async def _preview_csv(
+    url: str, max_rows: int, client: httpx.AsyncClient | None = None
+) -> str:
+    """Esikatsele CSV-resurssi."""
+    async with _asiakas(client) as client_:
+        async with client_.stream("GET", url, follow_redirects=True) as resp:
             resp.raise_for_status()
             content = b""
             async for chunk in resp.aiter_bytes():
@@ -102,13 +126,12 @@ async def _preview_csv(url: str, max_rows: int) -> str:
     return _format_md_table(headers, data_rows) + total_note
 
 
-async def _preview_json(url: str, max_rows: int) -> str:
+async def _preview_json(
+    url: str, max_rows: int, client: httpx.AsyncClient | None = None
+) -> str:
     """Esikatsele JSON/GeoJSON-resurssi."""
-    async with httpx.AsyncClient(
-        timeout=_HTTP_TIMEOUT,
-        headers={"User-Agent": user_agent()},
-    ) as client:
-        resp = await client.get(url, follow_redirects=True)
+    async with _asiakas(client) as client_:
+        resp = await client_.get(url, follow_redirects=True)
         resp.raise_for_status()
         # Rajoita luetun vastauksen kokoa
         text = resp.text[:_MAX_DOWNLOAD_BYTES]
