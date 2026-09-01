@@ -26,18 +26,26 @@ Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrett
 
 ## Kokeile ilman asennusta
 
-Aurasta on ylläpidetty julkinen instanssi. Liitä se tekoälyavustajaasi ilman
-asennusta ja kloonausta:
+Aurasta on **Futuai Oy:n** ylläpitämä julkinen instanssi. Liitä se
+tekoälyavustajaasi ilman asennusta ja kloonausta:
+
+```bash
+claude mcp add --transport http aura https://aura.futuai.fi/mcp
+```
+
+Tai käsin asetustiedostoon:
 
 ```json
 {
   "mcpServers": {
-    "aura": { "url": "https://aura.futuai.fi/mcp" }
+    "aura": { "type": "http", "url": "https://aura.futuai.fi/mcp" }
   }
 }
 ```
 
-Aineistoja voi myös selata selaimessa: **[aura.futuai.fi](https://aura.futuai.fi/)**
+Konfiguraatiot muille asiakkaille (Claude Desktop, Cursor, Windsurf) ovat
+**[käyttöönotto-ohjeessa](docs/MCP_SETUP.md)**. Aineistoja voi myös selata
+selaimessa: **[aura.futuai.fi](https://aura.futuai.fi/)**
 
 Muutama asia joka kannattaa tietää instanssista:
 
