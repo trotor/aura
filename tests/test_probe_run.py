@@ -10,11 +10,14 @@ poissa oleva palvelu ei palaa viikossa, hidas palvelu voi.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
+import time
 from typing import Any
 
 import pytest
 
+import aura.probe as probe_mod
 from aura.database import init_db, upsert_probe_result
 from aura.probe import TTL_DAYS, run_probe, select_targets
 from aura.probe.types import ProbeResult, ProbeStatus
@@ -511,3 +514,130 @@ class TestAjo:
             "SELECT status FROM probe_results WHERE resource_id = 'r-csv'"
         ).fetchone()
         assert csv_rivi["status"] == "ok"
+
+
+class TestTahdinsaatoJaRinnakkaisuus:
+    """Kolmas asia jonka moduulin docstring lupaa, mutta jota ei testattu.
+
+    Speksi (``docs/superpowers/specs/2026-08-19-probe-vaihe-design.md``) sanoo:
+    *"Tahdinsäätö on 2 kutsua sekunnissa per isäntä, rinnakkaisuus isäntien
+    välillä."* Molemmat puoliskot tarvitaan ja ne ovat vastakkaisia — pelkkä
+    tahdinsäätö ilman rinnakkaisuutta tekee kattavasta ajosta mahdottoman
+    (31 466 probattavaa resurssia), ja pelkkä rinnakkaisuus ilman
+    isäntäkohtaista tahtia törmää 429-rajoitukseen.
+
+    Testit mittaavat kestoa, joten kynnykset ovat väljiä: väite on
+    "sarjallinen vs. rinnakkainen", ei tarkka sekuntimäärä.
+    """
+
+    @staticmethod
+    def _conn_isannilla(hosts: list[str]) -> sqlite3.Connection:
+        """Kanta jossa on yksi CSV-resurssi kutakin annettua isäntää kohti."""
+        c = sqlite3.connect(":memory:")
+        c.row_factory = sqlite3.Row
+        init_db(c)
+        c.execute(
+            "INSERT INTO datasets (id, name, title, source)"
+            " VALUES ('d1','d1','D','testi')"
+        )
+        for i, host in enumerate(hosts):
+            c.execute(
+                "INSERT INTO resources (id, dataset_id, name, format, url)"
+                " VALUES (?, 'd1', ?, 'CSV', ?)",
+                (f"r{i}", f"r{i}", f"https://{host}/data{i}.csv"),
+            )
+        c.commit()
+        return c
+
+    @staticmethod
+    def _hidas_prober(kesto: float) -> Any:
+        async def prober(resource: dict[str, Any], client: Any) -> ProbeResult:
+            await asyncio.sleep(kesto)
+            return ProbeResult(status=ProbeStatus.OK, http_status=200)
+
+        return prober
+
+    @pytest.mark.anyio
+    async def test_eri_isannat_ajetaan_rinnakkain(self) -> None:
+        """Neljä isäntää, jokainen 0,1 s — rinnakkaisena ~0,1 s, ei 0,4 s."""
+        conn = self._conn_isannilla([f"h{i}.test" for i in range(4)])
+        alku = time.monotonic()
+        yhteenveto = await run_probe(
+            conn, now=NOW, limit=10, probers={"csv": self._hidas_prober(0.1)}
+        )
+        kesto = time.monotonic() - alku
+        assert yhteenveto["ok"] == 4
+        assert kesto < 0.25, f"näyttää sarjalliselta: {kesto:.2f} s"
+
+    @pytest.mark.anyio
+    async def test_saman_isannan_kutsut_pysyvat_sarjallisina(self) -> None:
+        """Sama isäntä neljästi: tahdin on säilyttävä, ei saa rinnakkaistua."""
+        conn = self._conn_isannilla(["sama.test"] * 4)
+        alku = time.monotonic()
+        yhteenveto = await run_probe(
+            conn, now=NOW, limit=10, probers={"csv": self._hidas_prober(0.1)}
+        )
+        kesto = time.monotonic() - alku
+        assert yhteenveto["ok"] == 4
+        assert kesto >= 0.3, f"saman isännän kutsut rinnakkaistuivat: {kesto:.2f} s"
+
+    @pytest.mark.anyio
+    async def test_saman_isannan_kutsujen_vali_on_tahdin_mukainen(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Tahdinsäätö itsessään, ilman että proberin kesto peittää sen."""
+        monkeypatch.setattr(probe_mod, "RATE_LIMIT_PER_SECOND", 20.0)
+        conn = self._conn_isannilla(["sama.test"] * 3)
+        hetket: list[float] = []
+
+        async def prober(resource: dict[str, Any], client: Any) -> ProbeResult:
+            hetket.append(time.monotonic())
+            return ProbeResult(status=ProbeStatus.OK, http_status=200)
+
+        await run_probe(conn, now=NOW, limit=10, probers={"csv": prober})
+        assert len(hetket) == 3
+        valit = [b - a for a, b in zip(hetket, hetket[1:], strict=False)]
+        # 1/20 s = 0,05 s; sallitaan ajastimen epätarkkuus alaspäin.
+        assert all(v >= 0.04 for v in valit), f"tahti ei pitänyt: {valit}"
+
+    @pytest.mark.anyio
+    async def test_rinnakkaisuudella_on_katto(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Isäntiä voi olla tuhansia; yhtäaikaisia pyyntöjä ei saa olla.
+
+        Ilman kattoa kattava ajo avaisi yhtä monta yhteyttä kuin on isäntiä,
+        mikä kaataisi sekä paikallisen prosessin että kohteliaisuuden.
+        """
+        monkeypatch.setattr(probe_mod, "HOST_CONCURRENCY", 2)
+        conn = self._conn_isannilla([f"h{i}.test" for i in range(6)])
+        yhtaaikaa = 0
+        huippu = 0
+
+        async def prober(resource: dict[str, Any], client: Any) -> ProbeResult:
+            nonlocal yhtaaikaa, huippu
+            yhtaaikaa += 1
+            huippu = max(huippu, yhtaaikaa)
+            await asyncio.sleep(0.05)
+            yhtaaikaa -= 1
+            return ProbeResult(status=ProbeStatus.OK, http_status=200)
+
+        yhteenveto = await run_probe(conn, now=NOW, limit=10, probers={"csv": prober})
+        assert yhteenveto["ok"] == 6
+        assert huippu <= 2, f"katto ei pitänyt, huippu {huippu}"
+
+    @pytest.mark.anyio
+    async def test_kaikki_tulokset_tallentuvat_rinnakkaisajossa(self) -> None:
+        """Kirjoitukset menevät yhdestä paikasta, joten yhtään ei saa kadota.
+
+        SQLite-yhteys ei kestä rinnakkaista kirjoitusta, joten proberit
+        ajetaan rinnakkain mutta tulokset kirjataan sarjallisesti. Jos tämä
+        menisi väärin, osa riveistä katoaisi hiljaa.
+        """
+        conn = self._conn_isannilla([f"h{i}.test" for i in range(12)])
+        yhteenveto = await run_probe(
+            conn, now=NOW, limit=50, probers={"csv": self._hidas_prober(0.01)}
+        )
+        assert yhteenveto["ok"] == 12
+        rivit = conn.execute("SELECT COUNT(*) FROM probe_results").fetchone()[0]
+        assert rivit == 12, f"kantaan päätyi {rivit}/12"

@@ -15,6 +15,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
@@ -61,6 +62,26 @@ TTL_DAYS: dict[str, int] = {
 #: ajo PxWebiä vasten menetti 3 808 taulua 3 928:sta, koska HTTP 429 näytti
 #: tyhjältä tulokselta eikä virheeltä.
 RATE_LIMIT_PER_SECOND = 2.0
+
+#: Montako isäntää probataan yhtä aikaa.
+#:
+#: Tahdinsäätö on isäntäkohtainen, joten rinnakkaisuus isäntien välillä ei
+#: kiristä yhdenkään palvelun kohtelua. Katto on silti tarpeen: kannassa on
+#: satoja eri isäntiä, ja ilman rajaa kattava ajo avaisi yhtä monta
+#: yhteyttä kerralla.
+#:
+#: **Kahdeksaa suuremmasta ei ole hyötyä, ja syy on mitattu (1.9.2026).**
+#: Probattavia resursseja on 16 979 ja eri isäntiä 192, mutta jakauma on
+#: äärimmäisen vino: ``sotkanet.fi`` yksin on 7 545 resurssia eli 44 %
+#: kaikesta. Kahden kutsun sekuntitahdilla koko kierros kestää sarjallisena
+#: ~2,4 h ja tällä katolla ~1,0 h — ja se tunti **on** sotkanet.fi, ei
+#: jonotus. Katon nostaminen ei siis lyhennä ajoa lainkaan.
+#:
+#: Jos kierrosta halutaan vielä lyhentää, ainoa tehoava keino on käsitellä
+#: sotkanet.fi erikseen: sen 3 772 templatoitua CSV-URLia ja yhtä monta
+#: JSON-URLia osoittavat samaan rajapintaan, joten ne eivät tarvitse
+#: resurssikohtaista noutoa.
+HOST_CONCURRENCY = 8
 
 _COMMIT_EVERY = 50
 _TIMEOUT = 30.0
@@ -243,36 +264,71 @@ async def run_probe(
     if not targets:
         return dict(summary)
 
-    last_call: dict[str, float] = {}
-    loop = asyncio.get_running_loop()
-
-    async def _throttle(url: str) -> None:
-        host = urlparse(url).netloc
-        vali = 1.0 / RATE_LIMIT_PER_SECOND
-        edellinen = last_call.get(host)
-        nyt = loop.time()
-        if edellinen is not None and nyt - edellinen < vali:
-            await asyncio.sleep(vali - (nyt - edellinen))
-        last_call[host] = loop.time()
+    # Ryhmittely isännän mukaan on koko rinnakkaisuuden perusta. Kun jokaisella
+    # isännällä on täsmälleen yksi työntekijä, tahdinsäätö ei enää tarvitse
+    # jaettua kirjanpitoa vaan seuraa rakenteesta: työntekijä odottaa oman
+    # edellisen kutsunsa jälkeen. Aiempi ``last_call``-sanakirja olisi ollut
+    # rinnakkaisessa ajossa tarkista-sitten-toimi -kilpailu.
+    ryhmat: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for kohde in targets:
+        ryhmat[urlparse(kohde["url"]).netloc].append(kohde)
 
     own_client = client is None
     http = client or httpx.AsyncClient(
         timeout=_TIMEOUT, headers={"User-Agent": user_agent("probe")}
     )
+
+    # Valmiit tulokset kulkevat jonon kautta yhdelle kirjoittajalle. SQLite-
+    # yhteys ei kestä rinnakkaista kirjoitusta, joten *pyynnöt* rinnakkaistuvat
+    # mutta *kirjaus* pysyy sarjallisena. Katto pitää jonon lyhyenä, jottei
+    # koko tulosjoukko kerry muistiin ennen kirjoitusta.
+    jono: asyncio.Queue[tuple[dict[str, Any], str, ProbeResult] | None] = asyncio.Queue(
+        maxsize=HOST_CONCURRENCY * 2
+    )
+    vuorot = asyncio.Semaphore(HOST_CONCURRENCY)
+
+    async def _tyontekija(kohteet: list[dict[str, Any]]) -> None:
+        """Aja yhden isännän kohteet sarjallisesti, tahtia noudattaen."""
+        async with vuorot:
+            loop = asyncio.get_running_loop()
+            vali = 1.0 / RATE_LIMIT_PER_SECOND
+            edellinen: float | None = None
+            for kohde in kohteet:
+                probe_type = PROBE_TYPES[(kohde["format"] or "").upper()]
+                prober = active.get(probe_type)
+                if prober is None:
+                    continue
+                if edellinen is not None:
+                    nyt = loop.time()
+                    if nyt - edellinen < vali:
+                        await asyncio.sleep(vali - (nyt - edellinen))
+                edellinen = loop.time()
+                try:
+                    tulos = await prober(kohde, http)
+                except Exception as e:  # prober ei saa kaataa koko ajoa
+                    logger.warning("[probe] %s kaatui: %s", kohde["id"], e)
+                    tulos = ProbeResult(
+                        status=ProbeStatus.PARSE_ERROR, detail=str(e)[:100]
+                    )
+                await jono.put((kohde, probe_type, tulos))
+
+    async def _kaikki_isannat() -> None:
+        # Vartija ajetaan finallyssä: ilman sitä työntekijän poikkeus
+        # jättäisi kuluttajan odottamaan jonoa ikuisesti.
+        try:
+            await asyncio.gather(*(_tyontekija(k) for k in ryhmat.values()))
+        finally:
+            await jono.put(None)
+
+    tuottaja = asyncio.create_task(_kaikki_isannat())
     try:
-        for i, target in enumerate(targets, 1):
-            probe_type = PROBE_TYPES[(target["format"] or "").upper()]
-            prober = active.get(probe_type)
-            if prober is None:
-                continue
-            await _throttle(target["url"])
-            try:
-                result = await prober(target, http)
-            except Exception as e:  # prober ei saa kaataa koko ajoa
-                logger.warning("[probe] %s kaatui: %s", target["id"], e)
-                result = ProbeResult(
-                    status=ProbeStatus.PARSE_ERROR, detail=str(e)[:100]
-                )
+        i = 0
+        while True:
+            paketti = await jono.get()
+            if paketti is None:
+                break
+            target, probe_type, result = paketti
+            i += 1
 
             # _store() ei myöskään saa kaataa koko ajoa: esim. WFS-resurssi
             # jonka typeNames kattaa useamman feature typen voi silti tuoda
@@ -321,7 +377,14 @@ async def run_probe(
             if i % _COMMIT_EVERY == 0:
                 conn.commit()
         conn.commit()
+        # Nostaa työntekijässä tapahtuneen poikkeuksen. Ilman tätä ajo
+        # päättyisi näennäisen siististi vaikka osa isännistä olisi kaatunut.
+        await tuottaja
     finally:
+        if not tuottaja.done():
+            tuottaja.cancel()
+            with suppress(asyncio.CancelledError):
+                await tuottaja
         if own_client:
             await http.aclose()
 
