@@ -210,10 +210,11 @@ LIMIT :limit
 | `parse_error`, `empty` | 30 vrk | vika on rakenteessa, ei hetkessä |
 
 **Tahdinsäätö on 2 kutsua sekunnissa per isäntä**, rinnakkaisuus isäntien välillä.
-Tämä ei ole arvaus: aura-pron dimensiohaku menetti 3 808 taulua 3 928:sta kun
-6-rinnakkainen ajo törmäsi PxWebin 429-rajoitukseen — ja 429 näytti tyhjältä
-tulokselta, ei virheeltä. Nykyinen `--delay 0.3` on globaali eikä katso isäntää,
-joten se on yhtä aikaa liian hidas monelle palvelimelle ja liian nopea yhdelle.
+Tämä ei ole arvaus vaan mitattu: `statfin.stat.fi` palauttaa HTTP 429:n herkästi,
+ja kuuden rinnakkaisen pyynnön ajossa valtaosa PxWeb-tauluista jäi hakematta —
+429 näytti **tyhjältä tulokselta eikä virheeltä**, joten ajo näytti onnistuneen.
+Nykyinen `--delay 0.3` on globaali eikä katso isäntää, joten se on yhtä aikaa
+liian hidas monelle palvelimelle ja liian nopea yhdelle.
 
 **Jatkaminen** on kirjoitus per resurssi, commit joka 50. Keskeytys menettää
 korkeintaan 50 kohdetta.
