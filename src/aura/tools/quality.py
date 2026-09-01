@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastmcp import Context
 
@@ -14,13 +15,28 @@ from aura.server import mcp
 
 logger = logging.getLogger(__name__)
 
-# Yhteinen vakio laatudimensioiden nimille (käytetään useassa paikassa)
+# Yhteinen vakio laatudimensioiden nimille (käytetään useassa paikassa).
+#
+# Tässä ovat **vain ne dimensiot joista ``overall`` lasketaan**, koska
+# ``describe`` renderöi tämän kokonaispisteiden erittelynä. Agenttivalmius
+# ei kuulu tänne: se on rinnakkainen mittari eikä osa kokonaislukua, ja
+# tähän listattuna se näyttäisi selittävän lukua johon se ei vaikuta.
 DIMENSION_LABELS: dict[str, str] = {
     "completeness": "Täydellisyys",
     "timeliness": "Ajantasaisuus",
     "accessibility": "Saavutettavuus",
     "documentation": "Dokumentointi",
 }
+
+#: Agenttivalmius on oma lukunsa, ei ``overall``:n osa.
+AGENT_READINESS = "agent_readiness"
+AGENT_READINESS_LABEL = "Agenttivalmius"
+
+#: Kaikki pisteytettävät dimensiot. Johdettu eikä toisteltu, jotta uuden
+#: dimension lisääminen ei jää työkaluilta huomaamatta.
+SCORED_DIMENSIONS: frozenset[str] = frozenset(
+    {"overall", AGENT_READINESS, *DIMENSION_LABELS}
+)
 
 
 @mcp.tool()
@@ -41,7 +57,13 @@ def quality_report(
     quality = get_quality_scores(conn, ds_id)
     if not quality:
         # Laske lennossa
-        from aura.quality import calculate_quality, save_quality_scores
+        from aura.quality import (
+            AgentFacts,
+            calculate_agent_readiness,
+            calculate_quality,
+            collect_agent_facts,
+            save_quality_scores,
+        )
 
         resources = [
             dict(r) for r in conn.execute(
@@ -53,7 +75,12 @@ def quality_report(
             (ds_id,),
         ).fetchone()
         enr_count = enr_row[0] if enr_row else 0
-        scores = calculate_quality(dataset, resources, enr_count)
+        scores: dict[str, tuple[float, dict[str, Any]] | None] = dict(
+            calculate_quality(dataset, resources, enr_count)
+        )
+        scores[AGENT_READINESS] = calculate_agent_readiness(
+            collect_agent_facts(conn).get(ds_id, AgentFacts())
+        )
 
         # Tallennus on parhaan yrityksen sivuvaikutus, ei lukupolun
         # edellytys. Toimitettavassa kannassa jokainen datasetti on jo
@@ -74,8 +101,9 @@ def quality_report(
         # tallennus ei koskaan onnistu, joten uudelleenluku palauttaisi
         # aina None:n.
         quality = {
-            dim: {"score": score, "details": details}
-            for dim, (score, details) in scores.items()
+            dim: {"score": arvo[0], "details": arvo[1]}
+            for dim, arvo in scores.items()
+            if arvo is not None
         }
 
     if not quality:
@@ -98,6 +126,29 @@ def quality_report(
                 for k, v in details.items():
                     if not k.endswith("_score"):
                         parts.append(f"    {k}: {v}")
+
+    # Agenttivalmius omana lukunaan, ei kokonaispisteiden erittelynä.
+    # Rivi puuttuu kokonaan jos datasettiä ei ole probattu — silloin luku
+    # olisi arvaus, ja arvaus tässä kohtaa olisi huonompi kuin tyhjä.
+    if AGENT_READINESS in quality:
+        ar = quality[AGENT_READINESS]["score"]
+        parts.append(f"\n**{AGENT_READINESS_LABEL}: {ar:.0f}/100**")
+        parts.append("*Pääseekö agentti dataan käsiksi ilman ihmistä.*")
+        liput = quality[AGENT_READINESS].get("details", {})
+        if isinstance(liput, dict):
+            selitteet = {
+                "endpoint_responds": "rajapinta vastaa",
+                "schema_known": "kenttien muoto tunnetaan",
+                "no_auth": "ei vaadi tunnistautumista",
+            }
+            for avain, selite in selitteet.items():
+                if avain in liput:
+                    merkki = "\u2713" if liput[avain] else "\u2717"
+                    parts.append(f"  {merkki} {selite}")
+    else:
+        parts.append(
+            f"\n*{AGENT_READINESS_LABEL}: ei mitattu — datasettiä ei ole probattu.*"
+        )
 
     return "\n".join(parts)
 
@@ -194,20 +245,21 @@ def quality_ranking(
     """Parhaiten pisteytetyt datasetit laadun mukaan.
 
     Args:
-        dimension: Laatudimensio: "overall", "completeness", "timeliness",
-            "accessibility", "documentation"
+        dimension: Laatudimensio: "overall", "agent_readiness",
+            "completeness", "timeliness", "accessibility", "documentation".
+            "agent_readiness" on eri asia kuin muut: se mittaa pääseekö
+            agentti dataan käsiksi, ei sitä miten hyvin aineisto on kuvattu.
         source: Rajaa lähteeseen (tyhjä = kaikki)
         limit: Tulosten enimmäismäärä (oletus 10)
     """
     limit = clamp(limit, MAX_LIST_LIMIT)
     conn = _server._get_conn(ctx)
 
-    valid_dims = {
-        "overall", "completeness", "timeliness",
-        "accessibility", "documentation",
-    }
-    if dimension not in valid_dims:
-        return f"Tuntematon dimensio '{dimension}'. Valitse: {', '.join(sorted(valid_dims))}"
+    if dimension not in SCORED_DIMENSIONS:
+        return (
+            f"Tuntematon dimensio '{dimension}'. "
+            f"Valitse: {', '.join(sorted(SCORED_DIMENSIONS))}"
+        )
 
     if source:
         rows = conn.execute(
@@ -243,6 +295,7 @@ def quality_ranking(
 
     dim_labels_full = {
         "overall": "Kokonaislaatu",
+        AGENT_READINESS: AGENT_READINESS_LABEL,
         **DIMENSION_LABELS,
     }
     label = dim_labels_full.get(dimension, dimension)

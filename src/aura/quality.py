@@ -1,10 +1,24 @@
-"""Datasettien automaattinen laatupisteytys neljässä dimensiossa.
+"""Datasettien automaattinen laatupisteytys.
 
-Dimensiot:
+**Kaksi lukua, jotka mittaavat eri asiaa.**
+
+``overall`` on metatiedon laatu — kuinka hyvin aineisto on *kuvattu*. Se
+lasketaan neljästä dimensiosta:
+
 - completeness (25 %): metatiedon täydellisyys
 - timeliness (30 %): aineiston tuoreus
 - accessibility (25 %): saavutettavuus ja koneluettavuus
 - documentation (20 %): dokumentointi ja rikastukset
+
+``agent_readiness`` on eri kysymys: pääseekö agentti dataan käsiksi ilman
+ihmistä. Se lasketaan probe-havainnoista eikä metatiedosta, ja sen tarve on
+mitattu — 1.9.2026 kannassa oli 434 datasettiä joiden ``overall`` on ≥ 85 ja
+joista 67:n skeemaa ei tunneta lainkaan. Hyvin kuvattu aineisto voi olla
+saavuttamaton, ja hyvin saavutettava huonosti kuvattu.
+
+Luvut pidetään erillään tarkoituksella. Agenttivalmius **ei ole osa
+``overall``-lukua**: ``DIMENSION_WEIGHTS`` on ennallaan, joten vanha luku
+tarkoittaa yhä samaa kuin ennen eikä yksikään aiempi arvo liiku.
 """
 
 from __future__ import annotations
@@ -13,6 +27,8 @@ import json
 import logging
 import sqlite3
 from collections import defaultdict
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -198,17 +214,145 @@ def calculate_quality(
     return scores
 
 
+# --- Agenttivalmius ---
+#
+# Nykyinen laatupiste mittaa **metatiedon täydellisyyttä**. Se on hyvä siinä
+# mitä se mittaa, mutta se ei kerro pääseekö dataan käsiksi — ja agentille
+# juuri jälkimmäinen ratkaisee. Mitattuna 1.9.2026: 434 datasettiä saa
+# laatupisteet ≥ 85, ja niistä 67:n skeemaa ei tunneta lainkaan.
+#
+# Agenttivalmius on **rinnakkainen mittari, ei korjaus vanhaan**:
+# ``DIMENSION_WEIGHTS`` pysyy ennallaan, joten ``overall`` tarkoittaa yhä
+# samaa kuin ennen eikä yksikään olemassa oleva luku liiku.
+
+
+@dataclass(frozen=True)
+class AgentFacts:
+    """Mitä probe on havainnut yhdestä datasetistä.
+
+    ``probed`` on erillään muista tarkoituksella: probaamaton datasetti ei
+    ole sama kuin probattu ja epäonnistunut. Ensimmäinen on meidän
+    puutteemme, toinen palvelun.
+    """
+
+    probed: bool = False
+    probe_ok: bool = False
+    schema_known: bool = False
+    available: bool | None = None
+    auth_required: bool = False
+
+
+#: Agenttivalmiuden osapisteet. Painot on valittu sen mukaan mikä *estää*
+#: agentin, ei sen mukaan mikä on helppo mitata.
+#:
+#: Vastaamaton rajapinta ja tuntematon skeema ovat kumpikin täysiä esteitä:
+#: ensimmäisestä ei saa dataa, jälkimmäisestä ei osaa muodostaa kyselyä.
+#: Tunnistautuminen painaa vähemmän, koska ihminen voi hoitaa sen kerran —
+#: kaatuvaa rajapintaa ei voi kiertää mitenkään.
+_READINESS_WEIGHTS = {"endpoint_responds": 40.0, "schema_known": 40.0, "no_auth": 20.0}
+
+
+def calculate_agent_readiness(
+    facts: AgentFacts,
+) -> tuple[float, dict[str, Any]] | None:
+    """Pystyykö agentti hakemaan tästä dataa ilman ihmistä.
+
+    Palauttaa ``None`` jos datasettiä ei ole probattu. Se ei ole nolla vaan
+    **mittaamaton**, ja ero on olennainen: nolla väittäisi aineiston olevan
+    käyttökelvoton, vaikka kyse on siitä ettemme ole katsoneet. Kutsuja
+    jättää tällöin rivin kirjoittamatta — puuttuvan tilan näkee, keksityn
+    ei. Sama periaate kuin 429:n kirjaamatta jättämisessä probessa.
+
+    Returns:
+        ``(pisteet, liput)`` tai ``None``. Liput kertovat *miksi* pisteet
+        ovat mitä ovat: luku järjestää, liput selittävät.
+    """
+    if not facts.probed:
+        return None
+
+    liput = {
+        "endpoint_responds": facts.probe_ok or facts.available is True,
+        "schema_known": facts.schema_known,
+        "no_auth": not facts.auth_required,
+    }
+    pisteet = sum(_READINESS_WEIGHTS[k] for k, ok in liput.items() if ok)
+    return pisteet, {**liput, "auth_required": facts.auth_required}
+
+
+def collect_agent_facts(conn: sqlite3.Connection) -> dict[str, AgentFacts]:
+    """Kokoa probe-havainnot datasetiteittäin yhdellä kyselykierroksella.
+
+    Vain probatut datasetit päätyvät tulokseen; muille ei ole mitään
+    sanottavaa eikä niistä pidä keksiä mitään.
+    """
+    probattu: dict[str, bool] = {}
+    for ds_id, status in conn.execute(
+        "SELECT dataset_id, status FROM probe_results"
+    ).fetchall():
+        probattu[ds_id] = probattu.get(ds_id, False) or status == "ok"
+
+    skeema = {
+        r[0] for r in conn.execute("SELECT DISTINCT dataset_id FROM resource_schema")
+    }
+    # WMS-palvelulla ei ole sarakkeita mutta on layerit, ja PxWeb-taulun
+    # muoto on dimensioissa. Kumpikin kelpaa "muoto tunnetaan" -tiedoksi.
+    for kentta in ("service_layers", "data_fields"):
+        skeema |= {
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT dataset_id FROM enrichments WHERE field = ?",
+                (kentta,),
+            )
+        }
+
+    saatavilla: dict[str, bool] = {}
+    for ds_id, avail in conn.execute(
+        "SELECT dataset_id, MAX(is_available) FROM resource_health GROUP BY dataset_id"
+    ).fetchall():
+        saatavilla[ds_id] = bool(avail)
+
+    auth = {
+        r[0]
+        for r in conn.execute(
+            "SELECT DISTINCT dataset_id FROM enrichments WHERE field = 'auth_method'"
+            " AND value NOT IN ('none', 'avoin', '')"
+        )
+    }
+
+    return {
+        ds_id: AgentFacts(
+            probed=True,
+            probe_ok=ok,
+            schema_known=ds_id in skeema,
+            available=saatavilla.get(ds_id),
+            auth_required=ds_id in auth,
+        )
+        for ds_id, ok in probattu.items()
+    }
+
+
 # --- Tietokantaoperaatiot ---
 
 
 def save_quality_scores(
     conn: sqlite3.Connection,
     dataset_id: str,
-    scores: dict[str, tuple[float, dict[str, Any]]],
+    # Mapping eikä dict: funktio vain lukee, ja dict on invariantti
+    # arvotyypissään. Ilman tätä ``calculate_quality``:n paluuarvoa
+    # (jossa ei ole None-vaihtoehtoa) ei voisi antaa suoraan.
+    scores: Mapping[str, tuple[float, dict[str, Any]] | None],
 ) -> None:
-    """Tallenna laatupisteet tietokantaan."""
+    """Tallenna laatupisteet tietokantaan.
+
+    ``None`` tarkoittaa **mittaamatonta** eikä nollaa, joten sille ei
+    kirjoiteta riviä. ``quality_scores.score`` on NOT NULL, mikä on tässä
+    hyvä: puuttuvaa lukua ei voi vahingossa lukea nollaksi.
+    """
     now = datetime.now(tz=UTC).isoformat()
-    for dimension, (score, details) in scores.items():
+    for dimension, arvo in scores.items():
+        if arvo is None:
+            continue
+        score, details = arvo
         conn.execute(
             """
             INSERT INTO quality_scores (dataset_id, dimension, score, details, calculated_at)
@@ -267,6 +411,11 @@ def score_all_datasets(conn: sqlite3.Connection, source: str = "") -> int:
         "SELECT dataset_id, COUNT(DISTINCT field) FROM enrichments GROUP BY dataset_id"
     ).fetchall())
 
+    # Agenttivalmius lasketaan probe-havainnoista eikä metatiedosta, joten
+    # se on oma kierroksensa. Probaamattomat puuttuvat sanakirjasta, ja
+    # ``calculate_agent_readiness`` palauttaa niille None.
+    agent_facts = collect_agent_facts(conn)
+
     count = 0
     for row in rows:
         dataset = dict(row)
@@ -274,7 +423,12 @@ def score_all_datasets(conn: sqlite3.Connection, source: str = "") -> int:
         resources = resources_by_ds.get(ds_id, [])
         enrichment_count = enr_counts.get(ds_id, 0)
 
-        scores = calculate_quality(dataset, resources, enrichment_count)
+        scores: dict[str, tuple[float, dict[str, Any]] | None] = dict(
+            calculate_quality(dataset, resources, enrichment_count)
+        )
+        scores["agent_readiness"] = calculate_agent_readiness(
+            agent_facts.get(ds_id, AgentFacts())
+        )
         save_quality_scores(conn, ds_id, scores)
         count += 1
 
