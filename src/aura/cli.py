@@ -1123,6 +1123,13 @@ async def _refresh(
     if outcome.skipped:
         print(f"  Ohitettu staattiset: {', '.join(outcome.skipped)}")
         print("    (käytä --include-static sisällyttääksesi)")
+    # Kaatuneet erikseen ja ennen kokonaismäärää: ne eivät sisälly siihen,
+    # eikä yhteenveto saa näyttää täydeltä kun osa lähteistä jäi hakematta.
+    if outcome.failures:
+        print(f"\n  EPÄONNISTUI ({len(outcome.failures)}):")
+        for nimi, syy in outcome.failures.items():
+            print(f"    {nimi:<20} {syy}")
+        print("    Nämä lähteet jäivät päivittämättä; vanhat rivit ovat yhä kannassa.")
     print(f"  Yhteensä: {outcome.total} datasettiä\n")
 
     # 2. Vanhentuneet rivit — vain raportti, ei poistoa

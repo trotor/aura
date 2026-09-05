@@ -37,6 +37,11 @@ class HarvestOutcome:
     warnings: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
 
+    #: Lähteet jotka kaatuivat, syineen. Erillään ``counts``:sta
+    #: tarkoituksella: kaatunut lähde on **mittaamaton**, ei tyhjä, ja nolla
+    #: määränä tarkoittaisi "haettiin, ei löytynyt mitään".
+    failures: dict[str, str] = field(default_factory=dict)
+
 
 async def harvest_sources(
     conn: sqlite3.Connection,
@@ -75,7 +80,28 @@ async def harvest_sources(
             on_progress(name, None)
 
         harvester = cls(conn=conn)
-        count = await harvester.harvest()
+        try:
+            count = await harvester.harvest()
+        except Exception as exc:
+            # Yksi kaatuva lähde ei saa viedä koko keruuta. Mitattu 5.9.2026:
+            # opendata.luke.fi oli lakannut olemasta CKAN-instanssi ja vastasi
+            # 302:lla, harvesteri nosti käsittelemättömän poikkeuksen, ja ajo
+            # päättyi siihen — 41 lähteestä kolmea ei yritetty lainkaan.
+            # Yksi ohitetuista oli sotkanet, katalogin suurin lähde.
+            #
+            # Nieleminen vaihtaisi vian vain toiseen, joten syy kerätään
+            # talteen ja raportoidaan. Docstring varoittaa hiljaisesta
+            # nollasta; tämä on sen peilikuva.
+            if source != "all":
+                # Nimetty lähde: ei ole mitään jonka puolesta jatkaa, ja
+                # hiljainen tyhjä tulos näyttäisi komentorivillä onnistumiselta.
+                raise
+            outcome.failures[name] = f"{type(exc).__name__}: {exc}"[:200]
+            logger.error("[harvest] %s kaatui: %s", name, exc)
+            if on_progress:
+                on_progress(name, None)
+            continue
+
         outcome.counts[name] = count
         outcome.total += count
 
