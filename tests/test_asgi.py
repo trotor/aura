@@ -219,6 +219,42 @@ class TestInstanssikuvaus:
         assert "Kenttätason indeksi mukana." in body
         assert "tulevat samasta repositoriosta" not in body
 
+    def test_laajennettu_instanssi_sanoo_olevansa_erillinen(
+        self, db_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Laajennettu instanssi ei ole sama kuin se mitä GitHubista saa.
+
+        Lukija tulee sivulle kloonatakseen — hänen on tiedettävä ennen
+        kloonausta, ettei tämä palvelin ole sama kokonaisuus, muuten ero
+        paljastuu vasta kun oma instanssi hakee eri tuloksia.
+        """
+        monkeypatch.setenv("AURA_DB", str(db_path))
+        monkeypatch.setenv("AURA_INSTANCE_NOTE", "Kenttätason indeksi mukana.")
+        with TestClient(create_asgi_app()) as c:
+            body = c.get("/").text
+        assert "hieman erillinen" in body
+        assert "github.com/trotor/aura" in body
+
+    def test_yllapitaja_nakyy_sivulla(
+        self, db_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Julkisen palvelun ajaja on kerrottava — kuka tahansa ei aja tätä."""
+        monkeypatch.setenv("AURA_DB", str(db_path))
+        monkeypatch.setenv("AURA_INSTANCE_OPERATOR", "Futuai Oy")
+        with TestClient(create_asgi_app()) as c:
+            body = c.get("/").text
+        assert "Futuai Oy" in body
+        assert "hostauksesta vastaa" in body
+
+    def test_ilman_yllapitajaa_ei_tyhjaa_lausetta(
+        self, db_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AURA_DB", str(db_path))
+        monkeypatch.delenv("AURA_INSTANCE_OPERATOR", raising=False)
+        with TestClient(create_asgi_app()) as c:
+            body = c.get("/").text
+        assert "hostauksesta vastaa" not in body
+
     def test_nimeton_laajennus_kertoo_silti_kyvysta(
         self, db_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
