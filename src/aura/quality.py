@@ -33,6 +33,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from aura.constants import MACHINE_READABLE_FORMATS, parse_json_list
+from aura.database import table_available
 
 logger = logging.getLogger(__name__)
 
@@ -286,10 +287,11 @@ def collect_agent_facts(conn: sqlite3.Connection) -> dict[str, AgentFacts]:
     sanottavaa eikä niistä pidä keksiä mitään.
     """
     probattu: dict[str, bool] = {}
-    for ds_id, status in conn.execute(
-        "SELECT dataset_id, status FROM probe_results"
-    ).fetchall():
-        probattu[ds_id] = probattu.get(ds_id, False) or status == "ok"
+    if table_available(conn, "probe_results"):
+        for ds_id, status in conn.execute(
+            "SELECT dataset_id, status FROM probe_results"
+        ).fetchall():
+            probattu[ds_id] = probattu.get(ds_id, False) or status == "ok"
 
     skeema = {
         r[0] for r in conn.execute("SELECT DISTINCT dataset_id FROM resource_schema")

@@ -16,6 +16,7 @@ from aura.database import (
     get_resource_schema,
     get_source,
     get_stale_enrichments,
+    table_available,
 )
 from aura.limits import MAX_COMPARE_DATASETS
 from aura.quality import get_quality_scores
@@ -187,6 +188,8 @@ def _format_probe_failure(conn: Any, dataset_id: str) -> str:
     Rajaa näytettävät rivit ``_MAX_PROBE_FAILURES``:ään ja kertoo lopun
     lukumääränä — katkaisu ei saa olla hiljainen.
     """
+    if not table_available(conn, "probe_results"):
+        return ""
     total = conn.execute(
         "SELECT COUNT(*) FROM probe_results WHERE dataset_id = ? AND status != 'ok'",
         (dataset_id,),

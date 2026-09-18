@@ -88,6 +88,39 @@ def get_connection(
     return conn
 
 
+#: Taulut joiden puuttumisesta on jo varoitettu. Varoitus kerran per prosessi:
+#: ländärisivu kysyy tilastot joka pyynnöllä, eikä loki saa täyttyä samasta.
+_warned_missing_tables: set[str] = set()
+
+
+def table_available(conn: sqlite3.Connection, table: str) -> bool:
+    """Kerro onko taulu kannassa — ja varoita kerran jos ei ole.
+
+    **Jaeltu kanta voi olla koodia vanhempi.** Julkisella instanssilla kanta
+    on imageen paistettu tilannekuva, joka avataan read-only: migraatioita ei
+    voi ajaa käynnistyksessä, joten koodin odottama uusin taulu voi puuttua.
+
+    Ydinreitin (ländäri, ``describe``) on kestettävä se. Kestäminen ei
+    kuitenkaan saa olla hiljaista: juuri hiljainen puute piti tuotannon
+    ländärisivun rikki neljä viikkoa 2026, koska ``/health`` ei koskenut
+    tauluun eikä mikään muukaan kertonut erosta.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    if row is not None:
+        return True
+    if table not in _warned_missing_tables:
+        _warned_missing_tables.add(table)
+        logger.warning(
+            "Taulu %r puuttuu kannasta — se on koodia vanhempi. Tulos jää "
+            "tältä osin tyhjäksi. Rakenna jaeltava kanta uudelleen.",
+            table,
+        )
+    return False
+
+
 def run_migrations(conn: sqlite3.Connection) -> int:
     """Aja pending-migraatiot tietokantaan.
 
@@ -888,9 +921,13 @@ def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "top_formats": [dict(r) for r in top_formats],
     }
 
-    probe_rows = conn.execute(
-        "SELECT status, COUNT(*) AS n FROM probe_results GROUP BY status"
-    ).fetchall()
+    probe_rows = (
+        conn.execute(
+            "SELECT status, COUNT(*) AS n FROM probe_results GROUP BY status"
+        ).fetchall()
+        if table_available(conn, "probe_results")
+        else []
+    )
     stats["probe_total"] = sum(r["n"] for r in probe_rows)
     stats["probe_ok"] = next((r["n"] for r in probe_rows if r["status"] == "ok"), 0)
 
