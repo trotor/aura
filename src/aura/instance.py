@@ -23,12 +23,18 @@ INSTANCE_NAME_ENV = "AURA_INSTANCE_NAME"
 #: Yhden kappaleen kuvaus siitä mitä tämä instanssi tarjoaa yli avoimen.
 INSTANCE_NOTE_ENV = "AURA_INSTANCE_NOTE"
 
+#: Kuka tätä instanssia ajaa, esim. "Futuai Oy". Julkisella palvelulla on
+#: ylläpitäjä, ja lukijan on tiedettävä kenen palvelimelle hän kyselynsä
+#: lähettää. Tyhjä = ei kerrota, mikä on oikea oletus omalla koneella ajavalle.
+INSTANCE_OPERATOR_ENV = "AURA_INSTANCE_OPERATOR"
+
 
 class Instance(NamedTuple):
     """Mitä tämä ajava instanssi on."""
 
     name: str
     note: str
+    operator: str = ""
 
     @property
     def is_extended(self) -> bool:
@@ -48,4 +54,5 @@ def describe_instance(env: Mapping[str, str] | None = None) -> Instance:
     return Instance(
         name=env.get(INSTANCE_NAME_ENV, "").strip(),
         note=env.get(INSTANCE_NOTE_ENV, "").strip(),
+        operator=env.get(INSTANCE_OPERATOR_ENV, "").strip(),
     )

@@ -44,14 +44,16 @@
             instanssin omalla koneellasi tai palvelimellasi.
         </p>
         <p>
-            <strong>Tämän palvelimen haku ulottuu myös aineistojen sisälle.</strong>
-            {% if instance.note %}{{ instance.note }}{% endif %}
+            <strong>Tämä palvelin on hieman erillinen kokonaisuus</strong> siitä mitä
+            GitHubista saa{% if instance.name %} — {{ instance.name }}{% endif %}. Oma
+            instanssi ajaa avointa versiota.
         </p>
+        {% if instance.note %}
         <p>
-            Aineisto ja hakukone ovat samat kuin avoimessa versiossa. Sisältöindeksi
-            on erillinen kerros, jota ylläpidetään tämän palvelimen mukana{% if instance.name %} —
-            {{ instance.name }}{% endif %}.
+            Tämän palvelimen haku ulottuu myös aineistojen sisälle.
+            {{ instance.note }}
         </p>
+        {% endif %}
         {% else %}
         <p>
             Aura on MIT-lisensoitu ja koodi on kokonaan julkista. Voit ajaa oman
@@ -71,6 +73,11 @@ aura serve --http</code></pre>
             aineistot ovat mukana heti kloonauksen jälkeen — harvestointia ei
             tarvitse ajaa itse.
         </small></p>
+        {% if instance.operator %}
+        <p><small>
+            Tämän palvelun hostauksesta vastaa {{ instance.operator }}.
+        </small></p>
+        {% endif %}
     </article>
 </div>
 
