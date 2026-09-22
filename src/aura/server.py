@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse
 
 from aura.config import is_readonly
 from aura.database import (
+    check_schema_freshness,
     get_connection,
     init_db,
 )
@@ -56,6 +57,10 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if not readonly:
         # init_db kirjoittaa (migraatiot/skeema) → ohitetaan read-only-moodissa.
         init_db(conn)
+    # Read-only-kannassa migraatioita ei voi ajaa, joten koodia vanhempi
+    # kanta on todettava lokiin — muuten ero näkyy vasta rikkinäisenä
+    # työkaluvastauksena.
+    check_schema_freshness(conn)
     warm_caches(conn)
     yso = YsoClient()
     try:

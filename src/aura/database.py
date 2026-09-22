@@ -88,6 +88,84 @@ def get_connection(
     return conn
 
 
+#: Migraatiotaso jonka tämä koodi olettaa kannasta löytyvän.
+#:
+#: **Miksi vakio eikä luku hakemistosta.** Imageen ei kopioida
+#: ``scripts/migrations/``-hakemistoa lainkaan — vain ``src/`` ja kanta —
+#: joten ajossa oleva palvelin ei voi laskea tasoa tiedostoista. Vakio on
+#: siksi ainoa lähde joka on olemassa myös kontissa. Sen ja hakemiston
+#: synkassa pitää ``tests/test_schema_drift.py``: uusi migraatio ilman
+#: vakion nostoa kaataa testit.
+EXPECTED_SCHEMA_VERSION = 24
+
+
+class SchemaTooOldError(RuntimeError):
+    """Kanta on koodia vanhempi eikä sitä voi migratoida tässä kohtaa."""
+
+
+def schema_version(conn: sqlite3.Connection) -> int:
+    """Palauta kannan migraatiotaso, tai 0 jos taulua ei ole."""
+    if not _table_exists(conn, "schema_migrations"):
+        return 0
+    row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
+    return int(row[0]) if row and row[0] is not None else 0
+
+
+def check_schema_freshness(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Vertaa kannan tasoa koodin odottamaan. Palauta (kannassa, koodissa).
+
+    **Tämä on käynnistyksen tarkistus, ei portti.** Jaeltu kanta avataan
+    read-only, joten migraatiota ei voi ajaa eikä kaatuminen korjaisi
+    mitään — se veisi vain koko palvelun alas siltä osin kuin se vielä
+    toimii. Ero kirjataan siksi virheenä lokiin **molemmat luvut
+    nimeten**: ilman lukuja korjaaja joutuu arvaamaan mitä puuttuu.
+
+    Kanta ilman ``schema_migrations``-taulua ei ole vanha vaan tyhjä
+    (testien minikanta, vasta luotu kanta) — siitä ei valiteta, koska
+    väärä hälytys opettaa ohittamaan oikeankin.
+    """
+    kannassa = schema_version(conn)
+    if 0 < kannassa < EXPECTED_SCHEMA_VERSION:
+        logger.error(
+            "Kanta on migraatiotasolla %d mutta koodi odottaa tasoa %d. "
+            "Tasojen väliset migraatiot puuttuvat, ja niitä lukevat kyselyt "
+            "jäävät tyhjiksi tai kaatuvat. Rakenna jaeltava kanta uudelleen "
+            "ja buildaa image siitä.",
+            kannassa,
+            EXPECTED_SCHEMA_VERSION,
+        )
+    return kannassa, EXPECTED_SCHEMA_VERSION
+
+
+def require_current_schema(conn: sqlite3.Connection) -> None:
+    """Vaadi että kanta on koodin tasolla. Muuten ``SchemaTooOldError``.
+
+    Tämä on **buildin** tarkistus. Siellä ero on korjattavissa — aja
+    kannan rakennus uudelleen — ja siellä kaatuminen on halpa: image jää
+    syntymättä sen sijaan että se paistaisi yhteen koodin ja kannan jotka
+    eivät tunne toisiaan. Juuri se yhdistelmä piti ländärisivun,
+    ``stats``-työkalun ja ``describe``-työkalun rikki neljä viikkoa 2026.
+    """
+    kannassa, koodissa = schema_version(conn), EXPECTED_SCHEMA_VERSION
+    if kannassa < koodissa:
+        raise SchemaTooOldError(
+            f"Kanta on migraatiotasolla {kannassa} mutta koodi odottaa tasoa "
+            f"{koodissa}. Aja migraatiot lähdekantaan ja rakenna jaeltava "
+            "kanta uudelleen ennen imagen buildia."
+        )
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    """Onko taulu kannassa. Ei varoita — ks. ``table_available``."""
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        is not None
+    )
+
+
 #: Taulut joiden puuttumisesta on jo varoitettu. Varoitus kerran per prosessi:
 #: ländärisivu kysyy tilastot joka pyynnöllä, eikä loki saa täyttyä samasta.
 _warned_missing_tables: set[str] = set()
@@ -105,11 +183,7 @@ def table_available(conn: sqlite3.Connection, table: str) -> bool:
     ländärisivun rikki neljä viikkoa 2026, koska ``/health`` ei koskenut
     tauluun eikä mikään muukaan kertonut erosta.
     """
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-        (table,),
-    ).fetchone()
-    if row is not None:
+    if _table_exists(conn, table):
         return True
     if table not in _warned_missing_tables:
         _warned_missing_tables.add(table)
