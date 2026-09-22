@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from aura.config import is_readonly
-from aura.database import get_connection, init_db
+from aura.database import check_schema_freshness, get_connection, init_db
 
 WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _db_conn = get_connection(check_same_thread=False, readonly=readonly)
     if not readonly:
         init_db(_db_conn)
+    check_schema_freshness(_db_conn)
     try:
         yield
     finally:
