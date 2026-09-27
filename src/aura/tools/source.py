@@ -60,13 +60,13 @@ class QuerySourceResult(Envelope):
     columns: list[str] = Field(default_factory=list)
     rows: list[dict[str, Any]] = Field(default_factory=list)
     row_count: int = 0
-    total: int | None = Field(None, description="Osumien kokonaismäärä jos lähde kertoi")
+    total: int | None = Field(default=None, description="Osumien kokonaismäärä jos lähde kertoi")
     truncated: bool = False
     dimensions: list[Dimension] | None = Field(
-        None, description="PxWeb: taulun dimensiot koodeineen (suodattimien rakentamiseen)"
+        default=None, description="PxWeb: taulun dimensiot koodeineen (suodattimien rakentamiseen)"
     )
     codes: dict[str, dict[str, str]] | None = Field(
-        None, description="PxWeb: rivien nimet → koodit dimensioittain"
+        default=None, description="PxWeb: rivien nimet → koodit dimensioittain"
     )
     provenance: Provenance | None = None
 

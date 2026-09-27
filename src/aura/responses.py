@@ -8,8 +8,8 @@ sijaan MCP:n ``structuredContent``in, jonka muoto on julkaistu
 ``outputSchema``na — ja rinnalle enintään viiden rivin tekstiyhteenvedon
 ihmiselle ja asiakkaille jotka eivät lue strukturoitua sisältöä.
 
-Mallit ovat tarkoituksella sallivia (``extra="allow"``): laajennus (esim.
-Aura Pro) voi lisätä kenttiä rikkomatta skeemaa, ja skeeman on silti
+Mallit ovat tarkoituksella sallivia (``extra="allow"``): laajennus voi
+lisätä kenttiä rikkomatta skeemaa, ja skeeman on silti
 kuvattava jokainen kenttä jonka avoin Aura itse täyttää.
 """
 
@@ -51,12 +51,12 @@ class Provenance(Model):
     """Mistä luku tai rivi tuli."""
 
     source: str = Field(description="Julkaisija")
-    source_url: str | None = Field(None, description="Kyselyn täsmällinen URL")
+    source_url: str | None = Field(default=None, description="Kyselyn täsmällinen URL")
     license: str | None = None
     retrieved_at: str | None = None
     dataset_id: str | None = None
     query: dict[str, Any] | None = Field(
-        None, description="POST-kyselyn runko jos kysely ei mahdu URL:iin (PxWeb)"
+        default=None, description="POST-kyselyn runko jos kysely ei mahdu URL:iin (PxWeb)"
     )
 
 

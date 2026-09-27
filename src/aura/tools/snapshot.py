@@ -65,6 +65,15 @@ class AreaSnapshotResult(Envelope):
     gaps: list[str] = Field(default_factory=list)
 
 
+def _number(value: float | int | None) -> str:
+    """Luku ilman turhaa desimaalia: 121832.0 → "121 832", 42.1 → "42,1"."""
+    if value is None:
+        return ".."
+    if float(value).is_integer():
+        return f"{value:,.0f}".replace(",", " ")
+    return f"{value}".replace(".", ",")
+
+
 def _ref(area: Any) -> AreaRef:
     return AreaRef(**area.to_dict())
 
@@ -183,16 +192,15 @@ async def area_snapshot(region: str, ctx: Context | None = None) -> ToolResult:
         "postinumero": "postinumeroalue",
     }.get(area.level, area.level)
     summary = [f"{area.name_fi} ({level_fi} {area.code})"]
+    if match.note:
+        summary[0] += f" — {match.note.split('. ')[0]}."
     if payload.parents:
+        shown = ("maakunta", "hyvinvointialue", "seutukunta", "kunta")
         summary.append(
-            ", ".join(
-                f"{k}: {v.name_fi}"
-                for k, v in payload.parents.items()
-                if k in ("maakunta", "hyvinvointialue", "seutukunta", "kunta")
-            )
+            ", ".join(f"{k}: {v.name_fi}" for k, v in payload.parents.items() if k in shown)
         )
     for k in payload.key_figures[:2]:
-        summary.append(f"{k.name}: {k.value} {k.unit or ''} ({k.period})".strip())
+        summary.append(f"{k.name}: {_number(k.value)} {k.unit or ''} ({k.period})".strip())
     summary.append(
         f"{payload.datasets_local} alueen omaa aineistoa, {payload.datasets_nationwide} koko maan."
     )

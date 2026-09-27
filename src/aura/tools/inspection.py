@@ -67,13 +67,15 @@ class InspectResult(Envelope):
     resource_count: int = 0
     api: dict[str, str] | None = None
     fields: list[FieldInfo] = Field(default_factory=list)
-    quality: dict[str, float] | None = Field(None, description="Laatupisteet 0–100 dimensioittain")
+    quality: dict[str, float] | None = Field(
+        default=None, description="Laatupisteet 0–100 dimensioittain"
+    )
     availability: dict[str, Any] | None = None
     enrichments: dict[str, str] = Field(
         default_factory=dict, description="Tutkimuksessa kirjatut lisätiedot kentittäin"
     )
     recipe: dict[str, Any] | None = Field(
-        None, description="Todennettu kyselypohja (vain jos instanssi tarjoaa)"
+        default=None, description="Todennettu kyselypohja (vain jos instanssi tarjoaa)"
     )
 
 

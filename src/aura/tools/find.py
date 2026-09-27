@@ -52,10 +52,10 @@ class DatasetHit(Model):
     queryable: bool = False
     modified: str = ""
     access_level: str = "open"
-    quality: float | None = Field(None, description="Metatiedon laatupisteet 0–100")
-    available: bool | None = Field(None, description="Viimeisin saatavuustarkistus")
+    quality: float | None = Field(default=None, description="Metatiedon laatupisteet 0–100")
+    available: bool | None = Field(default=None, description="Viimeisin saatavuustarkistus")
     coverage: str | None = Field(
-        None,
+        default=None,
         description="own = aineisto koskee aluetta; nationwide = koko maan aineisto "
         "jossa alue on dimensioarvo",
     )

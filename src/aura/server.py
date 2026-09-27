@@ -262,7 +262,9 @@ def build_instructions(readonly: bool = False, profile: str = "admin") -> str:
         readonly: True = etäpalvelin (ei local-FS:ää, ei kirjoittavia tooleja).
     """
     if profile == "public":
-        return _PUBLIC
+        from aura.extensions import INSTRUCTION_ADDENDA
+
+        return "\n".join([_PUBLIC, *INSTRUCTION_ADDENDA])
     if readonly:
         return _INTRO + _FINDINGS_REMOTE + _API_USAGE + _BOUNDARIES_REMOTE
     return _INTRO + _FINDINGS_LOCAL + _API_USAGE + _BOUNDARIES_LOCAL
@@ -282,7 +284,7 @@ mcp = FastMCP(
     lifespan=_lifespan,
 )
 
-#: Julkisen profiilin tagi. Laajennus (esim. Aura Pro) merkitsee omat
+#: Julkisen profiilin tagi. Laajennus merkitsee omat
 #: julkiset työkalunsa samalla tagilla.
 PUBLIC_TAG = "public"
 

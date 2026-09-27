@@ -1,6 +1,6 @@
 """Laajennuspisteet aikomustason työkaluille.
 
-Avoin Aura on metatietokatalogi. Laajennus (esim. Aura Pro) voi tuoda
+Avoin Aura on metatietokatalogi. Laajennus voi tuoda
 työkaluvastauksiin sisältöä jota katalogissa ei ole — valmiita
 tunnuslukuja, todennettuja kyselyreseptejä — ilman että avoimen auran
 koodiin tarvitsee koskea tai sitä tarvitsee paikata ajossa.
@@ -47,10 +47,23 @@ def register(hook: str, fn: Callable[..., Any]) -> None:
         _registry[hook].append(fn)
 
 
+#: Laajennuksen lisäykset julkisen profiilin ohjetekstiin. Ohje on alle
+#: 1 500 merkkiä, joten lisäys on rivi eikä kappale.
+INSTRUCTION_ADDENDA: list[str] = []
+
+
+def add_instructions(text: str) -> None:
+    """Lisää rivi julkisen profiilin ohjetekstiin (idempotentti)."""
+    if text not in INSTRUCTION_ADDENDA:
+        INSTRUCTION_ADDENDA.append(text)
+
+
 def clear(hook: str | None = None) -> None:
     """Poista rekisteröinnit (testit)."""
     for name in [hook] if hook else list(HOOKS):
         _registry[name].clear()
+    if hook is None:
+        INSTRUCTION_ADDENDA.clear()
 
 
 def has(hook: str) -> bool:
