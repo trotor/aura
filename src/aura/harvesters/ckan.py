@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from aura.database import upsert_dataset
+from aura.formats import infer_format
 from aura.harvesters.base import BaseHarvester
 from aura.models import Dataset
 
@@ -28,6 +29,13 @@ class CkanHarvester(BaseHarvester):
 
     ckan_base_url: str = ""
     ckan_source: str = ""
+    #: Portaalin kieli, jos se julkaisee otsikon ja kuvauksen vain
+    #: ``title``/``notes``-kentissä ilman ``*_translated``-käännöksiä.
+    #: Ulkoinen arvio 27.9.2026: SYKE:n 644 aineistolla ``title_fi`` oli
+    #: tyhjä, koska portaali ei täytä ``title_translated``-kenttää lainkaan
+    #: — vaikka otsikot ovat suomeksi. Tyhjä = ei oleteta mitään (avoindata.fi
+    #: ja HRI kääntävät itse, ja niiden ``title`` voi olla millä kielellä vain).
+    source_language: str = ""
 
     @classmethod
     def source_config(cls) -> dict[str, Any]:
@@ -79,7 +87,7 @@ class CkanHarvester(BaseHarvester):
                 datasets = result["result"]["results"]
 
                 for raw in datasets:
-                    dataset = Dataset.from_ckan(raw, source=self.ckan_source)
+                    dataset = self._to_dataset(raw)
                     upsert_dataset(self.conn, dataset)
                     self._enrich_from_extras(dataset.id, raw)
                     self._auto_enrich_crs(dataset)
@@ -151,7 +159,7 @@ class CkanHarvester(BaseHarvester):
             # harvest on lähdekonfiguraatio. Kummallakin nolla resurssia.
             if not raw or not raw.get("resources"):
                 continue
-            dataset = Dataset.from_ckan(raw, source=self.ckan_source)
+            dataset = self._to_dataset(raw)
             upsert_dataset(self.conn, dataset)
             self._enrich_from_extras(dataset.id, raw)
             self._auto_enrich_crs(dataset)
@@ -160,6 +168,27 @@ class CkanHarvester(BaseHarvester):
         self.conn.commit()
         logger.info("[%s] Vertailu toi %d aineistoa lisää", self.name, lisatty)
         return lisatty
+
+    def _to_dataset(self, raw: dict[str, Any]) -> Dataset:
+        """CKAN-paketti → Dataset, täydennettynä sillä minkä portaali jätti tyhjäksi.
+
+        Kaksi täydennystä, kumpikin vain kun kenttä on tyhjä:
+
+        - Suomenkielinen otsikko ja kuvaus ``title``/``notes``-kentistä, jos
+          portaalin kieli on tiedossa (``source_language``) eikä käännöstä ole.
+        - Resurssin formaatti URL:sta (``aura.formats.infer_format``), jotta
+          esim. SYKE:n formaatiton ``.../geoserver/<työtila>/wfs`` on kyseltävä.
+        """
+        dataset = Dataset.from_ckan(raw, source=self.ckan_source)
+        if self.source_language == "fi":
+            if not dataset.title_fi:
+                dataset.title_fi = dataset.title
+            if not dataset.notes_fi:
+                dataset.notes_fi = dataset.notes
+        for resource in dataset.resources:
+            if not (resource.format or "").strip():
+                resource.format = infer_format(resource.url)
+        return dataset
 
     async def _fetch_package(
         self, client: httpx.AsyncClient, nimi: str

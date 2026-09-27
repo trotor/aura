@@ -82,11 +82,20 @@ async def test_vipunen_tietojoukot_kentat_ja_aluetaso() -> None:
 @pytest.mark.asyncio
 async def test_prh_koodistot_eivat_toista_avoindatan_aineistoja() -> None:
     h = PrhHarvester(conn=_db())
-    assert await h.harvest() == 2
+    assert await h.harvest() == 3
     urls = [r[0] for r in h.conn.execute("SELECT url FROM resources")]
     assert len([u for u in urls if "description?code=" in u]) == len(CODE_LISTS)
-    # Yritystiedot ovat jo avoindata.fi:n kautta: ei companies- eikä bulk-resurssia.
-    assert not any("/companies" in u or "all_companies" in u for u in urls)
+    # Koko rekisteri on jo avoindata.fi:n kautta: ei bulk-resurssia.
+    assert not any("all_companies" in u for u in urls)
+    # Yrityshaku on poikkeus: avoindata.fi:n resurssi osoittaa sivuston juureen.
+    assert len([u for u in urls if "/companies?" in u]) == 1
+
+
+def test_prh_yrityshaun_kuvaus_nimeaa_parametrit() -> None:
+    cfg = next(c for c in PrhHarvester.datasets_config if c["id"] == "prh-ytj-yrityshaku")
+    for param in ("location", "mainBusinessLine", "companyForm", "businessId", "page"):
+        assert param in cfg["notes_fi"]
+    assert cfg["resources"][0]["format"] == "JSON"
 
 
 def test_vipusen_suodatin_palvelimelle() -> None:
@@ -124,3 +133,19 @@ async def test_vipunen_json_suodatetaan_palvelimella() -> None:
     assert "filter=" in seen[0]
     assert table.rows and table.rows[0]["oppilaatLukuvuosiLkm"] == 236
     assert any("palvelimella" in n for n in table.notes)
+
+
+@pytest.mark.asyncio
+async def test_sivutetun_jsonin_kokonaismaara_lahteesta() -> None:
+    """YTJ kertoo totalResults; sivun 100 riviä ei ole lähteen koko."""
+    from aura import fetch
+
+    async def fake_download(url: str, *a: Any, **kw: Any) -> tuple[bytes, bool]:
+        return b'{"totalResults": 1889, "companies": [{"businessId": {"value": "1"}}]}', False
+
+    with patch.object(fetch, "_download", fake_download):
+        table = await fetch.fetch_json(
+            "https://avoindata.prh.fi/opendata-ytj-api/v3/companies?location=Tampere", None, 50
+        )
+    assert table.total == 1889 and table.truncated is True
+    assert any("1889 osumaa" in n for n in table.notes)

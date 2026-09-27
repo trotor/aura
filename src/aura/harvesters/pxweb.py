@@ -42,6 +42,11 @@ class PxWebHarvester(BaseHarvester):
     #: Haetaanko englanninkieliset otsikot ``/en/``-puusta. Samat tunnisteet
     #: kuin suomenkielisessä puussa, joten taulu yhdistyy polulla.
     harvest_english: bool = True
+    #: Käännöskielet joiden puusta otsikot haetaan. Ruotsi lisättiin
+    #: ulkoisen arvion (27.9.2026) jälkeen: ``title_sv`` oli PxWeb-tauluilla
+    #: aina tyhjä, vaikka StatFin, Luke ja Traficom tarjoavat ``/sv/``-puun
+    #: samoilla tunnisteilla. ``harvest_english = False`` jättää englannin pois.
+    harvest_languages: tuple[str, ...] = ("en", "sv")
 
     @classmethod
     def source_config(cls) -> dict[str, Any]:
@@ -60,14 +65,18 @@ class PxWebHarvester(BaseHarvester):
             # kysely ei osu PxWeb-tauluun lainkaan, koska otsikko on vain
             # suomeksi.
             self._english: dict[str, tuple[str, list[str]]] = {}
-            if self.harvest_english:
-                await self._crawl_english(
-                    client, f"{self.pxweb_base_url}/en/{self.root_path}/",
-                    self.root_path, [],
+            self._swedish: dict[str, tuple[str, list[str]]] = {}
+            for lang in self.harvest_languages:
+                if lang == "en" and not self.harvest_english:
+                    continue
+                into = self._translations(lang)
+                if into is None:
+                    continue
+                await self._crawl_language(
+                    client, f"{self.pxweb_base_url}/{lang}/{self.root_path}/",
+                    self.root_path, [], into,
                 )
-                logger.info(
-                    "[%s] Englanninkielisiä otsikoita: %d", self.name, len(self._english)
-                )
+                logger.info("[%s] Otsikoita kielellä %s: %d", self.name, lang, len(into))
             total = await self._crawl_folder(
                 client,
                 f"{self.pxweb_base_url}/fi/{self.root_path}/",
@@ -110,28 +119,47 @@ class PxWebHarvester(BaseHarvester):
 
         return count
 
+    def _translations(self, lang: str) -> dict[str, tuple[str, list[str]]] | None:
+        """Kielen käännöstaulu (``polku/taulu → (otsikko, kansiot)``), tai None."""
+        if lang == "en":
+            return self._english
+        if lang == "sv":
+            return self._swedish
+        return None
+
     async def _crawl_english(
         self, client: httpx.AsyncClient, url: str, path: str, folders: list[str]
     ) -> None:
-        """Kerää ``polku/taulu → (otsikko, kansioiden nimet)`` englanniksi.
+        """Kerää englanninkieliset otsikot (``_crawl_language`` englannille)."""
+        await self._crawl_language(client, url, path, folders, self._english)
 
-        Virhe ei kaada keruuta: englanninkielinen otsikko on lisä, ja puuttuva
+    async def _crawl_language(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        path: str,
+        folders: list[str],
+        into: dict[str, tuple[str, list[str]]],
+    ) -> None:
+        """Kerää ``polku/taulu → (otsikko, kansioiden nimet)`` käännöspuusta.
+
+        Virhe ei kaada keruuta: käännetty otsikko on lisä, ja puuttuva
         kansio tarkoittaa vain että sen tauluilla ei ole käännöstä.
         """
         try:
             items = (await self._fetch(client, url)).json()
         except Exception as e:
-            logger.debug("[%s] Englanninkielinen kansio ohitettiin %s: %s", self.name, url, e)
+            logger.debug("[%s] Käännöskansio ohitettiin %s: %s", self.name, url, e)
             return
         for item in items:
             item_id = item.get("id", "")
             text = str(item.get("text", "")).strip()
             if item.get("type") == "l":
-                await self._crawl_english(
-                    client, f"{url}{item_id}/", f"{path}/{item_id}", [*folders, text]
+                await self._crawl_language(
+                    client, f"{url}{item_id}/", f"{path}/{item_id}", [*folders, text], into
                 )
             elif item.get("type") == "t" and text:
-                self._english[f"{path}/{item_id}"] = (text, folders)
+                into[f"{path}/{item_id}"] = (text, folders)
 
     def _table_to_dataset(self, item: dict[str, Any], path: str, base_url: str) -> Dataset:
         """Muunna PxWeb-taulu Dataset-olioksi."""
@@ -163,6 +191,7 @@ class PxWebHarvester(BaseHarvester):
         title_en, folders_en = getattr(self, "_english", {}).get(
             f"{path}/{table_id}", ("", [])
         )
+        title_sv, _ = getattr(self, "_swedish", {}).get(f"{path}/{table_id}", ("", []))
 
         return self._make_dataset(
             id=dataset_id,
@@ -170,6 +199,7 @@ class PxWebHarvester(BaseHarvester):
             title=title,
             title_fi=title,
             title_en=title_en,
+            title_sv=title_sv,
             keywords_en=[f for f in folders_en if f],
             notes_fi=f"{self.notes_template}. Polku: {path}/{table_id}",
             update_frequency=freq,

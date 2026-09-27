@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 from typing import Any
 
 import httpx
@@ -141,6 +142,8 @@ class MunicipalityPopulator(BasePopulator):
             )
             return 0
 
+        self._store_sotkanet_regions(regions)
+
         by_category: dict[str, dict[str, int]] = {}
         for r in regions:
             code, rid = r.get("code"), r.get("id")
@@ -176,6 +179,48 @@ class MunicipalityPopulator(BasePopulator):
             len(hvat),
         )
         return updated
+
+    def _store_sotkanet_regions(self, regions: list[dict[str, Any]]) -> int:
+        """Tallenna Sotkanetin koko aluerekisteri ``ref_sotkanet_regions``-tauluun.
+
+        Kaikki kategoriat, ei vain kunnat: Sotkanetin rivin ``region`` voi
+        olla myös maakunta, hyvinvointialue, seutukunta tai koko maa, ja
+        ilman tätä taulua niiden tunnus jäi kyselyn vastauksessa tulkitsematta
+        (ulkoinen arvio 27.9.2026). Taulu korvataan kokonaan: rekisteri on
+        pieni (540 riviä), eikä vanhentunut rivi saa jäädä tulkitsemaan.
+        """
+        rows = []
+        for r in regions:
+            rid = r.get("id")
+            if rid is None:
+                continue
+            title = r.get("title") or {}
+            if not isinstance(title, dict):
+                title = {"fi": str(title)}
+            rows.append(
+                (
+                    int(rid),
+                    str(r.get("category") or ""),
+                    str(r.get("code")) if r.get("code") is not None else None,
+                    title.get("fi"),
+                    title.get("sv"),
+                    title.get("en"),
+                )
+            )
+        if not rows:
+            return 0
+        try:
+            self.conn.execute("DELETE FROM ref_sotkanet_regions")
+            self.conn.executemany(
+                "INSERT INTO ref_sotkanet_regions (id, category, code, name_fi, name_sv, name_en)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+        except sqlite3.OperationalError as exc:  # taulu puuttuu (vanha kanta)
+            logger.warning("[%s] ref_sotkanet_regions ohitettiin: %s", self.name, exc)
+            return 0
+        self.conn.commit()
+        return len(rows)
 
     async def _find_latest_version(self, client: httpx.AsyncClient) -> str:
         """Hae uusin kunta-luokitusversio listaamalla kaikki luokitukset."""

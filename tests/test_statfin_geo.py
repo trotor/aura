@@ -1,11 +1,27 @@
 """Testit Tilastokeskuksen paikkatietoaineistojen harvesterille."""
 
 import sqlite3
+from collections.abc import Iterator
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from aura.database import init_db
-from aura.harvesters.statfin_geo import GEOSERVER_BASE, StatfinGeoHarvester
+from aura.harvesters.statfin_geo import (
+    GEOSERVER_BASE,
+    PAAVO_FALLBACK_YEAR,
+    StatfinGeoHarvester,
+)
+
+#: Alkuperäinen metodi talteen ennen kuin kiinnitys korvaa sen.
+_LATEST_YEAR = StatfinGeoHarvester._latest_paavo_year
+
+
+@pytest.fixture(autouse=True)
+def _ei_verkkoa() -> Iterator[None]:
+    """Paavon uusin vuosi luetaan kyvyistä; testeissä se on kiinteä."""
+    with patch.object(StatfinGeoHarvester, "_latest_paavo_year", AsyncMock(return_value=2026)):
+        yield
 
 
 def _memory_db() -> sqlite3.Connection:
@@ -73,3 +89,65 @@ class TestHarvest:
                 (ds["id"],),
             ).fetchone()[0]
             assert ds["num_resources"] == actual
+
+
+class TestPaavoTilastokerros:
+    """Ulkoinen arvio 27.9.2026: Paavon WFS osui rajakerrokseen, ei tunnuslukuihin."""
+
+    @pytest.mark.asyncio
+    async def test_tilastokerros_on_ensimmainen_resurssi(self):
+        h = _harvester()
+        await h.harvest()
+        rows = h.conn.execute(
+            "SELECT id, name_fi, format, url FROM resources"
+            " WHERE dataset_id = 'statfin-geo-paavo' ORDER BY rowid"
+        ).fetchall()
+        first = rows[0]
+        assert first["id"] == "statfin-geo-paavo-wfs-tilasto"
+        assert first["name_fi"] == "Paavo-tunnusluvut 2026 (WFS)"
+        assert first["url"].endswith("typeName=postialue:pno_tilasto_2026")
+        # Rajakerroksen resurssi säilyttää tunnuksensa ja osoitteensa.
+        ids = {r["id"]: r["url"] for r in rows}
+        assert ids["statfin-geo-paavo-wfs"] == f"{GEOSERVER_BASE}/postialue/wfs"
+        notes = h.conn.execute(
+            "SELECT notes_fi FROM datasets WHERE id = 'statfin-geo-paavo'"
+        ).fetchone()[0]
+        assert "he_vakiy" in notes and "pno_tilasto_2026" in notes
+
+    @pytest.mark.asyncio
+    async def test_luokan_konfiguraatio_ei_muutu(self):
+        h = _harvester()
+        await h.harvest()
+        paavo = next(
+            c for c in StatfinGeoHarvester.datasets_config if c["id"] == "statfin-geo-paavo"
+        )
+        assert len(paavo["resources"]) == 2
+
+
+class TestUusinVuosi:
+    @staticmethod
+    def _caps(names: list[str]) -> str:
+        types = "".join(f"<FeatureType><Name>{n}</Name></FeatureType>" for n in names)
+        return f"<WFS_Capabilities><FeatureTypeList>{types}</FeatureTypeList></WFS_Capabilities>"
+
+    @pytest.mark.asyncio
+    async def test_uusin_vuosi_kyvyista(self):
+        h = _harvester()
+        resp = MagicMock()
+        resp.text = self._caps(
+            [
+                "postialue:pno",
+                "postialue:pno_tilasto",
+                "postialue:pno_tilasto_2024",
+                "postialue:pno_tilasto_2027",
+                "postialue:pno_meri_2030",
+            ]
+        )
+        with patch.object(h, "_fetch", AsyncMock(return_value=resp)):
+            assert await _LATEST_YEAR(h) == 2027
+
+    @pytest.mark.asyncio
+    async def test_varavuosi_kun_palvelu_ei_vastaa(self):
+        h = _harvester()
+        with patch.object(h, "_fetch", AsyncMock(side_effect=RuntimeError("nurin"))):
+            assert await _LATEST_YEAR(h) == PAAVO_FALLBACK_YEAR

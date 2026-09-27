@@ -38,6 +38,8 @@ from aura.tools.search import (
 QUERYABLE_FORMATS = frozenset({"PXWEB", "WFS", "CSV", "JSON", "GEOJSON", "API", "ODATA"})
 
 _DESCRIPTION_CHARS = 300
+#: Tekstiyhteenvedossa listattavat osumat (viiden rivin katossa).
+_SUMMARY_HITS = 3
 
 
 class DatasetHit(Model):
@@ -70,8 +72,12 @@ class IndicatorHit(Model):
 
 class FindDataResult(Envelope):
     query: str = ""
-    count: int = 0
+    count: int = Field(default=0, description="Tulosten määrä tällä sivulla (ei kokonaismäärä)")
     offset: int = 0
+    may_have_more: bool = Field(
+        default=False,
+        description="Sivu täyttyi (count == limit): lisää tuloksia offset-parametrilla",
+    )
     region: AreaRef | None = None
     indicators: list[IndicatorHit] = Field(
         default_factory=list,
@@ -110,6 +116,22 @@ def _hit(
         available=health.get("is_available") if health else None,
         coverage=coverage,
     )
+
+
+def _count_line(n: int, query: str, offset: int, may_have_more: bool) -> str:
+    """Yhteenvedon ensimmäinen rivi: montako löytyi ja mitä tekstistä puuttuu.
+
+    Ulkoinen arvio 27.9.2026: rivi "10 aineistoa" luettiin kokonaismääräksi,
+    vaikka se oli sivun koko, ja tekstissä näkyi vain kolme ensimmäistä.
+    """
+    shown = min(n, _SUMMARY_HITS)
+    parts = []
+    if n > shown:
+        parts.append(f"näytetään {shown}, kaikki {n} rakenteisessa vastauksessa")
+    if may_have_more:
+        parts.append(f"lisää: offset={offset + n}")
+    head = f"Ainakin {n} aineistoa" if may_have_more else f"{n} aineistoa"
+    return f"{head} haulle '{query}'" + (f" ({'; '.join(parts)})" if parts else "") + "."
 
 
 @mcp.tool(tags={"public", "quality"}, output_schema=schema_of(FindDataResult))
@@ -242,19 +264,23 @@ async def find_data(
             "maan aineistoja joissa alue on dimensioarvo."
         )
 
+    # Kokonaismäärää ei lasketa: se vaatisi hausta erillisen laskentakyselyn.
+    # Täysi sivu kertoo silti rehellisesti, että lisää voi olla.
+    may_have_more = len(hits) >= limit
     payload = FindDataResult(
         query=query,
         count=len(hits),
         offset=offset,
+        may_have_more=may_have_more,
         region=area_ref,
         indicators=indicators,
         results=hits,
         notes=notes,
         next_actions=next_actions,
     )
-    summary = [f"{len(hits)} aineistoa haulle '{query or region}'."]
+    summary = [_count_line(len(hits), query or region, offset, may_have_more)]
     if indicators:
         summary.insert(0, f"Tunnusluku: {indicators[0].name} ({indicators[0].id}).")
-    for h in hits[:3]:
+    for h in hits[:_SUMMARY_HITS]:
         summary.append(f"- {h.title} [{h.id}] — {h.organization}")
     return respond(payload, summary)
