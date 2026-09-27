@@ -86,6 +86,10 @@ class Table:
     codes: dict[str, dict[str, str]] | None = None
     error: str | None = None
     error_code: str | None = None
+    #: WFS: palvelun kerrokset, jos kerros valittiin palvelun puolesta.
+    layers: list[str] | None = None
+    #: WFS: kerros jota kysely käytti, jos se tiedetään.
+    layer: str | None = None
 
 
 def _client() -> httpx.AsyncClient:
@@ -95,9 +99,16 @@ def _client() -> httpx.AsyncClient:
 
 
 def _num(value: Any) -> Any:
-    """Muunna numeerinen merkkijono luvuksi, muut sellaisenaan."""
+    """Muunna numeerinen merkkijono luvuksi, muut sellaisenaan.
+
+    Etunollallinen kokonaisluku jätetään merkkijonoksi: se on koodi eikä
+    luku. Postinumero ``00100`` muuttui muuten luvuksi 100 ja kuntakoodi
+    ``091`` luvuksi 91 — ja kumpikaan ei enää osunut omaan suodattimeensa.
+    """
     if isinstance(value, str):
         v = value.strip()
+        if re.fullmatch(r"0\d+", v):
+            return value
         if re.fullmatch(r"-?\d+", v):
             try:
                 return int(v)
@@ -336,40 +347,119 @@ async def fetch_odata(
 # --- WFS ---
 
 
+#: Postinumerokentät WFS-kerroksissa. Paavon tilastokerros käyttää nimeä
+#: ``postinumeroalue``, rajakerros ``posti_alue``.
+POSTAL_FIELDS = ("postinumeroalue", "posti_alue", "postinumero", "postinro", "postal_code")
+
+#: Kuinka monta kerrosta muistiinpanossa luetellaan.
+_MAX_LAYERS_LISTED = 10
+
+
+def _cql_literal(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _postal_field(headers: list[str]) -> str | None:
+    by_lower = {h.lower(): h for h in headers}
+    return next((by_lower[f] for f in POSTAL_FIELDS if f in by_lower), None)
+
+
 async def fetch_wfs(
-    url: str, filters: dict[str, list[str]] | None, max_rows: int, bbox: tuple[float, ...] | None
+    url: str,
+    filters: dict[str, list[str]] | None,
+    max_rows: int,
+    bbox: tuple[float, ...] | None,
+    *,
+    layer: str = "",
+    postal_code: str = "",
 ) -> Table:
-    from aura.wfs import fetch_features
+    """WFS-kysely. ``layer`` valitsee kerroksen, ``postal_code`` rajaa postinumeroon.
+
+    Postinumerorajaus on attribuuttisuodatin eikä bbox: postinumeroalueen
+    rajaus laatikkona osuisi naapurialueisiin. Se toimii vain kerroksessa
+    jossa on postinumerokenttä (``POSTAL_FIELDS``); kenttä tunnistetaan
+    yhden kohteen koehaulla, koska tallennettu kenttäskeema voi olla eri
+    kerroksesta (ks. inspect_dataset).
+    """
+    from aura.wfs import fetch_features, type_name_from_url, with_layer
+
+    if layer:
+        url = with_layer(url, layer)
+    explicit_layer = bool(layer) or type_name_from_url(url) is not None
+
+    parts: list[str] = []
+    for f, values in (filters or {}).items():
+        ors = [f"{f}={_cql_literal(v)}" for v in values]
+        parts.append(ors[0] if len(ors) == 1 else "(" + " OR ".join(ors) + ")")
+
+    probe = None
+    layers: list[str] = []
+    if postal_code:
+        probe = await fetch_features(url, 1, timeout=TIMEOUT)
+        if probe.error:
+            return Table(
+                protocol="wfs", request_url=url, error_code="service_error", error=probe.error
+            )
+        layers = list(probe.feature_types)
+        used = probe.type_name or type_name_from_url(url) or "?"
+        postal_field = _postal_field(list(probe.headers))
+        if postal_field is None:
+            return Table(
+                protocol="wfs",
+                request_url=url,
+                error_code="area_not_supported",
+                error=(
+                    f"Postinumero {postal_code} tunnistettiin, mutta kerroksessa {used} ei ole "
+                    "postinumerokenttää (kentät: "
+                    + ", ".join(list(probe.headers)[:12])
+                    + "). Valitse kerros jossa se on (layer) tai käytä kunnan nimeä."
+                ),
+                layers=layers or None,
+                layer=used,
+            )
+        if probe.type_name and not explicit_layer:
+            # Sama kerros varsinaiseen hakuun kuin jolla kenttä tunnistettiin.
+            url = with_layer(url, probe.type_name)
+        parts.append(f"{postal_field}={_cql_literal(postal_code)}")
 
     cql = None
     bbox_param = None
-    if filters:
-        parts = []
-        for f, values in filters.items():
-            ors = [f"{f}='{v}'" for v in values]
-            parts.append(ors[0] if len(ors) == 1 else "(" + " OR ".join(ors) + ")")
-        if bbox is not None:
-            probe = await fetch_features(url, 1, timeout=TIMEOUT)
-            if probe.geometry_name is None:
-                return Table(
-                    protocol="wfs",
-                    request_url=url,
-                    error_code="bbox_and_filters",
-                    error="Aluerajausta ei voi yhdistää suodattimiin: palvelu ei kerro "
-                    "geometriakentän nimeä. Aja kysely ilman toista niistä.",
-                )
-            parts.append(
-                f"BBOX({probe.geometry_name},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'EPSG:3067')"
+    if parts and bbox is not None:
+        probe = probe or await fetch_features(url, 1, timeout=TIMEOUT)
+        if probe.geometry_name is None:
+            return Table(
+                protocol="wfs",
+                request_url=url,
+                error_code="bbox_and_filters",
+                error="Aluerajausta ei voi yhdistää suodattimiin: palvelu ei kerro "
+                "geometriakentän nimeä. Aja kysely ilman toista niistä.",
             )
+        parts.append(
+            f"BBOX({probe.geometry_name},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'EPSG:3067')"
+        )
+    if parts:
         cql = " AND ".join(parts)
     elif bbox is not None:
         bbox_param = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},EPSG:3067"
     result = await fetch_features(url, max_rows, bbox=bbox_param, cql_filter=cql, timeout=TIMEOUT)
     table = Table(protocol="wfs", request_url=url)
+    layers = list(result.feature_types) or layers
+    probed = probe.type_name if probe else None
+    table.layer = result.type_name or probed or type_name_from_url(url)
+    if layers:
+        table.layers = layers
     if result.error:
         table.error_code = "service_error"
         table.error = result.error
         return table
+    if len(layers) > 1 and not explicit_layer:
+        listed = ", ".join(layers[:_MAX_LAYERS_LISTED])
+        extra = len(layers) - _MAX_LAYERS_LISTED
+        more = f" (+{extra} muuta)" if extra > 0 else ""
+        table.notes.append(
+            f"Palvelussa on {len(layers)} kerrosta; käytettiin ensimmäistä ({table.layer}). "
+            f"Valitse kerros layer-parametrilla: {listed}{more}."
+        )
     rows = [{h: _num(v) for h, v in zip(result.headers, r, strict=False)} for r in result.rows]
     total = int(result.total) if result.total and str(result.total).isdigit() else None
     if total is None:
