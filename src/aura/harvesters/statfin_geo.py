@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+import copy
+import logging
+import re
+from typing import Any
+
 from aura.harvesters.static import StaticHarvester
+from aura.wfs import parse_capabilities
+
+logger = logging.getLogger(__name__)
 
 GEOSERVER_BASE = "https://geo.stat.fi/geoserver"
+
+#: Paavon uusin tilastokerros ``postialue:pno_tilasto_<vuosi>``, jos
+#: GetCapabilities ei vastaa keruun aikana (tarkistettu 27.9.2026: 2026).
+PAAVO_FALLBACK_YEAR = 2026
+
+_PAAVO_STATS_LAYER = re.compile(r"^postialue:pno_tilasto_(\d{4})$")
 
 
 class StatfinGeoHarvester(StaticHarvester):
@@ -21,6 +35,75 @@ class StatfinGeoHarvester(StaticHarvester):
     org_name = "tilastokeskus"
     org_title = "Tilastokeskus"
     default_update_frequency = "vuosittain"
+
+    async def harvest(self) -> int:
+        """Kerää konfiguraatio; Paavoon lisätään uusimman vuoden tilastokerros.
+
+        Ulkoinen arvio 27.9.2026: Paavon ainoa WFS-resurssi oli ilman
+        kerrosta, joten kysely osui palvelun ensimmäiseen kerrokseen
+        (``postialue:pno``, pelkät rajat) eikä tunnuslukuihin. Tunnusluvut
+        ovat kerroksissa ``postialue:pno_tilasto_<vuosi>``; uusin vuosi
+        luetaan kyvyistä, jotta resurssi ei vanhene vuoden vaihtuessa.
+        """
+        year = await self._latest_paavo_year()
+        self.datasets_config = [
+            self._paavo_config(cfg, year) if cfg["id"] == "statfin-geo-paavo" else cfg
+            for cfg in type(self).datasets_config
+        ]
+        return await super().harvest()
+
+    async def _latest_paavo_year(self) -> int:
+        """Uusin ``pno_tilasto_<vuosi>``-kerros GetCapabilitiesista, tai varavuosi."""
+        try:
+            async with self._make_client(timeout=30.0) as client:
+                resp = await self._fetch(
+                    client,
+                    f"{GEOSERVER_BASE}/postialue/wfs",
+                    params={"service": "WFS", "version": "2.0.0", "request": "GetCapabilities"},
+                )
+            years = [
+                int(m.group(1))
+                for name in parse_capabilities(resp.text).feature_types
+                if (m := _PAAVO_STATS_LAYER.match(name))
+            ]
+        except Exception as exc:  # noqa: BLE001 — varavuosi riittää, keruu ei kaadu
+            logger.warning(
+                "[%s] Paavon kerroksia ei saatu (%s); vuosi %d", self.name, exc, PAAVO_FALLBACK_YEAR
+            )
+            return PAAVO_FALLBACK_YEAR
+        if not years:
+            logger.warning(
+                "[%s] Paavon tilastokerroksia ei löytynyt; vuosi %d", self.name, PAAVO_FALLBACK_YEAR
+            )
+            return PAAVO_FALLBACK_YEAR
+        return max(years)
+
+    @staticmethod
+    def _paavo_config(cfg: dict[str, Any], year: int) -> dict[str, Any]:
+        """Paavon konfiguraatio tilastokerroksen resurssilla (ensimmäisenä).
+
+        Tilastokerros on ensimmäinen, koska kyselyn oletusvalinta ottaa
+        ensimmäisen kyseltävän resurssin — ja postinumerokysymys koskee
+        lähes aina tunnuslukuja, ei rajoja.
+        """
+        out = copy.deepcopy(cfg)
+        layer = f"postialue:pno_tilasto_{year}"
+        stats = {
+            "id": "statfin-geo-paavo-wfs-tilasto",
+            "format": "WFS",
+            "url": f"{GEOSERVER_BASE}/postialue/wfs?service=WFS&typeName={layer}",
+            "name": f"Paavo-tunnusluvut {year} (WFS)",
+            "name_fi": f"Paavo-tunnusluvut {year} (WFS)",
+        }
+        out["resources"] = [stats, *out["resources"]]
+        out["notes_fi"] = (
+            f"{cfg['notes_fi']} Tunnusluvut kerroksessa {layer} (postinumerokenttä"
+            " postinumeroalue): he_vakiy väkiluku, he_kika keski-ikä, hr_mtu"
+            " asukkaiden mediaanitulot, te_taly taloudet, ra_asunn asunnot,"
+            " tp_tyopy työpaikat, pt_tyott työttömät. Kerros postialue:pno on"
+            " pelkät rajat; aiemmat vuodet kerroksissa pno_tilasto_<vuosi>."
+        )
+        return out
 
     datasets_config = [
         {
@@ -90,10 +173,14 @@ class StatfinGeoHarvester(StaticHarvester):
                 "tulotaso",
             ],
             "estimated_size_bytes": 200 * 1024**2,
+            # Tilastokerroksen resurssi lisätään keruussa (_paavo_config):
+            # uusin vuosi luetaan palvelun kyvyistä.
             "resources": [
                 {
+                    "id": "statfin-geo-paavo-wfs",
                     "format": "WFS",
                     "url": f"{GEOSERVER_BASE}/postialue/wfs",
+                    "name_fi": "Paavo — postinumeroalueiden rajat ja vuosikerrokset (WFS)",
                 },
                 {
                     "format": "WMS",
