@@ -39,6 +39,9 @@ class PxWebHarvester(BaseHarvester):
     org_title: str = ""
     dataset_id_prefix: str = ""
     notes_template: str = "Tilastotaulu"
+    #: Haetaanko englanninkieliset otsikot ``/en/``-puusta. Samat tunnisteet
+    #: kuin suomenkielisessä puussa, joten taulu yhdistyy polulla.
+    harvest_english: bool = True
 
     @classmethod
     def source_config(cls) -> dict[str, Any]:
@@ -52,6 +55,19 @@ class PxWebHarvester(BaseHarvester):
 
     async def harvest(self) -> int:
         async with self._make_client(timeout=60.0) as client:
+            # Englanninkielinen puu ensin: suomenkielisen puun taulut saavat
+            # otsikon ja kansioiden nimet sieltä. Ilman niitä englanninkielinen
+            # kysely ei osu PxWeb-tauluun lainkaan, koska otsikko on vain
+            # suomeksi.
+            self._english: dict[str, tuple[str, list[str]]] = {}
+            if self.harvest_english:
+                await self._crawl_english(
+                    client, f"{self.pxweb_base_url}/en/{self.root_path}/",
+                    self.root_path, [],
+                )
+                logger.info(
+                    "[%s] Englanninkielisiä otsikoita: %d", self.name, len(self._english)
+                )
             total = await self._crawl_folder(
                 client,
                 f"{self.pxweb_base_url}/fi/{self.root_path}/",
@@ -94,6 +110,29 @@ class PxWebHarvester(BaseHarvester):
 
         return count
 
+    async def _crawl_english(
+        self, client: httpx.AsyncClient, url: str, path: str, folders: list[str]
+    ) -> None:
+        """Kerää ``polku/taulu → (otsikko, kansioiden nimet)`` englanniksi.
+
+        Virhe ei kaada keruuta: englanninkielinen otsikko on lisä, ja puuttuva
+        kansio tarkoittaa vain että sen tauluilla ei ole käännöstä.
+        """
+        try:
+            items = (await self._fetch(client, url)).json()
+        except Exception as e:
+            logger.debug("[%s] Englanninkielinen kansio ohitettiin %s: %s", self.name, url, e)
+            return
+        for item in items:
+            item_id = item.get("id", "")
+            text = str(item.get("text", "")).strip()
+            if item.get("type") == "l":
+                await self._crawl_english(
+                    client, f"{url}{item_id}/", f"{path}/{item_id}", [*folders, text]
+                )
+            elif item.get("type") == "t" and text:
+                self._english[f"{path}/{item_id}"] = (text, folders)
+
     def _table_to_dataset(self, item: dict[str, Any], path: str, base_url: str) -> Dataset:
         """Muunna PxWeb-taulu Dataset-olioksi."""
         table_id = item.get("id", "")
@@ -121,11 +160,17 @@ class PxWebHarvester(BaseHarvester):
         elif "neljännes" in path_lower or "vuosinelj" in path_lower:
             freq = "neljännesvuosittain"
 
+        title_en, folders_en = getattr(self, "_english", {}).get(
+            f"{path}/{table_id}", ("", [])
+        )
+
         return self._make_dataset(
             id=dataset_id,
             name=f"{self.dataset_id_prefix}-{table_id.replace('.px', '').lower()}",
             title=title,
             title_fi=title,
+            title_en=title_en,
+            keywords_en=[f for f in folders_en if f],
             notes_fi=f"{self.notes_template}. Polku: {path}/{table_id}",
             update_frequency=freq,
             organization_id=self.org_id,

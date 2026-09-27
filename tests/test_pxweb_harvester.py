@@ -178,6 +178,50 @@ class TestCrawl:
         assert count == 0
 
 
+    @pytest.mark.asyncio
+    async def test_english_titles_join_by_path(self):
+        """Englanninkielinen puu antaa otsikon ja kansioiden nimet samalle polulle."""
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        pages = {
+            "https://x/en/StatFin/": [{"id": "asvu", "type": "l", "text": "Dwellings"}],
+            "https://x/en/StatFin/asvu/": [
+                {"id": "t1.px", "type": "t", "text": "Prices of dwellings"},
+            ],
+            "https://x/fi/StatFin/asvu/": [
+                {"id": "t1.px", "type": "t", "text": "Asuntojen hinnat", "updated": ""},
+            ],
+        }
+
+        async def fake_get(url, **_):
+            resp = MagicMock()
+            resp.json.return_value = pages[url]
+            resp.raise_for_status = MagicMock()
+            return resp
+
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=fake_get)
+        h._english = {}
+        await h._crawl_english(client, "https://x/en/StatFin/", "StatFin", [])
+        await h._crawl_folder(client, "https://x/fi/StatFin/asvu/", "StatFin/asvu")
+        row = conn.execute(
+            "SELECT title_fi, title_en, keywords_en FROM datasets WHERE id = 'statfin-t1.px'"
+        ).fetchone()
+        assert row[0] == "Asuntojen hinnat"
+        assert row[1] == "Prices of dwellings"
+        assert "Dwellings" in row[2]
+
+    @pytest.mark.asyncio
+    async def test_english_failure_is_silent(self):
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=Exception("HTTP 500"))
+        h._english = {}
+        await h._crawl_english(client, "https://x/en/StatFin/", "StatFin", [])
+        assert h._english == {}
+
+
 SAMPLE_TABLE_META = {
     "title": "Testitaulu muuttujina Vuosi ja Tiedot",
     "variables": [
