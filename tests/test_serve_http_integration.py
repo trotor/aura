@@ -57,7 +57,9 @@ async def test_initialize_and_list_tools_over_http(http_server: str) -> None:
     async with Client(http_server) as client:
         tools = await client.list_tools()
     names = {t.name for t in tools}
-    assert "search" in names
+    # Oletusprofiili on julkinen aikomustason pinta.
+    assert "find_data" in names
+    assert "search" not in names
 
 
 def test_health_endpoint_returns_200(http_server: str) -> None:

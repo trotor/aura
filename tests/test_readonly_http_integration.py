@@ -24,7 +24,10 @@ def _free_port() -> int:
 @pytest.fixture
 def readonly_server() -> Iterator[str]:
     port = _free_port()
-    env = {**os.environ, "AURA_READONLY": "1"}
+    # Admin-profiili: gating koskee ylläpitotyökaluja, jotka julkinen
+    # profiili piilottaa jo itsessään. Muuten testi ei näkisi puuttuuko
+    # kirjoittava työkalu gatingin vai profiilin takia.
+    env = {**os.environ, "AURA_READONLY": "1", "AURA_TOOL_PROFILE": "admin"}
     proc = subprocess.Popen(
         [sys.executable, "-m", "aura.cli", "serve", "--http",
          "--host", "127.0.0.1", "--port", str(port)],

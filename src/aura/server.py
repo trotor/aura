@@ -12,7 +12,7 @@ from fastmcp import Context, FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from aura.config import is_readonly
+from aura.config import is_readonly, tool_profile
 from aura.database import (
     check_schema_freshness,
     get_connection,
@@ -228,8 +228,30 @@ _BOUNDARIES_REMOTE = (
 )
 
 
-def build_instructions(readonly: bool = False) -> str:
-    """Rakenna server-instructions moodin mukaan (#137).
+# Julkisen profiilin ohje. Alle 1 500 merkkiä: ohje kulkee kontekstissa
+# jokaisella vuorolla, ja esimerkit kuuluvat promptteihin ja resursseihin.
+# Mitattu 27.9.2026: koko vanha pinta maksoi 9 127 tokenia per vuoro.
+_PUBLIC = (
+    "Aura: Suomen avoin data. Kolme askelta:\n"
+    "1) find_data(query, region) — aineistot, ja valmiit tunnusluvut jos "
+    "instanssi tuntee ne (indicators).\n"
+    "2) inspect_dataset(dataset_id) — rakenne, lisenssi, kyselyohje.\n"
+    "3) query_source(dataset_id, filters, area) — rivit lähteestä. PxWeb: "
+    "kutsu ensin ilman filttereitä, vastaus kertoo dimensiot ja koodit. "
+    "Aika: \"uusin\" tai \"2020-2024\".\n"
+    "area_snapshot(region) kertoo alueen hierarkian, tunnukset ja datan.\n"
+    "Alue nimellä tai koodilla: Tampere, 837, KU837, Pirkanmaa, 33100. "
+    "Lakkautettu kunta tulkitaan seuraajakseen.\n"
+    "Vastaukset ovat strukturoituja: seuraa next_actions-kenttää, lue error.hint "
+    "virheestä, ja kerro käyttäjälle provenance.source_url ja license."
+)
+
+
+def build_instructions(readonly: bool = False, profile: str = "admin") -> str:
+    """Rakenna server-instructions moodin ja profiilin mukaan (#137).
+
+    Julkinen profiili saa lyhyen aikomustason ohjeen; admin-profiili
+    vanhan ohjeen, joka kuvaa koko työkalupinnan.
 
     Read-only-moodi tarkoittaa käytännössä etäpalvelinta, jossa agentilla ei
     ole pääsyä ``data/boundaries/*.gpkg``-tiedostoihin eikä kirjoittaviin
@@ -239,16 +261,96 @@ def build_instructions(readonly: bool = False) -> str:
     Args:
         readonly: True = etäpalvelin (ei local-FS:ää, ei kirjoittavia tooleja).
     """
+    if profile == "public":
+        return _PUBLIC
     if readonly:
         return _INTRO + _FINDINGS_REMOTE + _API_USAGE + _BOUNDARIES_REMOTE
     return _INTRO + _FINDINGS_LOCAL + _API_USAGE + _BOUNDARIES_LOCAL
 
 
+def _startup_profile() -> str:
+    try:
+        return tool_profile()
+    except ValueError:
+        # Virhe nostetaan apply_tool_profilessa, jossa se näkyy käynnistyksessä.
+        return "admin"
+
+
 mcp = FastMCP(
     "Aura",
-    instructions=build_instructions(is_readonly()),
+    instructions=build_instructions(is_readonly(), _startup_profile()),
     lifespan=_lifespan,
 )
+
+#: Julkisen profiilin tagi. Laajennus (esim. Aura Pro) merkitsee omat
+#: julkiset työkalunsa samalla tagilla.
+PUBLIC_TAG = "public"
+
+#: Vanhentuneet työkalut → korvaaja. Näkyvät admin-profiilissa yhden version
+#: ajan kuvaus "Vanhentunut: käytä X" edellä, jotta vanhat kehotteet ja
+#: skriptit löytävät uuden nimen.
+DEPRECATED_TOOLS: dict[str, str] = {
+    "search": "find_data",
+    "search_structured": "find_data",
+    "search_by_region": "find_data(region=...)",
+    "recommend": "find_data",
+    "describe": "inspect_dataset",
+    "quality_report": "inspect_dataset",
+    "get_enrichments_tool": "inspect_dataset",
+    "query_data": "query_source",
+    "area_profile": "area_snapshot",
+    "lookup_municipality": "area_snapshot",
+    "compare_municipalities": "area_snapshot",
+}
+
+_DEPRECATION_PREFIX = "Vanhentunut: käytä "
+
+
+def apply_tool_profile(server: FastMCP | None = None, *, profile: str | None = None) -> str:
+    """Rajaa näkyvät työkalut profiilin mukaan ja aseta sen ohjeteksti.
+
+    ``public``: vain ``public``-tagilla merkityt työkalut, resurssit ja
+    promptit. ``admin``: kaikki; vanhentuneiden kuvaukseen lisätään korvaaja.
+
+    Kutsutaan käynnistyksessä read-only-gatingin jälkeen. Idempotentti.
+    """
+    if server is None:
+        server = mcp
+    if profile is None:
+        profile = tool_profile()
+    from fastmcp.tools.tool import Tool
+
+    # get_tool on asynkroninen, ja tämä ajetaan ennen tapahtumasilmukkaa.
+    # Komponentit ovat providerin omassa sanakirjassa; sama lähde jota
+    # get_tool itse käyttää.
+    tools = {
+        c.name: c for c in server.local_provider._components.values() if isinstance(c, Tool)
+    }
+    for name, replacement in DEPRECATED_TOOLS.items():
+        tool = tools.get(name)
+        if tool is None:
+            continue
+        desc = tool.description or ""
+        if not desc.startswith(_DEPRECATION_PREFIX):
+            tool.description = f"{_DEPRECATION_PREFIX}{replacement}. {desc}"
+    if profile == "public" and not getattr(server, "_aura_public_transforms", None):
+        before = list(server._transforms)
+        server.enable(tags={PUBLIC_TAG}, only=True)
+        server._aura_public_transforms = [  # type: ignore[attr-defined]
+            t for t in server._transforms if t not in before
+        ]
+    server.instructions = build_instructions(is_readonly(), profile)
+    return profile
+
+
+def reset_tool_profile(server: FastMCP | None = None) -> None:
+    """Kumoa julkisen profiilin rajaus (testit: ``mcp`` on moduulitason singleton)."""
+    if server is None:
+        server = mcp
+    for t in getattr(server, "_aura_public_transforms", None) or []:
+        if t in server._transforms:
+            server._transforms.remove(t)
+    server._aura_public_transforms = []  # type: ignore[attr-defined]
 
 
 @mcp.custom_route("/health", methods=["GET"])

@@ -378,12 +378,13 @@ def main() -> None:
 
     elif args.command == "serve":
         from aura.serve import resolve_serve_config
-        from aura.server import apply_readonly_gating, mcp
+        from aura.server import apply_readonly_gating, apply_tool_profile, mcp
 
         cfg = resolve_serve_config(http=args.http, host=args.host, port=args.port)
 
         if cfg.transport == "stdio":
             apply_readonly_gating(mcp)
+            apply_tool_profile(mcp)
             mcp.run(**cfg.run_args())
         else:
             # HTTP-moodissa tarjoillaan web-UI ja MCP samasta prosessista:

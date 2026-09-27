@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse
 
 from aura.config import is_readonly
 from aura.database import get_connection
-from aura.server import apply_readonly_gating, health_payload, mcp
+from aura.server import apply_readonly_gating, apply_tool_profile, health_payload, mcp
 from aura.web.app import create_app
 from aura.web.app import lifespan as web_lifespan
 
@@ -37,6 +37,7 @@ def create_asgi_app(stateless_http: bool = True) -> FastAPI:
             ei peri sitä, ja ero näkyy vasta asiakkaalla istuntopakkona.
     """
     apply_readonly_gating(mcp)
+    apply_tool_profile(mcp)
 
     # MCP-app saa oman reittinsä polkuun /mcp, ja se mountataan TYHJÄLLÄ
     # prefiksillä. Luonteva ``app.mount("/mcp", http_app(path="/"))`` ei
