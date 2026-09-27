@@ -66,6 +66,7 @@ BaseHarvester (base.py)
 ├── EduskuntaHarvester (eduskunta.py) — eduskunnan avoin data
 ├── FinapHarvester (finap.py) — NAP-liikennepalvelukatalogi
 ├── FmiHarvester (fmi.py) — WFS stored queries XML
+├── KelastoHarvester (kelasto.py) — Kelaston raportit Tietotarjottimen artikkelista
 ├── KoodistotHarvester (koodistot.py) — Suomi.fi-koodistot
 ├── PohtivaHarvester (pohtiva.py) — puolueohjelmat (Tietoarkisto)
 ├── SanastotHarvester (sanastot.py) — Suomi.fi-sanastot

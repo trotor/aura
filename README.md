@@ -6,7 +6,7 @@
 
 > **12 900+ datasettiä** · **31 000+ resurssia** · **340+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 43 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Vipunen, PRH, Kuntien paikkatiedot (36 kuntaa) ym.
+> 44 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Vipunen, PRH, Kelasto, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -333,6 +333,7 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [LUKE avoin tutkimusdata](https://opendata.luke.fi) | CKAN | 124 | 2,1 GB |
 | [Valtiokonttori](https://avoindata.tutkihallintoa.fi) | REST API | 48 | — |
 | [Vipunen](https://vipunen.fi) (opetushallinnon tilastopalvelu) | REST API | 47 | — |
+| [Kelasto](https://tietotarjotin.fi/tilastotietokanta-kelasto) (Kelan raportit, ei datarajapintaa) | Raporttilomake | 86 | — |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
 | Kuntien paikkatiedot (36 kuntaa) | WMS/WFS/ArcGIS | 36 | 57 GB |
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
