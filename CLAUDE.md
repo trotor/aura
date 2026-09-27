@@ -53,7 +53,7 @@ BaseHarvester (base.py)
 │   ├── MmlHarvester (mml.py) — Maanmittauslaitos
 │   ├── OvertureHarvester (overture.py)
 │   ├── PaituliHarvester (paituli.py) — CSC:n paikkatietopalvelu
-│   ├── PrhHarvester (prh.py) — YTJ-koodistot (YTJ-rajapinta ja bulk tulevat avoindata.fi:stä)
+│   ├── PrhHarvester (prh.py) — YTJ-yrityshaku ja koodistot (bulk tulee avoindata.fi:stä)
 │   ├── RuokavirastoHarvester (ruokavirasto.py)
 │   ├── StatfinGeoHarvester (statfin_geo.py)
 │   ├── StukHarvester (stuk.py) — Säteilyturvakeskus

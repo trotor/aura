@@ -349,7 +349,7 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | 19 GB |
 | [LIPAS](https://www.jyu.fi/sport/fi/yhteistyo/lipas) | WMS/WFS | 3 | 1 GB |
 | [STUK](https://stuk.fi) | WMS/REST | 2 | — |
-| [PRH](https://avoindata.prh.fi) (YTJ-koodistot ja postinumerot) | REST API | 2 | — |
+| [PRH](https://avoindata.prh.fi) (YTJ-yrityshaku, koodistot ja postinumerot) | REST API | 3 | — |
 | [Finap/NAP](https://finap.fi) | Portaali | 5 | — |
 | [Suomi.fi-sanastot](https://sanastot.suomi.fi) | REST API | — | — |
 | [THL Sotkanet](https://sotkanet.fi) | REST API | ~3 500 | — |

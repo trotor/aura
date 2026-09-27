@@ -257,12 +257,31 @@ async def fetch_json(
     # Osumien määrä kerrotaan vain kokonaan luetusta vastauksesta: katkaistun
     # vastauksen luku väittäisi lähteen olevan esikatselun kokoinen.
     table.total = None if cut else total
+    reported = _reported_total(data)
+    if reported is not None and not filters and reported > len(records):
+        # Sivutettu rajapinta (YTJ totalResults, Kirkanta total): sivun
+        # rivimäärä ei ole lähteen koko, joten lähteen oma luku voittaa.
+        table.total = reported
+        table.notes.append(
+            f"Lähde kertoo {reported} osumaa; vastauksessa oli yksi sivu ({len(records)} riviä)."
+        )
     if path and path != "$":
         table.notes.append(f"Rivit polusta '{path}'.")
     if unknown:
         table.error_code = "unknown_filter"
         table.error = f"Tuntemattomat kentät: {', '.join(unknown)}. Kentät: {headers}"
-    return _finish(table, headers, rows, None, total)
+    return _finish(table, headers, rows, None, table.total if table.total is not None else total)
+
+
+def _reported_total(data: Any) -> int | None:
+    """Lähteen oma osumamäärä JSON-vastauksen juuresta, jos se kerrotaan."""
+    if not isinstance(data, dict):
+        return None
+    for key in ("totalResults", "total", "totalCount", "count"):
+        value = data.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return None
 
 
 def vipunen_filter_url(url: str, filters: dict[str, list[str]]) -> str:
