@@ -52,9 +52,19 @@ def _pick_resource(
                 return r
     # Suosi formaatteja joille kysely osaa tehdä jotain. Koneluettavuus on
     # eri asia: XLSX on koneluettava mutta esikatselu ei osaa avata sitä.
-    for r in resources:
-        if resource_format(r) in PREVIEWABLE_FORMATS:
-            return r
+    queryable = [r for r in resources if resource_format(r) in PREVIEWABLE_FORMATS]
+    # WFS-resurssi joka nimeää tason on tarkempi kuin palvelun oletustaso:
+    # Paavon tilastotaso lisättiin rajatason rinnalle, mutta valinta osui
+    # rajatasoon (vain postinumero ja nimi) koska se oli listassa ensin.
+    named = [
+        r
+        for r in queryable
+        if resource_format(r) == "WFS" and "typename" in str(r.get("url", "")).lower()
+    ]
+    if named:
+        return named[0]
+    if queryable:
+        return queryable[0]
     return resources[0]
 
 

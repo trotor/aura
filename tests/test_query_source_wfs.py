@@ -285,3 +285,18 @@ async def test_layer_muulla_protokollalla_ohitetaan_huomautuksella(
         data = await _call({"dataset_id": "statfin-geo-paavo", "resource_index": 1, "layer": "x"})
     assert any("layer koskee vain WFS" in n for n in data["notes"])
     assert "layer" not in data["resource"]
+
+
+def test_nimetty_taso_ennen_oletustasoa() -> None:
+    """Paavo: tilastotaso (typeName) valitaan ennen rajatasoa (ei tasoa URL:ssa)."""
+    from aura.preview import _pick_resource
+
+    resources = [
+        {"format": "WFS", "url": "https://geo.stat.fi/geoserver/postialue/wfs"},
+        {"format": "WMS", "url": "https://geo.stat.fi/geoserver/postialue/wms"},
+        {
+            "format": "WFS",
+            "url": "https://geo.stat.fi/geoserver/postialue/wfs?typeName=postialue:pno_tilasto_2026",
+        },
+    ]
+    assert "pno_tilasto" in _pick_resource(resources)["url"]
