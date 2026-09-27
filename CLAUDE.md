@@ -42,6 +42,7 @@ BaseHarvester (base.py)
 │   ├── StatfinHarvester (statfin.py)
 │   ├── LukeHarvester (luke.py)
 │   └── TraficomTilastotHarvester (traficom_tilastot.py) — liikennetilastot
+│   (englanninkieliset otsikot haetaan /en/-puusta samalla polulla)
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
 │   ├── FinaviaHarvester (finavia.py) — lentoliikennetilastot (XLSX)
 │   ├── GtkHarvester (gtk.py)
@@ -52,6 +53,7 @@ BaseHarvester (base.py)
 │   ├── MmlHarvester (mml.py) — Maanmittauslaitos
 │   ├── OvertureHarvester (overture.py)
 │   ├── PaituliHarvester (paituli.py) — CSC:n paikkatietopalvelu
+│   ├── PrhHarvester (prh.py) — YTJ-koodistot (YTJ-rajapinta ja bulk tulevat avoindata.fi:stä)
 │   ├── RuokavirastoHarvester (ruokavirasto.py)
 │   ├── StatfinGeoHarvester (statfin_geo.py)
 │   ├── StukHarvester (stuk.py) — Säteilyturvakeskus
@@ -69,7 +71,8 @@ BaseHarvester (base.py)
 ├── SanastotHarvester (sanastot.py) — Suomi.fi-sanastot
 ├── SotkanetHarvester (sotkanet.py) — THL Sotkanet REST API
 ├── TraficomHarvester (traficom.py) — OData v4
-└── ValtiokonttoriHarvester (valtiokonttori.py) — Valtiokonttorin tuottavuusdata
+├── ValtiokonttoriHarvester (valtiokonttori.py) — Valtiokonttorin tuottavuusdata
+└── VipunenHarvester (vipunen.py) — opetushallinnon tilastopalvelu (REST, kenttäskeemat)
 ```
 
 ### Uuden harvesterin lisääminen
