@@ -20,6 +20,7 @@ from pydantic import Field
 import aura.server as _server
 from aura import fetch
 from aura.database import get_dataset, get_source
+from aura.formats import resource_format
 from aura.preview import _pick_resource
 from aura.responses import (
     Envelope,
@@ -149,7 +150,9 @@ async def query_source(
     ds_id = dataset["id"]
     source_info = get_source(conn, dataset.get("source", "")) or {}
     resource = _pick_resource(dataset.get("resources", []), resource_index, format_hint)
-    fmt = (resource.get("format") or "").upper() if resource else ""
+    # Tyhjä formaatti päätellään URL:sta: jo kerätyssä kannassa SYKE:n
+    # WFS-resurssit ovat formaatittomia kunnes lähde kerätään uudelleen.
+    fmt = resource_format(resource) if resource else ""
     url = (resource or {}).get("url", "") or ""
     protocol = _protocol(fmt, url, dataset, source_info.get("query_protocol", ""))
     res_ref = ResourceRef(

@@ -18,3 +18,5 @@ class SykeHarvester(CkanHarvester):
     url = "https://ckan.ymparisto.fi"
     ckan_base_url = "https://ckan.ymparisto.fi/api/3/action"
     ckan_source = "syke"
+    #: Portaali ei täytä ``title_translated``-kenttää; otsikot ovat suomeksi.
+    source_language = "fi"
