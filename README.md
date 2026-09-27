@@ -6,7 +6,7 @@
 
 > **12 900+ datasettiä** · **31 000+ resurssia** · **340+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 41 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Kuntien paikkatiedot (36 kuntaa) ym.
+> 44 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Vipunen, PRH, Kelasto, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -332,6 +332,8 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Digitransit](https://digitransit.fi) | GTFS/GraphQL | 40 | — |
 | [LUKE avoin tutkimusdata](https://opendata.luke.fi) | CKAN | 124 | 2,1 GB |
 | [Valtiokonttori](https://avoindata.tutkihallintoa.fi) | REST API | 48 | — |
+| [Vipunen](https://vipunen.fi) (opetushallinnon tilastopalvelu) | REST API | 47 | — |
+| [Kelasto](https://tietotarjotin.fi/tilastotietokanta-kelasto) (Kelan raportit, ei datarajapintaa) | Raporttilomake | 86 | — |
 | [Metsäkeskus](https://avoin.metsakeskus.fi) | WFS/WCS/ZIP | 43 | 1,2 TB |
 | Kuntien paikkatiedot (36 kuntaa) | WMS/WFS/ArcGIS | 36 | 57 GB |
 | [Ruokavirasto](https://www.ruokavirasto.fi) | INSPIRE/GeoServer | 33 | — |
@@ -347,6 +349,7 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | 19 GB |
 | [LIPAS](https://www.jyu.fi/sport/fi/yhteistyo/lipas) | WMS/WFS | 3 | 1 GB |
 | [STUK](https://stuk.fi) | WMS/REST | 2 | — |
+| [PRH](https://avoindata.prh.fi) (YTJ-koodistot ja postinumerot) | REST API | 2 | — |
 | [Finap/NAP](https://finap.fi) | Portaali | 5 | — |
 | [Suomi.fi-sanastot](https://sanastot.suomi.fi) | REST API | — | — |
 | [THL Sotkanet](https://sotkanet.fi) | REST API | ~3 500 | — |
@@ -542,6 +545,17 @@ mypy src/           # tyypintarkistus
 ```
 
 Katso **[CONTRIBUTING.md](CONTRIBUTING.md)** tarkemmat ohjeet.
+
+### Käyttötelemetria (oletuksena pois)
+
+Oman instanssin ylläpitäjä voi kytkeä päälle suppean käyttökirjauksen asettamalla `AURA_TELEMETRY_DB=/polku/telemetria.db`. Kantaan tallentuu vain kuvio ja laskuri, ei istuntoa, käyttäjää eikä yksittäisiä tapahtumia:
+
+- nollatulokselliset hakusanat (`aura gaps`)
+- työkalujen käyttömäärät (`aura gaps --patterns tool`)
+- istunnon työkaluketjut kuviona, esim. `find_data → inspect_dataset → query_source` (`aura gaps --patterns chain`). Tilaton HTTP ei anna istuntoa, jolloin kirjautuvat vain käyttömäärät.
+- käsitteet, joita laajennus ei tunnistanut (`aura gaps --patterns unmatched`)
+
+Ohjausmerkit poistetaan kirjoitettaessa ja kentät katkaistaan 200 merkkiin. `aura gaps --clear` tyhjentää nollatulokset.
 
 ## Versiointi
 

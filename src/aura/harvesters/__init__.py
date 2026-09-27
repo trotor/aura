@@ -14,6 +14,7 @@ from aura.harvesters.fluentoutdoors import FluentOutdoorsHarvester
 from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
 from aura.harvesters.hri import HriHarvester
+from aura.harvesters.kelasto import KelastoHarvester
 from aura.harvesters.koodistot import KoodistotHarvester
 from aura.harvesters.kunnat import KunnatHarvester
 from aura.harvesters.lajitietokeskus import LajitietokeskusHarvester
@@ -28,6 +29,7 @@ from aura.harvesters.overture import OvertureHarvester
 from aura.harvesters.paikkatietoikkuna import PaikkatietoikkunaHarvester
 from aura.harvesters.paituli import PaituliHarvester
 from aura.harvesters.pohtiva import PohtivaHarvester
+from aura.harvesters.prh import PrhHarvester
 from aura.harvesters.ptv import PtvHarvester
 from aura.harvesters.ruokavirasto import RuokavirastoHarvester
 from aura.harvesters.sanastot import SanastotHarvester
@@ -47,9 +49,13 @@ from aura.harvesters.tulospalvelu import TulospalveluHarvester
 from aura.harvesters.vaalirahoitus import VaalirahoitusHarvester
 from aura.harvesters.valtiokonttori import ValtiokonttoriHarvester
 from aura.harvesters.vayla import VaylaHarvester
+from aura.harvesters.vipunen import VipunenHarvester
 
 # Rekisteri kaikista harvestereista
 HARVESTERS: dict[str, type[BaseHarvester]] = {
+    "vipunen": VipunenHarvester,
+    "prh": PrhHarvester,
+    "kelasto": KelastoHarvester,
     "avoindata.fi": AvoindataHarvester,
     "hri.fi": HriHarvester,
     "syke": SykeHarvester,

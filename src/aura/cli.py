@@ -330,6 +330,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gaps_p.add_argument("--limit", type=int, default=50, help="Rivien määrä")
     gaps_p.add_argument("--clear", action="store_true", help="Tyhjennä kertymä (säilytysaika)")
+    gaps_p.add_argument(
+        "--patterns",
+        choices=("tool", "chain", "unmatched"),
+        help="Näytä työkalujen käyttö, työkaluketjut tai tunnistamattomat käsitteet",
+    )
 
     # prune
     prune_ds = subparsers.add_parser(
@@ -553,6 +558,19 @@ def main() -> None:
         if args.clear:
             removed = clear_zero_results()
             print(f"Poistettu {removed} riviä.")
+            return
+
+        if args.patterns:
+            from aura.telemetry import top_patterns
+
+            patterns = top_patterns(args.patterns, limit=args.limit)
+            if not patterns:
+                print(f"Ei kirjattuja kuvioita lajia '{args.patterns}'.")
+                return
+            print(f"\n{'kpl':>5}  {'viimeksi':<21} kuvio")
+            print("-" * 72)
+            for row in patterns:
+                print(f"{row['count']:>5}  {row['last_seen']!s:<21} {row['pattern']}")
             return
 
         rows = zero_result_gaps(limit=args.limit)

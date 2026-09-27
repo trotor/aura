@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastmcp import Context, FastMCP
+from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -66,6 +67,10 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     try:
         yield {"db": conn, "findings": [], "yso": yso}
     finally:
+        # Keskeneräiset ketjut kirjataan sammutuksessa, muuten ne katoaisivat.
+        import time
+
+        _telemetry.chains.flush_idle(time.monotonic(), all_=True)
         await yso.close()
         conn.close()
 
@@ -119,6 +124,40 @@ WRITE_TOOL_NAMES = frozenset(
 )
 
 
+class TelemetryMiddleware(Middleware):
+    """Kirjaa työkalun nimen ja istunnon ketjun kuviona (ks. aura.telemetry).
+
+    Kirjaus on pois päältä ellei ``AURA_TELEMETRY_DB`` ole asetettu, ja
+    epäonnistuminen ohitetaan: middleware ei koskaan kaada työkalukutsua.
+    """
+
+    def __init__(self) -> None:
+        from aura.telemetry import ChainRecorder
+
+        self.chains = ChainRecorder()
+
+    async def on_call_tool(
+        self, context: MiddlewareContext[Any], call_next: CallNext[Any, Any]
+    ) -> Any:
+        import time
+
+        from aura.telemetry import telemetry_path
+
+        if telemetry_path() is not None:
+            try:
+                session = None
+                ctx = context.fastmcp_context
+                if ctx is not None:
+                    try:
+                        session = ctx.session_id
+                    except Exception:  # noqa: BLE001 — tilaton HTTP: ei istuntoa
+                        session = None
+                self.chains.add(session, str(context.message.name), time.monotonic())
+            except Exception:  # noqa: BLE001 — telemetria ei saa kaataa kutsua
+                logger.debug("[telemetry] Middleware ohitti kirjauksen", exc_info=True)
+        return await call_next(context)
+
+
 def health_payload(conn: sqlite3.Connection) -> dict[str, Any]:
     """Rakenna /health-vastauksen runko: tila + datasettien määrä (DB-tarkistus)."""
     count = conn.execute("SELECT COUNT(*) FROM datasets").fetchone()[0]
@@ -151,10 +190,7 @@ def apply_readonly_gating(
     return removed
 
 
-_INTRO = (
-    "Suomalaisen avoimen datan discovery-palvelu. "
-    "Hae ja ymmärrä Suomen avoimia datasettejä. "
-)
+_INTRO = "Suomalaisen avoimen datan discovery-palvelu. Hae ja ymmärrä Suomen avoimia datasettejä. "
 
 # Löydösten kirjaus. log_finding/list_findings ovat session-muistia ja
 # toimivat molemmissa moodeissa; save_session_findings kirjoittaa kantaan
@@ -239,7 +275,7 @@ _PUBLIC = (
     "2) inspect_dataset(dataset_id) — rakenne, lisenssi, kyselyohje.\n"
     "3) query_source(dataset_id, filters, area) — rivit lähteestä. PxWeb: "
     "kutsu ensin ilman filttereitä, vastaus kertoo dimensiot ja koodit. "
-    "Aika: \"uusin\" tai \"2020-2024\".\n"
+    'Aika: "uusin" tai "2020-2024".\n'
     "area_snapshot(region) kertoo alueen hierarkian, tunnukset ja datan.\n"
     "Alue nimellä tai koodilla: Tampere, 837, KU837, Pirkanmaa, 33100. "
     "Lakkautettu kunta tulkitaan seuraajakseen.\n"
@@ -303,6 +339,8 @@ mcp = FastMCP(
     instructions=build_instructions(is_readonly(), _startup_profile()),
     lifespan=_lifespan,
 )
+_telemetry = TelemetryMiddleware()
+mcp.add_middleware(_telemetry)
 
 #: Julkisen profiilin tagi. Laajennus merkitsee omat
 #: julkiset työkalunsa samalla tagilla.
@@ -352,9 +390,7 @@ def apply_tool_profile(server: FastMCP | None = None, *, profile: str | None = N
     # get_tool on asynkroninen, ja tämä ajetaan ennen tapahtumasilmukkaa.
     # Komponentit ovat providerin omassa sanakirjassa; sama lähde jota
     # get_tool itse käyttää.
-    tools = {
-        c.name: c for c in server.local_provider._components.values() if isinstance(c, Tool)
-    }
+    tools = {c.name: c for c in server.local_provider._components.values() if isinstance(c, Tool)}
     for name, replacement in DEPRECATED_TOOLS.items():
         tool = tools.get(name)
         if tool is None:
@@ -394,6 +430,7 @@ def build_quality_server(source: FastMCP | None = None) -> FastMCP:
     for component in list(source.local_provider._components.values()):
         if isinstance(component, Tool) and QUALITY_TAG in (component.tags or set()):
             server.add_tool(component)
+    server.add_middleware(_telemetry)
     return server
 
 
