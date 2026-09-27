@@ -548,14 +548,17 @@ Katso **[CONTRIBUTING.md](CONTRIBUTING.md)** tarkemmat ohjeet.
 
 ### Käyttötelemetria (oletuksena pois)
 
-Oman instanssin ylläpitäjä voi kytkeä päälle suppean käyttökirjauksen asettamalla `AURA_TELEMETRY_DB=/polku/telemetria.db`. Kantaan tallentuu vain kuvio ja laskuri, ei istuntoa, käyttäjää eikä yksittäisiä tapahtumia:
+Oman instanssin ylläpitäjä voi kytkeä päälle suppean käyttökirjauksen asettamalla `AURA_TELEMETRY_DB=/polku/telemetria.db`. Raportti: `aura telemetry [--days 30] [--json]`.
 
-- nollatulokselliset hakusanat (`aura gaps`)
-- työkalujen käyttömäärät (`aura gaps --patterns tool`)
-- istunnon työkaluketjut kuviona, esim. `find_data → inspect_dataset → query_source` (`aura gaps --patterns chain`). Tilaton HTTP ei anna istuntoa, jolloin kirjautuvat vain käyttömäärät.
-- käsitteet, joita laajennus ei tunnistanut (`aura gaps --patterns unmatched`)
+Kantaan tallentuu:
 
-Ohjausmerkit poistetaan kirjoitettaessa ja kentät katkaistaan 200 merkkiin. `aura gaps --clear` tyhjentää nollatulokset.
+- käyttö päivittäin työkaluittain ja asiakasohjelmittain: kutsut, virheet ja keskimääräinen kesto. Asiakasohjelma on User-Agentin tuotenimi ilman versiota, esim. `claude-user`.
+- mitä kysytään: hakusanat, alueet, aineistotunnisteet ja tunnusluvut (työkalujen `query`-, `question`-, `region`-, `area(s)`-, `dataset_id`- ja `indicator`-argumentit) laskureina
+- nollatulokselliset haut ja käsitteet, joita laajennus ei tunnistanut
+- virheet muodossa `työkalu:koodi`
+- istunnon työkaluketjut kuviona, kun asiakkaalla on istunto. Tilaton HTTP ei anna istuntoa.
+
+Kantaan ei tallennu istuntoa, IP-osoitetta, käyttäjää eikä yksittäisiä tapahtumia. Sama arvo on yksi rivi, jonka laskuri kasvaa. Kellonaikaa ei tallenneta, ainoastaan päivä sekä kuvion ensimmäinen ja viimeinen esiintymä. Ohjausmerkit poistetaan kirjoitettaessa ja kentät katkaistaan 200 merkkiin. `aura gaps --clear` tyhjentää koko kertymän.
 
 ## Versiointi
 

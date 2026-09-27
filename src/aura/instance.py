@@ -35,6 +35,10 @@ class Instance(NamedTuple):
     name: str
     note: str
     operator: str = ""
+    #: Tallentaako instanssi käyttötelemetriaa (``AURA_TELEMETRY_DB``). Sivu
+    #: kertoo sen aina kun se on päällä — lukijan on tiedettävä, että
+    #: hakusanat tallentuvat, eikä sitä saa jättää ylläpitäjän muistettavaksi.
+    telemetry: bool = False
 
     @property
     def is_extended(self) -> bool:
@@ -55,4 +59,5 @@ def describe_instance(env: Mapping[str, str] | None = None) -> Instance:
         name=env.get(INSTANCE_NAME_ENV, "").strip(),
         note=env.get(INSTANCE_NOTE_ENV, "").strip(),
         operator=env.get(INSTANCE_OPERATOR_ENV, "").strip(),
+        telemetry=bool(env.get("AURA_TELEMETRY_DB", "").strip()),
     )

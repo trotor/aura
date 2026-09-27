@@ -116,6 +116,14 @@ class TestIndexPage:
         resp = client.get("/")
         assert "Aura" in resp.text
 
+    def test_telemetria_kerrotaan_kun_paalla(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("AURA_TELEMETRY_DB", raising=False)
+        assert "tallentaa palvelun kehittämiseksi" not in client.get("/").text
+        monkeypatch.setenv("AURA_TELEMETRY_DB", "/tmp/t.db")
+        assert "tallentaa palvelun kehittämiseksi" in client.get("/").text
+
     def test_index_contains_source_table(self, client: TestClient) -> None:
         resp = client.get("/")
         assert "avoindata.fi" in resp.text

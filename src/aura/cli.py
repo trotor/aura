@@ -336,6 +336,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Näytä työkalujen käyttö, työkaluketjut tai tunnistamattomat käsitteet",
     )
 
+    # telemetry
+    tel_p = subparsers.add_parser(
+        "telemetry", help="Käyttöraportti: mitä ja kuinka paljon kysytään (AURA_TELEMETRY_DB)"
+    )
+    tel_p.add_argument("--days", type=int, default=30, help="Aikaikkuna päivinä")
+    tel_p.add_argument("--limit", type=int, default=20, help="Rivejä per lista")
+    tel_p.add_argument("--json", action="store_true", help="Tulosta JSON")
+
     # prune
     prune_ds = subparsers.add_parser(
         "prune", help="Poista lähteestä kadonneet datasetit (oletuksena kuiva-ajo)"
@@ -355,6 +363,51 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def _print_telemetry(days: int, limit: int, *, as_json: bool = False) -> None:
+    import json as _json
+
+    from aura.telemetry import TELEMETRY_DB_ENV, telemetry_path, usage_report
+
+    if telemetry_path() is None:
+        print(f"Telemetria ei ole käytössä: aseta {TELEMETRY_DB_ENV}.")
+        return
+    report = usage_report(days=days, limit=limit)
+    if as_json:
+        print(_json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    if not report:
+        print("Ei kirjattua käyttöä.")
+        return
+
+    def table(title: str, rows: object, cols: list[str]) -> None:
+        items = rows if isinstance(rows, list) else []
+        print(f"\n{title}")
+        print("-" * 72)
+        if not items:
+            print("  (ei rivejä)")
+        for row in items:
+            print("  " + "  ".join(f"{row.get(c, '')!s:>8}" if c != cols[-1] else
+                                  f"{row.get(c, '')!s}" for c in cols))
+
+    per_day = report.get("per_day") or []
+    total = sum(int(r["calls"]) for r in per_day) if isinstance(per_day, list) else 0
+    print(f"Aura-käyttö {report.get('since')} alkaen: {total} työkalukutsua")
+    table("Päivittäin (kutsut, virheet, päivä)", per_day, ["calls", "errors", "day"])
+    table("Työkalut (kutsut, virheet, ms keskim., työkalu)", report.get("per_tool"),
+          ["calls", "errors", "avg_ms", "tool"])
+    table("Asiakasohjelmat (kutsut, ohjelma)", report.get("per_client"), ["calls", "client"])
+    for key, title in (
+        ("query", "Hakusanat"),
+        ("area", "Alueet"),
+        ("dataset", "Aineistot"),
+        ("indicator", "Tunnusluvut"),
+        ("zero_results", "Nollatulokset (mitä ei löytynyt)"),
+        ("unmatched", "Tunnistamattomat tunnusluvut"),
+        ("error", "Virheet (työkalu:koodi)"),
+    ):
+        table(f"{title} (kpl, viimeksi, arvo)", report.get(key), ["count", "last_seen", "pattern"])
 
 
 def main() -> None:
@@ -536,6 +589,9 @@ def main() -> None:
             total_imported += count
 
         print(f"\nTuotu yhteensä {total_imported} rikastusta.")
+
+    elif args.command == "telemetry":
+        _print_telemetry(args.days, args.limit, as_json=args.json)
 
     elif args.command == "gaps":
         from aura.telemetry import (
