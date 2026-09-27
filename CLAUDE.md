@@ -46,6 +46,7 @@ BaseHarvester (base.py)
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
 │   ├── FinaviaHarvester (finavia.py) — lentoliikennetilastot (XLSX)
 │   ├── GtkHarvester (gtk.py)
+│   ├── KirjastotHarvester (kirjastot.py) — kirjastotilastot (XLS, vuodet sivulta) ja Kirkanta API v4
 │   ├── KunnatHarvester (kunnat.py) — 36 kunnan WMS/WFS/ArcGIS
 │   ├── LipasHarvester (lipas.py) — Jyväskylän yliopisto liikuntapaikat
 │   ├── LukeKarttaHarvester (luke_kartta.py)

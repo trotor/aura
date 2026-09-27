@@ -6,7 +6,7 @@
 
 > **12 900+ datasettiä** · **31 000+ resurssia** · **340+ organisaatiota** · **~2 TB** avointa dataa
 >
-> 44 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Vipunen, PRH, Kelasto, Kuntien paikkatiedot (36 kuntaa) ym.
+> 45 datalähteestä: avoindata.fi, SYKE, HRI, Tilastokeskus, LUKE, Digitraffic, Digitransit, Finap/NAP, FMI, Paikkatietoikkuna, Suomi.fi-koodistot, Overture Maps, GTK, Traficom, Traficomin tilastotietokanta, Finavia, Finlex, Eduskunta, Metsäkeskus, MML, Väylävirasto, Valtiokonttori, Ruokavirasto, THL Sotkanet, STUK, LIPAS, PaItuli, Vaalirahoitusvalvonta, Lajitietokeskus, POHTIVA, Vipunen, PRH, Kelasto, Kirjastot.fi, Kuntien paikkatiedot (36 kuntaa) ym.
 
 Aura kyntää suomalaisen avoimen datan esiin piilostaan ja tekee sen ymmärrettäväksi. Palvelu toimii MCP-serverinä tekoälyille sekä avoimena web-palveluna ihmisille.
 
@@ -349,6 +349,7 @@ Katso tuetut dataformaatit: **[docs/formats.md](docs/formats.md)**
 | [Taustakartat](https://kartat.kapsi.fi) | TMS | 4 | 19 GB |
 | [LIPAS](https://www.jyu.fi/sport/fi/yhteistyo/lipas) | WMS/WFS | 3 | 1 GB |
 | [STUK](https://stuk.fi) | WMS/REST | 2 | — |
+| [Kirjastot.fi](https://tilastot.kirjastot.fi) (kirjastotilastot, Kirkanta API v4) | XLS/REST API | 2 | — |
 | [PRH](https://avoindata.prh.fi) (YTJ-yrityshaku, koodistot ja postinumerot) | REST API | 3 | — |
 | [Finap/NAP](https://finap.fi) | Portaali | 5 | — |
 | [Suomi.fi-sanastot](https://sanastot.suomi.fi) | REST API | — | — |
