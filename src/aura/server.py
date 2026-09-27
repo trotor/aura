@@ -143,19 +143,66 @@ class TelemetryMiddleware(Middleware):
 
         from aura.telemetry import telemetry_path
 
-        if telemetry_path() is not None:
+        if telemetry_path() is None:
+            return await call_next(context)
+        tool = str(context.message.name)
+        try:
+            session = None
+            ctx = context.fastmcp_context
+            if ctx is not None:
+                try:
+                    session = ctx.session_id
+                except Exception:  # noqa: BLE001 — tilaton HTTP: ei istuntoa
+                    session = None
+            self.chains.add(session, tool, time.monotonic())
+        except Exception:  # noqa: BLE001 — telemetria ei saa kaataa kutsua
+            logger.debug("[telemetry] Middleware ohitti kirjauksen", exc_info=True)
+        started = time.monotonic()
+        error_code: str | None = None
+        try:
+            result = await call_next(context)
+        except Exception:
+            error_code = "exception"
+            raise
+        else:
+            error_code = _error_code(result)
+            return result
+        finally:
+            self._record(context, tool, 1000 * (time.monotonic() - started), error_code)
+
+    @staticmethod
+    def _record(
+        context: MiddlewareContext[Any], tool: str, ms: float, error_code: str | None
+    ) -> None:
+        from aura.telemetry import client_kind, record_call
+
+        try:
+            client = ""
             try:
-                session = None
-                ctx = context.fastmcp_context
-                if ctx is not None:
-                    try:
-                        session = ctx.session_id
-                    except Exception:  # noqa: BLE001 — tilaton HTTP: ei istuntoa
-                        session = None
-                self.chains.add(session, str(context.message.name), time.monotonic())
-            except Exception:  # noqa: BLE001 — telemetria ei saa kaataa kutsua
-                logger.debug("[telemetry] Middleware ohitti kirjauksen", exc_info=True)
-        return await call_next(context)
+                from fastmcp.server.dependencies import get_http_request
+
+                client = client_kind(get_http_request().headers.get("user-agent", ""))
+            except Exception:  # noqa: BLE001 — stdio: ei HTTP-pyyntöä
+                client = "stdio"
+            record_call(
+                tool,
+                dict(context.message.arguments or {}),
+                client=client,
+                ms=ms,
+                error_code=error_code,
+            )
+        except Exception:  # noqa: BLE001 — telemetria ei saa kaataa kutsua
+            logger.debug("[telemetry] Kutsun kirjaus ohitettiin", exc_info=True)
+
+
+def _error_code(result: Any) -> str | None:
+    """Virhekoodi strukturoidusta vastauksesta (``fail()`` → ``error.code``)."""
+    data = getattr(result, "structured_content", None)
+    if isinstance(data, dict) and isinstance(data.get("error"), dict):
+        return str(data["error"].get("code") or "error")
+    if getattr(result, "is_error", False):
+        return "error"
+    return None
 
 
 def health_payload(conn: sqlite3.Connection) -> dict[str, Any]:

@@ -62,3 +62,37 @@ def test_tyhjennys_poistaa_myos_kuviot(telemetry: Path) -> None:
     record_pattern("tool", "find_data")
     assert clear_zero_results() == 2
     assert top_patterns("tool") == []
+
+
+async def test_kaytto_ja_kysytyt_kasitteet(telemetry: Path) -> None:
+    """Päivälaskuri, argumenttien arvot ja virhekoodi — ei istuntoa eikä kellonaikaa."""
+    from aura.server import mcp
+    from aura.telemetry import usage_report
+
+    async with Client(mcp) as client:
+        await client.call_tool("find_data", {"query": "metsä", "region": "Tampere"})
+        await client.call_tool("find_data", {"query": "metsä"})
+        await client.call_tool(
+            "inspect_dataset", {"dataset_id": "ei-ole-olemassa"}, raise_on_error=False
+        )
+    report = usage_report()
+    tools = {r["tool"]: r for r in report["per_tool"]}  # type: ignore[union-attr]
+    assert tools["find_data"]["calls"] == 2
+    assert tools["inspect_dataset"]["errors"] == 1
+    assert report["query"][0] == {  # type: ignore[index]
+        "pattern": "metsä", "count": 2, "last_seen": report["query"][0]["last_seen"]  # type: ignore[index]
+    }
+    assert [r["pattern"] for r in report["area"]] == ["Tampere"]  # type: ignore[union-attr]
+    assert report["error"][0]["pattern"] == "inspect_dataset:dataset_not_found"  # type: ignore[index]
+    assert report["per_client"][0]["client"] == "stdio"  # type: ignore[index]
+    dump = "\n".join(sqlite3.connect(telemetry).iterdump())
+    assert "T" not in {c for row in report["per_day"] for c in str(row["day"])}  # type: ignore[union-attr]
+    assert "session" not in dump.lower()
+
+
+def test_asiakasohjelman_nimi() -> None:
+    from aura.telemetry import client_kind
+
+    assert client_kind("claude-user/1.0 (+https://claude.ai)") == "claude-user"
+    assert client_kind("Mozilla/5.0 (Macintosh)") == "mozilla"
+    assert client_kind("\x1b[2Kpaha/1") == "2kpaha"

@@ -83,6 +83,13 @@ aura serve --http</code></pre>
             Tämän palvelun hostauksesta vastaa {{ instance.operator }}.
         </small></p>
         {% endif %}
+        {% if instance.telemetry %}
+        <p><small>
+            Palvelu tallentaa palvelun kehittämiseksi hakusanat, kysytyt alueet,
+            aineistot ja tunnusluvut sekä työkalujen käyttömäärät päivittäin.
+            Käyttäjää, istuntoa tai IP-osoitetta ei tallenneta.
+        </small></p>
+        {% endif %}
     </article>
 </div>
 

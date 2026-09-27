@@ -54,13 +54,38 @@ CREATE TABLE IF NOT EXISTS tool_patterns (
     last_seen  TEXT NOT NULL,
     PRIMARY KEY (kind, pattern)
 );
+CREATE TABLE IF NOT EXISTS usage_daily (
+    day      TEXT NOT NULL,
+    tool     TEXT NOT NULL,
+    client   TEXT NOT NULL DEFAULT '',
+    calls    INTEGER NOT NULL DEFAULT 0,
+    errors   INTEGER NOT NULL DEFAULT 0,
+    total_ms INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, tool, client)
+);
 """
 
 #: tool_patterns-taulun lajit. ``tool`` = yksittäinen työkalu, ``chain`` =
 #: istunnon työkaluketju kuviona, ``unmatched`` = käsite jota laajennus ei
-#: tunnistanut (esim. tunnusluvun nimi). Sama minimimuoto kuin
+#: tunnistanut (esim. tunnusluvun nimi). Argumenttilajit (``query``,
+#: ``area``, ``dataset``, ``indicator``) kertovat mitä kysytään, ``error``
+#: mikä epäonnistuu (``työkalu:koodi``). Sama minimimuoto kuin
 #: nollatuloksilla: kuvio ja laskuri, ei istuntoa eikä tapahtumia.
-PATTERN_KINDS = frozenset({"tool", "chain", "unmatched"})
+PATTERN_KINDS = frozenset(
+    {"tool", "chain", "unmatched", "query", "area", "dataset", "indicator", "error"}
+)
+
+#: Työkalun argumentti → kuvion laji. Vain nämä kirjataan: ne kertovat
+#: mitä kysytään. Muut argumentit (suodattimet, rajat) jätetään pois.
+ARG_KINDS = {
+    "query": "query",
+    "question": "query",
+    "region": "area",
+    "area": "area",
+    "areas": "area",
+    "dataset_id": "dataset",
+    "indicator": "indicator",
+}
 
 #: Ketjun enimmäispituus. Pidempi ketju katkaistaan — pitkä ketju on jo
 #: itsessään signaali, eikä sen loppu kerro enempää.
@@ -164,6 +189,132 @@ def record_pattern(kind: str, pattern: str, env: Mapping[str, str] | None = None
         return False
 
 
+def client_kind(user_agent: str) -> str:
+    """Asiakasohjelman tuotenimi User-Agentista (``claude-user/1.0`` → ``claude-user``).
+
+    Vain ensimmäinen tuotetunnus ilman versiota: se kertoo mikä ohjelma
+    kysyy, mutta ei erottele käyttäjiä.
+    """
+    token = (user_agent or "").strip().split(" ", 1)[0].split("/", 1)[0]
+    return re.sub(r"[^a-z0-9._-]", "", token.lower())[:40]
+
+
+def record_call(
+    tool: str,
+    arguments: dict[str, object] | None,
+    *,
+    client: str = "",
+    ms: float = 0.0,
+    error_code: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    """Kirjaa yksi työkalukutsu: päivän laskuri ja kysytyt käsitteet.
+
+    Tallentuu päivä (ei kellonaikaa), työkalu, asiakasohjelman nimi,
+    kesto ja virhekoodi sekä ``ARG_KINDS``-argumenttien arvot kuvioina.
+    Ei istuntoa, IP:tä eikä tapahtumakohtaista aikaleimaa. Ei koskaan
+    nosta poikkeusta (kutsuja on työkalupolulla).
+    """
+    path = telemetry_path(env)
+    if path is None or not tool:
+        return False
+    now = datetime.now(UTC)
+    stamp = now.isoformat(timespec="seconds")
+    patterns: list[tuple[str, str]] = []
+    for key, value in (arguments or {}).items():
+        kind = ARG_KINDS.get(key)
+        if kind is None or value in (None, "", []):
+            continue
+        values = value if isinstance(value, list) else [value]
+        patterns += [(kind, _clean(str(v))) for v in values[:5] if _clean(str(v))]
+    if error_code:
+        patterns.append(("error", _clean(f"{tool}:{error_code}")))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(path, timeout=2.0) as conn:
+            conn.executescript(_SCHEMA)
+            conn.execute(
+                """
+                INSERT INTO usage_daily (day, tool, client, calls, errors, total_ms)
+                VALUES (?, ?, ?, 1, ?, ?)
+                ON CONFLICT(day, tool, client) DO UPDATE SET
+                    calls = calls + 1,
+                    errors = errors + excluded.errors,
+                    total_ms = total_ms + excluded.total_ms
+                """,
+                (now.date().isoformat(), _clean(tool), client, int(bool(error_code)), int(ms)),
+            )
+            conn.executemany(
+                """
+                INSERT INTO tool_patterns (kind, pattern, count, first_seen, last_seen)
+                VALUES (?, ?, 1, ?, ?)
+                ON CONFLICT(kind, pattern) DO UPDATE SET
+                    count = count + 1,
+                    last_seen = excluded.last_seen
+                """,
+                [(k, v, stamp, stamp) for k, v in patterns],
+            )
+        return True
+    except (sqlite3.Error, OSError) as exc:
+        logger.debug("[telemetry] Kutsun kirjaus ohitettiin: %s", exc)
+        return False
+
+
+def usage_report(
+    days: int = 30, limit: int = 20, env: Mapping[str, str] | None = None
+) -> dict[str, object]:
+    """Yhteenveto: käyttö päivittäin, työkaluittain ja asiakkaittain sekä kysytyimmät."""
+    path = telemetry_path(env)
+    if path is None or not path.exists():
+        return {}
+    try:
+        with sqlite3.connect(path, timeout=2.0) as conn:
+            conn.row_factory = sqlite3.Row
+            conn.executescript(_SCHEMA)
+            since = conn.execute(
+                "SELECT date('now', ?)", (f"-{max(days, 1) - 1} days",)
+            ).fetchone()[0]
+
+            def rows(sql: str, *params: object) -> list[dict[str, object]]:
+                return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+            report: dict[str, object] = {
+                "since": since,
+                "per_day": rows(
+                    "SELECT day, SUM(calls) calls, SUM(errors) errors FROM usage_daily"
+                    " WHERE day >= ? GROUP BY day ORDER BY day",
+                    since,
+                ),
+                "per_tool": rows(
+                    "SELECT tool, SUM(calls) calls, SUM(errors) errors,"
+                    " CAST(SUM(total_ms) / MAX(SUM(calls), 1) AS INTEGER) avg_ms"
+                    " FROM usage_daily WHERE day >= ? GROUP BY tool ORDER BY calls DESC",
+                    since,
+                ),
+                "per_client": rows(
+                    "SELECT client, SUM(calls) calls FROM usage_daily WHERE day >= ?"
+                    " GROUP BY client ORDER BY calls DESC",
+                    since,
+                ),
+                "zero_results": rows(
+                    "SELECT query pattern, count, last_seen FROM zero_results"
+                    " ORDER BY count DESC, last_seen DESC LIMIT ?",
+                    limit,
+                ),
+            }
+            for kind in ("query", "area", "dataset", "indicator", "unmatched", "error"):
+                report[kind] = rows(
+                    "SELECT pattern, count, last_seen FROM tool_patterns WHERE kind = ?"
+                    " ORDER BY count DESC, last_seen DESC LIMIT ?",
+                    kind,
+                    limit,
+                )
+        return report
+    except sqlite3.Error as exc:
+        logger.debug("[telemetry] Raportin luku epäonnistui: %s", exc)
+        return {}
+
+
 def top_patterns(
     kind: str, limit: int = 50, env: Mapping[str, str] | None = None
 ) -> list[dict[str, object]]:
@@ -262,7 +413,7 @@ def clear_zero_results(env: Mapping[str, str] | None = None) -> int:
         with sqlite3.connect(path, timeout=2.0) as conn:
             conn.executescript(_SCHEMA)
             count = 0
-            for table in ("zero_results", "tool_patterns"):
+            for table in ("zero_results", "tool_patterns", "usage_daily"):
                 count += conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
                 conn.execute(f"DELETE FROM {table}")
         return int(count)
