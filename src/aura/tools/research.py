@@ -47,7 +47,7 @@ def reset_findings() -> None:
     _fallback_findings.clear()
 
 
-@mcp.tool()
+@mcp.tool(tags={"quality"})
 def log_finding(
     dataset_id: str,
     finding: str,
@@ -86,7 +86,7 @@ def log_finding(
     )
 
 
-@mcp.tool()
+@mcp.tool(tags={"quality"})
 def list_findings(ctx: Context | None = None) -> str:
     """Näytä session aikana kirjatut löydökset.
 

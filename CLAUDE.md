@@ -99,7 +99,7 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 
 ## MCP-työkalut
 
-Kaksi profiilia (`AURA_TOOL_PROFILE`): **public** (oletus, julkinen pinta) ja **admin** (kaikki). Repon `.mcp.json` käyttää admin-profiilia.
+Kolme profiilia (`AURA_TOOL_PROFILE`): **public** (oletus, datan käyttäjä, `/mcp`), **laatu** (julkaisijat ja ylläpitäjät, vain luku, `/mcp/laatu`) ja **admin** (kaikki). Repon `.mcp.json` käyttää admin-profiilia.
 
 **Julkinen profiili — aikomustason työkalut, strukturoidut vastaukset:**
 
@@ -116,6 +116,8 @@ Jokaisella julkisella työkalulla on `outputSchema`, ja `tests/test_surface.py` 
 Laajennuspisteet (`aura.extensions`): `find_data.indicators`, `inspect_dataset.recipe`, `area_snapshot.key_figures` ja `add_instructions()`.
 
 Aluetunnisteet tulkitaan aina `aura.areas.resolve_area()`:lla (nimi fi/sv taivutettuna, kuntakoodi, `KU837`, `MK06`, postinumero, lakkautettu kunta → seuraaja).
+
+**Laatuprofiili** (tagi `quality`, oma palvelin `build_quality_server()`): `quality_summary`, `metadata_gaps`, `availability_report` + `find_data`, `inspect_dataset`, `log_finding`, `list_findings`. Ei kirjoittavia työkaluja eikä `health_check`ia — saatavuus luetaan tallennetuista tarkistuksista (`tests/test_laatu.py`).
 
 **Admin-profiili:** kaikki alla olevat. Korvatut työkalut näkyvät kuvauksella "Vanhentunut: käytä X" (`aura.server.DEPRECATED_TOOLS`) yhden version ajan.
 

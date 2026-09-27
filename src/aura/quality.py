@@ -439,17 +439,31 @@ def score_all_datasets(conn: sqlite3.Connection, source: str = "") -> int:
     return count
 
 
+def _gap_filter(source: str, organization: str) -> tuple[str, list[str]]:
+    """Lähde- ja julkaisijaehto puuteanalyyseille (julkaisija: osa nimestä riittää)."""
+    parts: list[str] = []
+    params: list[str] = []
+    if source:
+        parts.append("d.source = ?")
+        params.append(source)
+    if organization:
+        parts.append("d.organization_title LIKE ?")
+        params.append(f"%{organization}%")
+    return " AND ".join(parts), params
+
+
 def analyze_metadata_gaps(
     conn: sqlite3.Connection,
     source: str = "",
+    organization: str = "",
 ) -> dict[str, Any]:
     """Analysoi metatiedon puutteet lähteittäin.
 
     Returns:
         Dict jossa lähdekohtaiset tilastot ja parannusehdotukset.
     """
-    where = "WHERE d.source = ?" if source else ""
-    params: list[str] = [source] if source else []
+    cond, params = _gap_filter(source, organization)
+    where = f"WHERE {cond}" if cond else ""
 
     # Perustilastot
     rows = conn.execute(
@@ -535,14 +549,16 @@ def suggest_improvements(
     conn: sqlite3.Connection,
     source: str = "",
     limit: int = 10,
+    organization: str = "",
 ) -> list[dict[str, Any]]:
     """Ehdota helposti parannettavia datasettejä.
 
     Palauttaa datasetit joilla on eniten puutteita mutta jotka ovat
     helposti rikastettavissa.
     """
-    where = "AND d.source = ?" if source else ""
-    params: list[Any] = [source] if source else []
+    cond, filter_params = _gap_filter(source, organization)
+    where = f"AND {cond}" if cond else ""
+    params: list[Any] = list(filter_params)
 
     rows = conn.execute(
         f"""

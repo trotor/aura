@@ -113,7 +113,7 @@ def _hit(
     )
 
 
-@mcp.tool(tags={"public"}, output_schema=schema_of(FindDataResult))
+@mcp.tool(tags={"public", "quality"}, output_schema=schema_of(FindDataResult))
 async def find_data(
     query: str = "",
     region: str = "",

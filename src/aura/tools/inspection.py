@@ -92,7 +92,7 @@ def _frequency(raw: Any) -> str:
     return str(value)
 
 
-@mcp.tool(tags={"public"}, output_schema=schema_of(InspectResult))
+@mcp.tool(tags={"public", "quality"}, output_schema=schema_of(InspectResult))
 async def inspect_dataset(dataset_id: str, ctx: Context | None = None) -> ToolResult:
     """Aineiston kuvaus, resurssit, kentät, laatu, saatavuus ja kyselyohje.
 

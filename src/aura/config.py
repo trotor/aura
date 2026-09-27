@@ -22,9 +22,11 @@ def is_readonly(env: Mapping[str, str] | None = None) -> bool:
     return env.get("AURA_READONLY", "").strip().lower() in _TRUTHY
 
 
-#: Työkaluprofiilit. ``public`` on aikomustason pinta (≤ 8 työkalua);
-#: ``admin`` näyttää kaiken, myös ylläpidon ja vanhentuneet työkalut.
-TOOL_PROFILES = ("public", "admin")
+#: Työkaluprofiilit. ``public`` on aikomustason pinta (≤ 8 työkalua) datan
+#: käyttäjälle; ``laatu`` laadunvalvonta julkaisijoille ja ylläpitäjille
+#: (vain lukuoperaatioita); ``admin`` näyttää kaiken, myös ylläpidon ja
+#: vanhentuneet työkalut.
+TOOL_PROFILES = ("public", "laatu", "admin")
 
 
 def tool_profile(env: Mapping[str, str] | None = None) -> str:

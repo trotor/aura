@@ -12,23 +12,55 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from starlette.responses import JSONResponse
 
 from aura.config import is_readonly
 from aura.database import get_connection
-from aura.server import apply_readonly_gating, apply_tool_profile, health_payload, mcp
+from aura.server import (
+    apply_readonly_gating,
+    apply_tool_profile,
+    build_quality_server,
+    health_payload,
+    mcp,
+)
 from aura.web.app import create_app
 from aura.web.app import lifespan as web_lifespan
 
 MCP_PATH = "/mcp"
 
+#: Laadunvalvonnan MCP (julkaisijat ja ylläpitäjät). Oma palvelin, sama prosessi.
+QUALITY_MCP_PATH = "/mcp/laatu"
+
+
+def _dispatch(quality_app: Any, main_app: Any) -> Any:
+    """Ohjaa ``/mcp/laatu`` laatupalvelimelle, kaikki muu pääsovellukselle.
+
+    Kaksi tyhjällä prefiksillä mountattua sovellusta ei toimi peräkkäin:
+    ensimmäinen nappaa jokaisen polun ja palauttaa 404:n omista
+    tuntemattomistaan. Polun etuliitteen tarkistus ennen mounttia säilyttää
+    saman ominaisuuden kuin ``/mcp``:llä — ei 307-ohjausta.
+    """
+
+    async def app(scope: dict[str, Any], receive: Any, send: Any) -> None:
+        path = scope.get("path", "")
+        if scope["type"] in ("http", "websocket") and (
+            path == QUALITY_MCP_PATH or path.startswith(QUALITY_MCP_PATH + "/")
+        ):
+            await quality_app(scope, receive, send)
+        else:
+            await main_app(scope, receive, send)
+
+    return app
+
 
 def create_asgi_app(stateless_http: bool = True) -> FastAPI:
     """Rakenna yhdistetty sovellus.
 
-    Read-only-gatettu MCP mountataan ``/mcp``:hen ja web-UI jää juureen.
+    Read-only-gatettu MCP mountataan ``/mcp``:hen, laadunvalvonnan MCP
+    ``/mcp/laatu``:hun ja web-UI jää juureen.
 
     Args:
         stateless_http: Sama oletus kuin ``resolve_serve_config``:lla
@@ -49,6 +81,9 @@ def create_asgi_app(stateless_http: bool = True) -> FastAPI:
     # Tyhjä prefiksi nappaa vain ne polut joita FastAPIn omat reitit eivät
     # ota, koska ne on rekisteröity ensin.
     mcp_app = mcp.http_app(path=MCP_PATH, stateless_http=stateless_http)
+    quality_app = build_quality_server(mcp).http_app(
+        path=QUALITY_MCP_PATH, stateless_http=stateless_http
+    )
 
     @asynccontextmanager
     async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -60,7 +95,8 @@ def create_asgi_app(stateless_http: bool = True) -> FastAPI:
         """
         async with web_lifespan(app):
             async with mcp_app.router.lifespan_context(app):
-                yield
+                async with quality_app.router.lifespan_context(app):
+                    yield
 
     app = create_app(lifespan=combined_lifespan)
 
@@ -75,5 +111,5 @@ def create_asgi_app(stateless_http: bool = True) -> FastAPI:
         finally:
             conn.close()
 
-    app.mount("", mcp_app)
+    app.mount("", _dispatch(quality_app, mcp_app))
     return app

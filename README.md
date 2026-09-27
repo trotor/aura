@@ -181,7 +181,7 @@ aura import-enrichments contributions/*.json
 
 ## MCP-työkalut
 
-Aura tarjoaa kaksi työkaluprofiilia, jotka valitaan `AURA_TOOL_PROFILE`-muuttujalla.
+Aura tarjoaa kolme työkaluprofiilia. Paikallisesti profiili valitaan `AURA_TOOL_PROFILE`-muuttujalla; HTTP-palvelin tarjoilee julkisen profiilin polussa `/mcp` ja laatuprofiilin polussa `/mcp/laatu`.
 
 ### Julkinen profiili (oletus)
 
@@ -198,6 +198,24 @@ Viisi aikomustason työkalua. Jokainen palauttaa strukturoidun vastauksen (`stru
 Alueen voi antaa nimellä tai koodilla: `Tampere`, `837`, `KU837`, `Pirkanmaa`, `33100`. Lakkautettu kunta tulkitaan seuraajakseen, ja vastaus kertoo sen (esim. `Nastola` → Lahti, liitetty 2016). PxWeb-suodattimissa aikadimensio ymmärtää arvot `uusin` ja `2020-2024`.
 
 Profiili tarjoaa myös MCP-resurssit alueille (`aura://kunta/{koodi}`, `aura://maakunta/{koodi}`, `aura://alue/{taso}/{koodi}`) sekä promptit `kuntavertailu`, `loyda-ja-hae` ja `aluekatsaus`.
+
+### Laatuprofiili (`/mcp/laatu`, `AURA_TOOL_PROFILE=laatu`)
+
+Julkaisijalle ja ylläpitäjälle: metatiedon laatu ja resurssien saatavuus. Kaikki työkalut ovat lukuoperaatioita, joten profiili toimii myös read-only-instanssissa. Rajaukseen riittää osa julkaisijan nimestä (`organization="Espoo"`).
+
+| Työkalu | Tehtävä |
+|---------|---------|
+| `quality_summary` | Laatupisteet dimensioittain, jakauma, heikoimmat ja parhaat aineistot |
+| `metadata_gaps` | Puuttuvat kentät (kuvaus, avainsanat, päivitystiheys, lisenssi, englanninkieliset) ja helpoimmin parannettavat aineistot |
+| `availability_report` | Tallennettujen saatavuustarkistusten tulos ja ikä, rikkinäiset linkit |
+| `find_data`, `inspect_dataset` | Yksittäisen aineiston tarkastelu |
+| `log_finding`, `list_findings` | Havaintojen kirjaus istunnon ajaksi |
+
+Saatavuusraportti ei aja tarkistuksia; ne ajetaan ylläpidossa (`aura health`), ja raportti kertoo milloin viimeksi.
+
+```json
+{ "mcpServers": { "aura-laatu": { "url": "https://<instanssi>/mcp/laatu" } } }
+```
 
 ### Admin-profiili (`AURA_TOOL_PROFILE=admin`)
 

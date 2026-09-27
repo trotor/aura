@@ -247,6 +247,23 @@ _PUBLIC = (
 )
 
 
+# Laatuprofiilin ohje. Sama raja kuin julkisella: alle 1 500 merkkiä.
+_LAATU = (
+    "Aura – laadunvalvonta: Suomen avoimen datan katalogin metatiedon laatu ja "
+    "resurssien saatavuus julkaisijoille ja ylläpitäjille. Kaikki työkalut ovat "
+    "lukuoperaatioita.\n"
+    "quality_summary(source, organization) — laatupisteet, jakauma, heikoimmat.\n"
+    "metadata_gaps(source, organization) — puuttuvat kentät ja helpoimmin "
+    "parannettavat aineistot.\n"
+    "availability_report(source, organization) — tallennettujen "
+    "saatavuustarkistusten tulos ja ikä; rikkinäiset linkit.\n"
+    "find_data ja inspect_dataset yksittäisen aineiston tarkasteluun. "
+    "organization-rajaukseen riittää osa julkaisijan nimestä (esim. 'Espoo').\n"
+    "Kirjaa havainnot log_finding()-työkalulla; list_findings() näyttää ne. "
+    "Vastaukset ovat strukturoituja: seuraa next_actions-kenttää."
+)
+
+
 def build_instructions(readonly: bool = False, profile: str = "admin") -> str:
     """Rakenna server-instructions moodin ja profiilin mukaan (#137).
 
@@ -265,6 +282,8 @@ def build_instructions(readonly: bool = False, profile: str = "admin") -> str:
         from aura.extensions import INSTRUCTION_ADDENDA
 
         return "\n".join([_PUBLIC, *INSTRUCTION_ADDENDA])
+    if profile == "laatu":
+        return _LAATU
     if readonly:
         return _INTRO + _FINDINGS_REMOTE + _API_USAGE + _BOUNDARIES_REMOTE
     return _INTRO + _FINDINGS_LOCAL + _API_USAGE + _BOUNDARIES_LOCAL
@@ -287,6 +306,12 @@ mcp = FastMCP(
 #: Julkisen profiilin tagi. Laajennus merkitsee omat
 #: julkiset työkalunsa samalla tagilla.
 PUBLIC_TAG = "public"
+
+#: Laatuprofiilin tagi. Työkalu voi kuulua molempiin (find_data, inspect_dataset).
+QUALITY_TAG = "quality"
+
+#: Profiili → tagi jolla sen työkalut, resurssit ja promptit merkitään.
+PROFILE_TAGS = {"public": PUBLIC_TAG, "laatu": QUALITY_TAG}
 
 #: Vanhentuneet työkalut → korvaaja. Näkyvät admin-profiilissa yhden version
 #: ajan kuvaus "Vanhentunut: käytä X" edellä, jotta vanhat kehotteet ja
@@ -311,8 +336,9 @@ _DEPRECATION_PREFIX = "Vanhentunut: käytä "
 def apply_tool_profile(server: FastMCP | None = None, *, profile: str | None = None) -> str:
     """Rajaa näkyvät työkalut profiilin mukaan ja aseta sen ohjeteksti.
 
-    ``public``: vain ``public``-tagilla merkityt työkalut, resurssit ja
-    promptit. ``admin``: kaikki; vanhentuneiden kuvaukseen lisätään korvaaja.
+    ``public``/``laatu``: vain profiilin tagilla merkityt työkalut, resurssit
+    ja promptit. ``admin``: kaikki; vanhentuneiden kuvaukseen lisätään
+    korvaaja.
 
     Kutsutaan käynnistyksessä read-only-gatingin jälkeen. Idempotentti.
     """
@@ -335,14 +361,39 @@ def apply_tool_profile(server: FastMCP | None = None, *, profile: str | None = N
         desc = tool.description or ""
         if not desc.startswith(_DEPRECATION_PREFIX):
             tool.description = f"{_DEPRECATION_PREFIX}{replacement}. {desc}"
-    if profile == "public" and not getattr(server, "_aura_public_transforms", None):
+    tag = PROFILE_TAGS.get(profile)
+    if tag and not getattr(server, "_aura_public_transforms", None):
         before = list(server._transforms)
-        server.enable(tags={PUBLIC_TAG}, only=True)
+        server.enable(tags={tag}, only=True)
         server._aura_public_transforms = [  # type: ignore[attr-defined]
             t for t in server._transforms if t not in before
         ]
     server.instructions = build_instructions(is_readonly(), profile)
     return profile
+
+
+def build_quality_server(source: FastMCP | None = None) -> FastMCP:
+    """Erillinen palvelin laatuprofiilille (``/mcp/laatu``).
+
+    Profiili on näkyvyysmuunnos palvelintasolla, joten saman prosessin kaksi
+    eri pintaa vaativat kaksi palvelinta. Työkalut ovat samat oliot kuin
+    päätason palvelimessa — sama koodi, sama kanta, sama lifespan — ne vain
+    rekisteröidään toiseen palvelimeen. Kutsu read-only-gatingin jälkeen,
+    jotta poistettu kirjoittava työkalu ei päädy tänne.
+    """
+    from fastmcp.tools.tool import Tool
+
+    if source is None:
+        source = mcp
+    server = FastMCP(
+        "Aura – laadunvalvonta",
+        instructions=build_instructions(is_readonly(), "laatu"),
+        lifespan=_lifespan,
+    )
+    for component in list(source.local_provider._components.values()):
+        if isinstance(component, Tool) and QUALITY_TAG in (component.tags or set()):
+            server.add_tool(component)
+    return server
 
 
 def reset_tool_profile(server: FastMCP | None = None) -> None:
