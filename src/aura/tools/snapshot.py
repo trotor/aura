@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastmcp import Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from pydantic import Field
 
 import aura.server as _server

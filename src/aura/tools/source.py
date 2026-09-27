@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 from fastmcp import Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from pydantic import Field
 
 import aura.server as _server

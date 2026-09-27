@@ -347,7 +347,7 @@ def apply_tool_profile(server: FastMCP | None = None, *, profile: str | None = N
         server = mcp
     if profile is None:
         profile = tool_profile()
-    from fastmcp.tools.tool import Tool
+    from fastmcp.tools import Tool
 
     # get_tool on asynkroninen, ja tämä ajetaan ennen tapahtumasilmukkaa.
     # Komponentit ovat providerin omassa sanakirjassa; sama lähde jota
@@ -382,7 +382,7 @@ def build_quality_server(source: FastMCP | None = None) -> FastMCP:
     rekisteröidään toiseen palvelimeen. Kutsu read-only-gatingin jälkeen,
     jotta poistettu kirjoittava työkalu ei päädy tänne.
     """
-    from fastmcp.tools.tool import Tool
+    from fastmcp.tools import Tool
 
     if source is None:
         source = mcp
