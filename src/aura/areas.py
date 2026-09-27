@@ -279,7 +279,10 @@ def resolve_area(
         if found:
             first, rest = found[0], found[1:]
             note = ""
-            if rest:
+            # Kunta on odotettu tulkinta, ja lähes jokaisella keskuskaupungilla
+            # on samanniminen seutukunta — huomautus olisi joka vastauksessa
+            # kohinaa. Vaihtoehdot jäävät silti alternatives-kenttään.
+            if rest and first.level != "kunta":
                 others = ", ".join(f"{a.level} {a.code}" for a in rest)
                 note = f"Nimi on myös: {others}. Valittiin {first.level}."
             return AreaMatch(first, raw, note=note, alternatives=rest)
