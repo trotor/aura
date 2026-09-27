@@ -92,7 +92,8 @@ def test_syke_titteli_ja_kuvaus_suomeksi_ja_formaatti_urlista() -> None:
     ds = SykeHarvester(conn=_memory_db())._to_dataset(RAW)
     assert ds.title_fi == "Luonnonsuojelu- ja erämaa-alueet"
     assert ds.notes_fi.startswith("Valtion ja yksityisten")
-    assert [r.format for r in ds.resources] == ["ZIP", "WFS"]
+    # Kaksi viimeistä ovat CKANin omat; alussa kuratoidut kerrokset (syke.py).
+    assert [r.format for r in ds.resources][-2:] == ["ZIP", "WFS"]
 
 
 def test_kaannos_voittaa_eika_kielta_oleteta_ilman_asetusta() -> None:
