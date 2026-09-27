@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from aura.populators.areas import AreaHierarchyPopulator, MunicipalityChangesPopulator
 from aura.populators.base import BasePopulator
 from aura.populators.boundaries import BoundaryPopulator
 from aura.populators.map_sheets import MapSheetPopulator
@@ -16,6 +17,8 @@ POPULATORS: dict[str, type[BasePopulator]] = {
     "boundaries": BoundaryPopulator,
     "map_sheets": MapSheetPopulator,
     "municipality_bbox": MunicipalityBboxPopulator,
+    "areas": AreaHierarchyPopulator,
+    "municipality_changes": MunicipalityChangesPopulator,
 }
 
 

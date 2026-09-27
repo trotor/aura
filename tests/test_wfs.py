@@ -163,6 +163,15 @@ class TestPyynnonRakennus:
         )
         assert params["TYPENAMES"] == "ns:kohteet"
 
+    def test_tallennettu_kysely_sailyy_urlista(self) -> None:
+        """FMI: ilman storedquery_id:tä palvelin vastaa 400:lla."""
+        _base, params = request_params(
+            "https://opendata.fmi.fi/wfs?service=WFS&request=GetFeature"
+            "&storedquery_id=fmi::observations::weather::simple",
+            max_rows=1,
+        )
+        assert params["storedquery_id"] == "fmi::observations::weather::simple"
+
     def test_getcapabilities_ei_kulkeudu_lapi(self) -> None:
         _base, params = request_params(
             "https://example.test/wfs?request=getcapabilities", max_rows=1

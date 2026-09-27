@@ -257,6 +257,12 @@ def request_params(
         if key.lower() in ("typename", "typenames") and values:
             params[key] = values[0]
             from_url = True
+        elif key.lower() == "storedquery_id" and values:
+            # Tallennettu kysely (FMI) on kerroksen nimen vastine: ilman sitä
+            # palvelin vastaa 400:lla eikä kerro mikä puuttuu. Mitattu
+            # 27.9.2026 — yksikään agentti ei saanut säähavaintoa.
+            params[key] = values[0]
+            from_url = True
     if type_name and not from_url:
         params["typeNames"] = type_name
     if bbox:

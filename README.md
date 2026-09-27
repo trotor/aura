@@ -181,27 +181,61 @@ aura import-enrichments contributions/*.json
 
 ## MCP-työkalut
 
-**Haku ja selaus:**
+Aura tarjoaa kolme työkaluprofiilia. Paikallisesti profiili valitaan `AURA_TOOL_PROFILE`-muuttujalla; HTTP-palvelin tarjoilee julkisen profiilin polussa `/mcp` ja laatuprofiilin polussa `/mcp/laatu`.
+
+### Julkinen profiili (oletus)
+
+Viisi aikomustason työkalua. Jokainen palauttaa strukturoidun vastauksen (`structuredContent`, julkaistu `outputSchema`) ja enintään viiden rivin tekstiyhteenvedon. Vastaus päättyy valmiisiin seuraaviin kutsuihin (`next_actions`), ja virheissä on koodi, vihje ja korjattu kutsu (`error.code`, `error.hint`, `error.suggested_call`).
+
+| Työkalu | Tehtävä |
+|---------|---------|
+| `find_data` | Hae aineistoja kaikilla suodattimilla (lähde, formaatti, julkaisija, saatavuus, alue) |
+| `inspect_dataset` | Aineiston kuvaus, resurssit, kentät, laatu, saatavuus ja kyselyohje |
+| `query_source` | Aineiston sisältö riveinä: PxWeb, WFS, FMI:n tallennetut kyselyt, OData, CSV, JSON. Jokaisessa vastauksessa on kyselyn täsmällinen URL, lisenssi ja hakuaika |
+| `area_snapshot` | Alueen tunnistus, ylemmät aluetasot, tunnukset ja datatarjonta aiheittain |
+| `find_related` | Samankaltaiset aineistot |
+
+Alueen voi antaa nimellä tai koodilla: `Tampere`, `837`, `KU837`, `Pirkanmaa`, `33100`. Lakkautettu kunta tulkitaan seuraajakseen, ja vastaus kertoo sen (esim. `Nastola` → Lahti, liitetty 2016). PxWeb-suodattimissa aikadimensio ymmärtää arvot `uusin` ja `2020-2024`.
+
+Profiili tarjoaa myös MCP-resurssit alueille (`aura://kunta/{koodi}`, `aura://maakunta/{koodi}`, `aura://alue/{taso}/{koodi}`) sekä promptit `kuntavertailu`, `loyda-ja-hae` ja `aluekatsaus`.
+
+### Laatuprofiili (`/mcp/laatu`, `AURA_TOOL_PROFILE=laatu`)
+
+Julkaisijalle ja ylläpitäjälle: metatiedon laatu ja resurssien saatavuus. Kaikki työkalut ovat lukuoperaatioita, joten profiili toimii myös read-only-instanssissa. Rajaukseen riittää osa julkaisijan nimestä (`organization="Espoo"`).
+
+| Työkalu | Tehtävä |
+|---------|---------|
+| `quality_summary` | Laatupisteet dimensioittain, jakauma, heikoimmat ja parhaat aineistot |
+| `metadata_gaps` | Puuttuvat kentät (kuvaus, avainsanat, päivitystiheys, lisenssi, englanninkieliset) ja helpoimmin parannettavat aineistot |
+| `availability_report` | Tallennettujen saatavuustarkistusten tulos ja ikä, rikkinäiset linkit |
+| `find_data`, `inspect_dataset` | Yksittäisen aineiston tarkastelu |
+| `log_finding`, `list_findings` | Havaintojen kirjaus istunnon ajaksi |
+
+Saatavuusraportti ei aja tarkistuksia; ne ajetaan ylläpidossa (`aura health`), ja raportti kertoo milloin viimeksi.
+
+```json
+{ "mcpServers": { "aura-laatu": { "url": "https://<instanssi>/mcp/laatu" } } }
+```
+
+### Admin-profiili (`AURA_TOOL_PROFILE=admin`)
+
+Koko työkalupinta: ylläpito, laatu, rikastus, rajausaineistot ja vanhat hakutyökalut. Repon oma `.mcp.json` käyttää tätä profiilia.
+
+Vanhat työkalut, jotka aikomustason pinta korvaa, näkyvät admin-profiilissa yhden version ajan. Niiden kuvaus alkaa sanoilla "Vanhentunut: käytä X":
+
+| Vanha | Korvaaja |
+|-------|----------|
+| `search`, `search_structured`, `search_by_region`, `recommend` | `find_data` |
+| `describe`, `quality_report`, `get_enrichments_tool` | `inspect_dataset` |
+| `query_data` | `query_source` |
+| `area_profile`, `lookup_municipality`, `compare_municipalities` | `area_snapshot` |
+
+**Haku ja selaus (admin):**
 
 | Työkalu | Kuvaus |
 |---------|--------|
-| `search` | Hae datasettejä luonnollisella kielellä (suodattimet: lähde, formaatti, organisaatio, saatavuus, alue) |
-| `search_structured` | Hae datasettejä ja palauta JSON tekoälyagenteille |
-| `search_by_region` | Hae alueellisesti (kunta, maakunta, postinumero) |
-| `describe` | Kuvaa datasetti yksityiskohtaisesti (sis. skeema, laatu, rikastukset) |
-| `query_data` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData); `area`-parametri rajaa WFS-kyselyn kuntaan, karttalehteen tai bbox:iin |
-| `recommend` | Suosittele parhaita datasettejä aiheesta |
 | `compare` | Vertaile datasettejä rinnakkain (2–5 kpl) |
-| `find_related` | Etsi samankaltaiset datasetit |
 | `suggest_questions` | Ehdota esimerkkikysymyksiä teemoittain ja alueittain |
-
-**Alueanalyysi:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `area_profile` | Alueprofiili: datasetit, laatu, puutteet |
-| `compare_municipalities` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
-| `lookup_municipality` | Hae kuntatiedot nimellä, koodilla tai postinumerolla |
 | `municipality_bbox` | Kunnan rajauslaatikko (EPSG:3067) WFS/WCS-kyselyyn |
 | `find_map_sheets` | MML:n TM35-karttalehdet jotka osuvat alueelle (kunta, bbox, piste, prefiksi) |
 | `map_sheet` | Karttalehden bbox, centroidi sekä vanhempi- ja lapsilehdet |
@@ -256,22 +290,23 @@ Aura ei ole pelkkä hakemisto — tekoälyagentti voi **hakea dataa suoraan** ra
 **Tilastot:**
 > *"Mikä on Tampereen väkiluku?"*
 >
-> Agentti löytää Tilastokeskuksen PxWeb-taulun ja kyselee sen `query_data`-työkalulla.
+> Agentti löytää Tilastokeskuksen PxWeb-taulun ja kyselee sen `query_source`-työkalulla: `filters={"Tiedot": ["Väestö 31.12."], "Vuosi": ["uusin"]}, area="Tampere"`.
 
 **Sää:**
 > *"Mikä on lämpötila Helsingissä?"*
 >
-> Agentti hakee Ilmatieteen laitoksen WFS-rajapinnasta reaaliaikahavainnon.
+> Agentti hakee Ilmatieteen laitoksen tallennetusta kyselystä reaaliaikahavainnon: `query_source("fmi-fmi::observations::weather::simple", filters={"place": ["Helsinki"], "parameters": ["t2m"]})`.
 
 ### Tuetut rajapintatyypit
 
 | Rajapinta | Suora kysely | Esimerkkilähde |
 |-----------|-------------|----------------|
-| REST/JSON | `query_data` tai suora HTTP | Digitraffic (tie, rata, meri), Sotkanet |
-| PxWeb | `query_data` (suodattimet) | Tilastokeskus, LUKE |
-| WFS | `query_data` (`area`, suodattimet) | FMI, SYKE, MML, Väylävirasto |
-| OData v4 | `query_data` (filter) | Traficom |
-| CSV | `query_data` (rivit) | avoindata.fi, HRI |
+| REST/JSON | `query_source` tai suora HTTP | Digitraffic (tie, rata, meri), Sotkanet |
+| PxWeb | `query_source` (suodattimet, `area`) | Tilastokeskus, LUKE |
+| WFS | `query_source` (`area`, suodattimet) | SYKE, MML, Väylävirasto |
+| FMI:n tallennetut kyselyt | `query_source` (kyselyn parametrit suodattimina) | Ilmatieteen laitos |
+| OData v4 | `query_source` (filter) | Traficom |
+| CSV | `query_source` (rivit) | avoindata.fi, HRI |
 | GTFS | GTFS-tiedostojen URL:t | Digitransit (32 operaattoria) |
 | GraphQL | Vaatii rekisteröitymisen | Digitransit Routing API |
 
@@ -424,7 +459,7 @@ Aura tallentaa jokaiselle datasetille `geographical_coverage`-kentän, joka kert
 |---------|------|
 | Datasettejä joilla aluetieto | ~1 200+ / 7 024 |
 | Yleisimmät arvot | `Helsinki`, `Turku`, `Oulu`, `Espoo`, `Vantaa` |
-| Viitetaulut | 308 kuntaa, 3 784 postinumeroa |
+| Viitetaulut | 308 kuntaa, 3 784 postinumeroa, 477 aluetta 12 tasolla, 272 lakkautettua kuntaa |
 | Oletusarvo | `["Suomi"]` (kaikki harvestarit ellei tarkempaa tietoa) |
 
 Arvot tulevat eri lähteistä:
@@ -432,6 +467,15 @@ Arvot tulevat eri lähteistä:
 - **Kuntien paikkatiedot** — 36 kuntaa omalla `geographical_coverage`-arvolla
 - **Staattiset harvestarit** — konfiguraatiossa (esim. Overture Maps → `["Maailma"]`)
 - **Muut** — oletusarvo `["Suomi"]`
+
+### Aluetasot ja kuntaliitokset
+
+Kaksi viiteaineistoa Tilastokeskuksen luokituspalvelusta (`aura populate areas`, `aura populate municipality_changes`):
+
+- **Aluetasojen ristiintaulukko** (`ref_areas`, `ref_area_membership`): mihin seutukuntaan, maakuntaan, hyvinvointialueeseen, suuralueeseen, elinvoimakeskukseen, vaalipiiriin, kuntaryhmään ja NUTS 1–3 -alueeseen kunta kuuluu.
+- **Kuntaliitoshistoria** (`ref_municipality_changes`): lakkautetun kunnan seuraaja ja liitosvuosi. Vuodet päätellään luokituksen vuosiversioista (1970–), seuraajat lakkautettujen kuntien luokitusavaimesta. Avainta uudemmat liitokset kirjataan käsin lähteineen (`aura.populators.areas.KNOWN_SUCCESSORS`).
+
+`aura.areas.resolve_area()` tulkitsee alueen kaikille työkaluille samalla tavalla: nimi (fi/sv, myös taivutettuna), kuntakoodi, StatFin-koodi (`KU837`, `MK06`, `SK064`, `HVA08`), postinumero tai lakkautetun kunnan nimi.
 
 ### Rajausaineistot
 
@@ -479,9 +523,9 @@ MML:n OGC API Processes -tiedostopalvelu vaatii ilmaisen API-avaimen. Kapsi.fi-p
 `region`-suodatin MCP-työkaluissa:
 
 ```python
-search("joukkoliikenne", region="Helsinki")     # kaupunkitaso
-search("ympäristödata", region="Uusimaa")        # maakuntataso → laajentuu kuntiin
-search("palvelut", region="33100")               # postinumero → kunta
+find_data("joukkoliikenne", region="Helsinki")     # kaupunkitaso
+find_data("ympäristödata", region="Uusimaa")        # maakuntataso → laajentuu kuntiin
+find_data("palvelut", region="33100")            # postinumero → kunta
 ```
 
 Hierarkkinen haku: haettaessa maakunnalla palautetaan myös maakunnan kuntien aineistot. Viitetaulut (308 kuntaa, 3 784 postinumeroa) mahdollistavat alueen tunnistuksen.

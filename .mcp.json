@@ -2,7 +2,14 @@
   "mcpServers": {
     "aura": {
       "command": ".venv/bin/python",
-      "args": ["-m", "aura.cli", "serve"]
+      "args": [
+        "-m",
+        "aura.cli",
+        "serve"
+      ],
+      "env": {
+        "AURA_TOOL_PROFILE": "admin"
+      }
     }
   }
 }

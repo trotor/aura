@@ -99,76 +99,42 @@ Ohita oletusarvot antamalla ne kwargs:ssa.
 
 ## MCP-työkalut
 
-**Haku ja selaus:**
+Kolme profiilia (`AURA_TOOL_PROFILE`): **public** (oletus, datan käyttäjä, `/mcp`), **laatu** (julkaisijat ja ylläpitäjät, vain luku, `/mcp/laatu`) ja **admin** (kaikki). Repon `.mcp.json` käyttää admin-profiilia.
+
+**Julkinen profiili — aikomustason työkalut, strukturoidut vastaukset:**
 
 | Työkalu | Kuvaus |
 |---------|--------|
-| `search(query, ...)` | Hae datasettejä suodattimilla (source, format, organization, region) |
-| `search_structured(query, ...)` | Hae JSON-muodossa agenteille |
-| `search_by_region(region, query)` | Hae alueellisesti (kunta, maakunta, postinumero) |
-| `describe(dataset_id)` | Datasetin yksityiskohtaiset tiedot |
-| `query_data(dataset_id, ..., area)` | Esikatsele tai kyselöi datasetin sisältöä (CSV, JSON, PxWeb, WFS, OData). `area` rajaa WFS-kyselyn kuntaan, karttalehteen tai bbox:iin |
-| `recommend(topic, limit)` | Suosittele parhaita datasettejä aiheesta |
+| `find_data(query, region, ...)` | Aineistohaku kaikilla suodattimilla; `indicators`-kenttä jos laajennus tuntee tunnusluvun |
+| `inspect_dataset(dataset_id)` | Kuvaus, resurssit, kentät, laatu, saatavuus, resepti (laajennus) |
+| `query_source(dataset_id, filters, area, ...)` | Rivit lähteestä: PxWeb, WFS, FMI stored query, OData, CSV, JSON + provenance |
+| `area_snapshot(region)` | Alueen tunnistus, hierarkia, tunnukset, datatarjonta; `key_figures` (laajennus) |
+| `find_related(dataset_id)` | Samankaltaiset aineistot |
+
+Jokaisella julkisella työkalulla on `outputSchema`, ja `tests/test_surface.py` validoi oikean vastauksen sitä vasten. Uusi julkinen työkalu: `@mcp.tool(tags={"public"}, output_schema=schema_of(Malli))`, palauta `aura.responses.respond(payload, yhteenveto)` ja virheet `fail(...)`:lla. Julkisessa profiilissa enintään 8 työkalua, ohjeteksti alle 1 500 merkkiä.
+
+Laajennuspisteet (`aura.extensions`): `find_data.indicators`, `inspect_dataset.recipe`, `area_snapshot.key_figures` ja `add_instructions()`.
+
+Aluetunnisteet tulkitaan aina `aura.areas.resolve_area()`:lla (nimi fi/sv taivutettuna, kuntakoodi, `KU837`, `MK06`, postinumero, lakkautettu kunta → seuraaja).
+
+**Laatuprofiili** (tagi `quality`, oma palvelin `build_quality_server()`): `quality_summary`, `metadata_gaps`, `availability_report` + `find_data`, `inspect_dataset`, `log_finding`, `list_findings`. Ei kirjoittavia työkaluja eikä `health_check`ia — saatavuus luetaan tallennetuista tarkistuksista (`tests/test_laatu.py`).
+
+**Admin-profiili:** kaikki alla olevat. Korvatut työkalut näkyvät kuvauksella "Vanhentunut: käytä X" (`aura.server.DEPRECATED_TOOLS`) yhden version ajan.
+
+| Työkalu | Kuvaus |
+|---------|--------|
+| `search`, `search_structured`, `search_by_region`, `recommend` | → `find_data` |
+| `describe`, `quality_report`, `get_enrichments_tool` | → `inspect_dataset` |
+| `query_data` | → `query_source` |
+| `area_profile`, `lookup_municipality`, `compare_municipalities` | → `area_snapshot` |
 | `compare(dataset_ids)` | Vertaile datasettejä rinnakkain (2–5 kpl) |
-| `find_related(dataset_id, limit)` | Etsi samankaltaiset datasetit |
-| `suggest_questions(region, theme)` | Ehdota esimerkkikysymyksiä teemoittain ja alueittain |
-
-**Alueanalyysi:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `area_profile(region)` | Alueprofiili: datasetit, laatu, puutteet |
-| `compare_municipalities(municipalities, theme)` | Vertaile kuntien datatarjontaa rinnakkain (2–5 kpl) |
-| `municipality_bbox(query)` | Kunnan rajauslaatikko (EPSG:3067) aluerajaukseen |
-| `find_map_sheets(scale, ...)` | Karttalehdet jotka osuvat alueelle (municipality, bbox, point, prefix) |
-| `map_sheet(sheet_id)` | Karttalehden bbox, centroidi, vanhempi ja lapset |
-
-**Laatu:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `quality_report(dataset_id)` | Datasetin laatupisteet dimensioittain |
-| `quality_overview(source, min_score)` | Yhteenveto laatupisteistä |
-| `quality_ranking(dimension, source, limit)` | Parhaiten pisteytetyt datasetit |
-| `quality_gaps(source, limit)` | Metatiedon puutteet ja parannusehdotukset |
-
-**Rikastus ja tutkimus:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `enrich(dataset_id, field, value, ...)` | Rikasta datasetin tietoja |
-| `batch_enrich(enrichments)` | Tallenna useita rikastuksia kerralla |
-| `get_enrichments_tool(dataset_id)` | Näytä datasetin rikastukset |
-| `suggest_yso_tags(dataset_id, save)` | Ehdota YSO-ontologian avainsanoja |
-| `log_finding(dataset_id, finding, category)` | Kirjaa löydös tutkimuksen aikana |
-| `list_findings()` | Näytä session löydökset |
-| `save_session_findings()` | Tallenna löydökset enrichmenteiksi |
-
-**Viiteaineistot:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `lookup_municipality(query)` | Hae kuntatiedot nimellä, koodilla tai postinumerolla |
-| `reference_status()` | Viiteaineistojen tila |
-| `populate_reference(source)` | Lataa viiteaineistot kantaan |
-
-**Terveystarkastus:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `health_check(source, limit)` | Tarkista resurssien saatavuus (HTTP) |
-| `health_report(source)` | Saatavuusraportti aiempien tarkistusten perusteella |
-
-**Hallinta:**
-
-| Työkalu | Kuvaus |
-|---------|--------|
-| `stats()` | Tilastot: datasetit, organisaatiot, formaatit |
-| `list_organizations(limit)` | Julkaisijat datasettien mukaan |
-| `list_formats(limit)` | Dataformaatit resurssien mukaan |
-| `harvest(source)` | Hae metatiedot lähteistä (päivittää sources-taulun) |
-| `list_sources()` | Datalähteet ja harvestoinnin tila (lukee sources-taulusta) |
-| `probe_sizes(source)` | Mittaa paikkatietoaineistojen koot |
+| `suggest_questions(region, theme)` | Esimerkkikysymykset teemoittain ja alueittain |
+| `municipality_bbox`, `find_map_sheets`, `map_sheet` | Rajausaineistot (EPSG:3067) |
+| `quality_overview`, `quality_ranking`, `quality_gaps` | Laatu |
+| `enrich`, `batch_enrich`, `suggest_yso_tags`, `log_finding`, `list_findings`, `save_session_findings` | Rikastus ja tutkimus |
+| `reference_status`, `populate_reference` | Viiteaineistot (`areas`, `municipality_changes`, `municipalities`, ...) |
+| `health_check`, `health_report` | Saatavuus |
+| `stats`, `list_organizations`, `list_formats`, `harvest`, `list_sources`, `probe_sizes`, `probe_schemas` | Hallinta |
 
 ## Rajausaineistot ja karttalehtijako
 

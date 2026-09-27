@@ -329,8 +329,9 @@ class TestFindRelated:
         conn.commit()
         with patch("aura.server._get_conn", return_value=conn):
             result = find_related("test-1")
-        assert "Samankaltaiset" in result
-        assert "Espoon väestö" in result
+        data = result.structured_content
+        assert data["dataset_id"] == "test-1"
+        assert "Espoon väestö" in [r["title"] for r in data["results"]]
 
 
 class TestEnrich:

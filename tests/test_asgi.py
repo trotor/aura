@@ -120,6 +120,30 @@ class TestMcpMount:
         assert response.status_code == 200
         assert "Aura" in response.text
 
+    def test_laatu_endpoint_on_erillinen_ja_ilman_ohjausta(
+        self, client: TestClient
+    ) -> None:
+        """``/mcp/laatu`` vastaa suoraan omalla palvelimellaan, ``/mcp`` omallaan."""
+        body = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "t", "version": "1"},
+            },
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        laatu = client.post("/mcp/laatu", headers=headers, json=body, follow_redirects=False)
+        main = client.post("/mcp", headers=headers, json=body, follow_redirects=False)
+        assert laatu.status_code == 200 and "laadunvalvonta" in laatu.text
+        assert main.status_code == 200 and "laadunvalvonta" not in main.text
+        assert "/mcp/laatu" in client.get("/").text
+
     def test_mcp_does_not_redirect(self, client: TestClient) -> None:
         """``POST /mcp`` on vastattava suoraan, ei 307:llä ``/mcp/``:hen.
 

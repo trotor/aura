@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import Context
+from fastmcp.tools import ToolResult
+from pydantic import Field
 
 import aura.server as _server
 from aura.constants import MACHINE_READABLE_FORMATS, parse_json_list
@@ -16,6 +18,7 @@ from aura.database import (
     search_datasets,
 )
 from aura.limits import MAX_SEARCH_LIMIT, clamp
+from aura.responses import Envelope, NextAction, fail, respond, schema_of
 from aura.search import format_dataset_summary
 from aura.server import mcp
 from aura.telemetry import record_zero_result
@@ -322,37 +325,57 @@ async def recommend(topic: str, limit: int = 5, ctx: Context | None = None) -> s
     return "\n".join(parts)
 
 
-@mcp.tool()
-def find_related(dataset_id: str, limit: int = 5, ctx: Context | None = None) -> str:
-    """Etsi samankaltaiset datasetit avainsanojen ja organisaation perusteella.
+class RelatedResult(Envelope):
+    dataset_id: str = ""
+    title: str = ""
+    results: list[dict[str, Any]] = Field(
+        default_factory=list, description="id, title, organization, source, reason"
+    )
+
+
+@mcp.tool(tags={"public"}, output_schema=schema_of(RelatedResult))
+def find_related(dataset_id: str, limit: int = 5, ctx: Context | None = None) -> ToolResult:
+    """Etsi samankaltaiset aineistot avainsanojen ja julkaisijan perusteella.
 
     Args:
-        dataset_id: Datasetin ID tai nimi
+        dataset_id: Aineiston tunniste (id tai name)
         limit: Tulosten enimmäismäärä (oletus 5)
     """
     limit = clamp(limit, MAX_SEARCH_LIMIT)
     conn = _server._get_conn(ctx)
     dataset = get_dataset(conn, dataset_id)
     if dataset is None:
-        return f"Datasettiä '{dataset_id}' ei löytynyt."
+        return fail(
+            RelatedResult, "dataset_not_found", f"Aineistoa '{dataset_id}' ei löytynyt.",
+            hint="Hae tunniste find_data-työkalulla.",
+            suggested_call=NextAction(tool="find_data", args={"query": dataset_id}),
+        )
 
     related = find_related_datasets(conn, dataset_id, limit=limit)
-
-    if not related:
-        return f"Ei samankaltaisia datasettejä löytynyt datasetille '{dataset_id}'."
-
+    org = dataset.get("organization_title", "")
     title = dataset.get("title_fi") or dataset.get("title") or dataset.get("name", "")
-    parts = [f"# Samankaltaiset datasetit: {title}\n"]
-
-    for d in related:
-        rel_title = d.get("title_fi") or d.get("title") or d.get("name", "")
-        org = d.get("organization_title", "")
-        source = d.get("source", "")
-        name = d.get("name", d.get("id", ""))
-
-        parts.append(f"- **{rel_title}** ({org}, {source}) — ID: {name}")
-
-    return "\n".join(parts)
+    results = [
+        {
+            "id": d.get("id", ""),
+            "title": d.get("title_fi") or d.get("title") or d.get("name", ""),
+            "organization": d.get("organization_title", ""),
+            "source": d.get("source", ""),
+            "reason": "sama julkaisija" if org and d.get("organization_title") == org
+            else "yhteiset avainsanat",
+        }
+        for d in related
+    ]
+    payload = RelatedResult(
+        dataset_id=dataset["id"],
+        title=title,
+        results=results,
+        next_actions=[
+            NextAction(tool="inspect_dataset", args={"dataset_id": r["id"]}) for r in results[:1]
+        ],
+    )
+    summary = [f"{len(results)} samankaltaista aineistoa: {title}"]
+    summary += [f"- {r['title']} [{r['id']}]" for r in results[:3]]
+    return respond(payload, summary)
 
 
 @mcp.tool()
