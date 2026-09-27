@@ -723,6 +723,13 @@ def build_dataset_filters(
     return conditions, params
 
 
+#: Tiukan vaiheen osumien määrä, jonka alittuessa arkisanan muunnelmat
+#: haetaan (ks. ``aura.vocabularies.synonym_variants``). Yksi: muunnelma vain
+#: kun tiukka vaihe ei löytänyt mitään. Jo viiden rajalla täsmäkysely
+#: ("follariasemat", 1 osuma) sai perään sanaston kohinaa.
+VARIANT_THRESHOLD = 1
+
+
 def search_datasets(
     conn: sqlite3.Connection,
     query: str,
@@ -825,9 +832,25 @@ def search_datasets(
     lexicon = load_lexicon(conn) if _has_lemma_column(conn) else None
 
     attempts: list[tuple[str, str]] = []
+    variant_attempts: set[int] = set()
+    strong_attempts: set[int] = set()
     strict_ds = build_fts_query(query, strict=True, lemma_column=lemma_col)
     if strict_ds:
         attempts.append((strict_ds, build_fts_query(query, strict=True, lemma_column=None)))
+        # Arkisanan muunnelmat tiukkoina hakuina heti tiukan vaiheen jälkeen:
+        # tiukan vaiheen osumat pysyvät kärjessä, ja muunnelma täydentää ennen
+        # löysää OR-hakua (ks. aura.vocabularies.synonym_variants).
+        from aura.vocabularies import synonym_variants_ranked
+
+        for variant, strong in synonym_variants_ranked(query, lexicon):
+            v_ds = build_fts_query(variant, strict=True, lemma_column=lemma_col)
+            if v_ds:
+                pair = (v_ds, build_fts_query(variant, strict=True, lemma_column=None))
+                if strong:
+                    strong_attempts.add(len(attempts))
+                else:
+                    variant_attempts.add(len(attempts))
+                attempts.append(pair)
         loose_ds = build_fts_query(query, strict=False, lemma_column=lemma_col, lexicon=lexicon)
         if loose_ds != strict_ds:
             attempts.append(
@@ -848,7 +871,13 @@ def search_datasets(
     # tilalle nousisi laaja OR-kohina.
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for ds_query, enr_query in attempts:
+    for i, (ds_query, enr_query) in enumerate(attempts):
+        # Muunnelma vain kun tiukka vaihe ei löytänyt mitään: muuten se
+        # syrjäytti hyviä osumia (mitattu 27.9.2026: tarkkuussetin nDCG@10
+        # 0,574 → 0,491). Arkisanan ongelma on juuri se, ettei tiukka vaihe
+        # löydä mitään.
+        if i in variant_attempts and len(merged) >= VARIANT_THRESHOLD:
+            continue
         try:
             rows = _run(ds_query, enr_query)
         except sqlite3.OperationalError:
@@ -859,7 +888,11 @@ def search_datasets(
             if key not in seen:
                 seen.add(key)
                 merged.append(row)
-        if len(merged) >= max(RELAX_THRESHOLD, fetch):
+        # Vahva muunnelma (monisanainen arkisana, "asuntojen hinnat") haetaan
+        # vaikka tiukka vaihe täytti ikkunan; se täydentää tiukan vaiheen
+        # perään. Tiukan vaiheen edelle siirrettynä se laski taulusetin
+        # nDCG@10:n 0,611 → 0,574 (mitattu 27.9.2026).
+        if len(merged) >= max(RELAX_THRESHOLD, fetch) and i + 1 not in strong_attempts:
             break
 
     # Deduplikointi vasta kasauksen jälkeen: sama taulu voi tulla eri
