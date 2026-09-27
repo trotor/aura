@@ -254,6 +254,9 @@ async def fetch_json(
         records = _annotate_sotkanet(conn, records, table)
     headers = list(records[0].keys())
     rows, total, unknown = _filter_rows(records, filters, max_rows)
+    # Osumien määrä kerrotaan vain kokonaan luetusta vastauksesta: katkaistun
+    # vastauksen luku väittäisi lähteen olevan esikatselun kokoinen.
+    table.total = None if cut else total
     if path and path != "$":
         table.notes.append(f"Rivit polusta '{path}'.")
     if unknown:
@@ -282,30 +285,92 @@ def vipunen_filter_url(url: str, filters: dict[str, list[str]]) -> str:
     return urllib.parse.urlunsplit(split._replace(query=urllib.parse.urlencode(query)))
 
 
-def _annotate_sotkanet(
-    conn: sqlite3.Connection, records: list[dict[str, Any]], table: Table
-) -> list[dict[str, Any]]:
-    """Lisää Sotkanetin aluetunnuksen rinnalle kuntakoodi ja nimi."""
+#: Sotkanetin aluekategoria → Auran aluetaso (``aura.areas``in nimet
+#: niille jotka Aura tuntee). Muut kategoriat pienaakkosin sellaisenaan.
+_SOTKANET_LEVELS = {
+    "KUNTA": "kunta",
+    "MAAKUNTA": "maakunta",
+    "HYVINVOINTIALUE": "hyvinvointialue",
+    "SEUTUKUNTA": "seutukunta",
+    "SUURALUE": "suuralue",
+    "NUTS1": "nuts1",
+    "MAA": "koko_maa",
+    "ELY-KESKUS": "ely",
+    "ALUEHALLINTOVIRASTO": "avi",
+    "SAIRAANHOITOPIIRI": "sairaanhoitopiiri",
+    "ERVA": "erva",
+    "YTA": "yta",
+    "EUROOPPA": "maa_eurooppa",
+    "POHJOISMAAT": "maa_pohjoismaat",
+    "EURALUEET": "maaryhma",
+}
+
+
+def _sotkanet_regions(conn: sqlite3.Connection) -> dict[int, tuple[str | None, str, str]]:
+    """Sotkanetin aluetunnus → (koodi, nimi, taso).
+
+    Ensisijaisesti koko rekisteri (``ref_sotkanet_regions``, migraatio 26).
+    Vanhemmassa kannassa taulua ei ole: silloin vain kunnat
+    ``ref_municipalities.sotkanet_id``-sarakkeesta, kuten ennenkin.
+    """
     try:
         rows = conn.execute(
+            "SELECT id, category, code, name_fi FROM ref_sotkanet_regions"
+        ).fetchall()
+    except sqlite3.Error:
+        rows = []
+    out: dict[int, tuple[str | None, str, str]] = {}
+    for rid, category, code, name in rows:
+        level = _SOTKANET_LEVELS.get(category, str(category).lower())
+        # Koko maan koodi 358 on suuntanumero; Tilastokeskuksen koodi on SSS.
+        out[int(rid)] = ("SSS" if category == "MAA" else code, name or "", level)
+    if out:
+        return out
+    try:
+        kunnat = conn.execute(
             "SELECT sotkanet_id, code, name_fi FROM ref_municipalities"
             " WHERE sotkanet_id IS NOT NULL"
         ).fetchall()
     except sqlite3.Error:
-        return records
-    by_id = {int(r[0]): (r[1], r[2]) for r in rows}
+        return {}
+    return {int(r[0]): (r[1], r[2], "kunta") for r in kunnat}
+
+
+def _annotate_sotkanet(
+    conn: sqlite3.Connection, records: list[dict[str, Any]], table: Table
+) -> list[dict[str, Any]]:
+    """Lisää Sotkanetin aluetunnuksen rinnalle alueen koodi, nimi ja taso."""
+    by_id = _sotkanet_regions(conn)
     if not by_id:
         return records
+    full = any(level != "kunta" for _, _, level in by_id.values())
     out = []
     for rec in records:
         rid = rec.get("region")
-        code, name = by_id.get(int(rid), ("", "")) if isinstance(rid, int) else ("", "")
-        out.append({**rec, "region_code": code or None, "region_name": name or None})
-    table.notes.append(
-        "Sotkanet: 'region' on Sotkanetin oma aluetunnus, EI kuntakoodi. "
-        "Kuntakoodi ja nimi ovat kentissä region_code ja region_name "
-        '(tyhjä = alue ei ole kunta). Suodata esim. {"region_name": ["Joensuu"]}.'
-    )
+        code, name, level = (
+            by_id.get(int(rid), (None, "", "")) if isinstance(rid, int) else (None, "", "")
+        )
+        out.append(
+            {
+                **rec,
+                "region_code": code or None,
+                "region_name": name or None,
+                "region_level": level or None,
+            }
+        )
+    if full:
+        table.notes.append(
+            "Sotkanet: 'region' on Sotkanetin oma aluetunnus, EI kuntakoodi. Alueen "
+            "koodi, nimi ja taso ovat kentissä region_code, region_name ja region_level "
+            "(kunta, maakunta, hyvinvointialue, seutukunta, koko_maa ...). Suodata esim. "
+            '{"region_name": ["Joensuu"]}.'
+        )
+    else:
+        table.notes.append(
+            "Sotkanet: 'region' on Sotkanetin oma aluetunnus, EI kuntakoodi. "
+            "Kuntakoodi ja nimi ovat kentissä region_code ja region_name "
+            '(tyhjä = alue ei ole kunta). Suodata esim. {"region_name": ["Joensuu"]}.'
+        )
     return out
 
 

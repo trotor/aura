@@ -96,7 +96,7 @@ def get_connection(
 #: siksi ainoa lähde joka on olemassa myös kontissa. Sen ja hakemiston
 #: synkassa pitää ``tests/test_schema_drift.py``: uusi migraatio ilman
 #: vakion nostoa kaataa testit.
-EXPECTED_SCHEMA_VERSION = 25
+EXPECTED_SCHEMA_VERSION = 26
 
 
 class SchemaTooOldError(RuntimeError):
