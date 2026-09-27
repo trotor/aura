@@ -214,6 +214,9 @@ async def fetch_json(
     max_rows: int,
     conn: sqlite3.Connection | None = None,
 ) -> Table:
+    server_filtered = False
+    if filters and "api.vipunen.fi" in url:
+        url, server_filtered = vipunen_filter_url(url, filters), True
     content, cut = await _download(url)
     table = Table(protocol="json", request_url=url)
     try:
@@ -223,6 +226,14 @@ async def fetch_json(
         table.error = "Vastaus ei ole kelvollista JSONia" + (" (katkaistu)" if cut else "")
         return table
     records, path = _records(data)
+    if not records and server_filtered:
+        table.notes.append("Vipunen: palvelin suodatti, eikä yksikään rivi täsmännyt.")
+        return _finish(table, [], [], None, 0)
+    if server_filtered:
+        table.notes.append(
+            "Vipunen: suodatus tehtiin palvelimella (filter-parametri), joten rivit "
+            "kattavat koko tietojoukon eivätkä vain ensimmäistä sivua."
+        )
     if not records:
         table.error_code = "no_rows"
         table.error = "JSON-rakenteesta ei löytynyt rivilistaa."
@@ -238,6 +249,26 @@ async def fetch_json(
         table.error_code = "unknown_filter"
         table.error = f"Tuntemattomat kentät: {', '.join(unknown)}. Kentät: {headers}"
     return _finish(table, headers, rows, None, total)
+
+
+def vipunen_filter_url(url: str, filters: dict[str, list[str]]) -> str:
+    """Vipusen RSQL-suodatin URL:iin: ``kenttä=="arvo"`` tai ``kenttä=in=(...)``.
+
+    Ilman tätä suodatus osui vain ensimmäiseen 1 000 rivin sivuun, ja
+    rivitason tietojoukossa se on yleensä vanhin lukuvuosi: kysytty rivi
+    jäi löytymättä, vaikka se oli lähteessä.
+    """
+    parts = []
+    for key, values in filters.items():
+        vals = [str(v).replace('"', "") for v in (values if isinstance(values, list) else [values])]
+        if len(vals) == 1:
+            parts.append(f'{key}=="{vals[0]}"')
+        elif vals:
+            parts.append(f"{key}=in=({','.join(chr(34) + v + chr(34) for v in vals)})")
+    split = urllib.parse.urlsplit(url)
+    query = dict(urllib.parse.parse_qsl(split.query))
+    query["filter"] = ";".join(parts)
+    return urllib.parse.urlunsplit(split._replace(query=urllib.parse.urlencode(query)))
 
 
 def _annotate_sotkanet(

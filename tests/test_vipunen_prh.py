@@ -87,3 +87,40 @@ async def test_prh_koodistot_eivat_toista_avoindatan_aineistoja() -> None:
     assert len([u for u in urls if "description?code=" in u]) == len(CODE_LISTS)
     # Yritystiedot ovat jo avoindata.fi:n kautta: ei companies- eikä bulk-resurssia.
     assert not any("/companies" in u or "all_companies" in u for u in urls)
+
+
+def test_vipusen_suodatin_palvelimelle() -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    from aura.fetch import vipunen_filter_url
+
+    url = vipunen_filter_url(
+        "https://api.vipunen.fi/api/resources/x/data?limit=1000",
+        {"oppilaitos": ["Apollon yhteiskoulu"], "lukuvuosi": ["2024/2025", "2023/2024"]},
+    )
+    q = parse_qs(urlsplit(url).query)
+    assert q["limit"] == ["1000"]
+    assert q["filter"] == [
+        'oppilaitos=="Apollon yhteiskoulu";lukuvuosi=in=("2024/2025","2023/2024")'
+    ]
+
+
+@pytest.mark.asyncio
+async def test_vipunen_json_suodatetaan_palvelimella() -> None:
+    from aura import fetch
+
+    seen: list[str] = []
+
+    async def fake_download(url: str, *a: Any, **kw: Any) -> tuple[bytes, bool]:
+        seen.append(url)
+        return b'[{"lukuvuosi": "2024/2025", "oppilaatLukuvuosiLkm": 236}]', False
+
+    with patch.object(fetch, "_download", fake_download):
+        table = await fetch.fetch_json(
+            "https://api.vipunen.fi/api/resources/x/data?limit=1000",
+            {"lukuvuosi": ["2024/2025"]},
+            50,
+        )
+    assert "filter=" in seen[0]
+    assert table.rows and table.rows[0]["oppilaatLukuvuosiLkm"] == 236
+    assert any("palvelimella" in n for n in table.notes)
