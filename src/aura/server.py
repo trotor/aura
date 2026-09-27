@@ -230,7 +230,8 @@ _BOUNDARIES_REMOTE = (
 
 # Julkisen profiilin ohje. Alle 1 500 merkkiä: ohje kulkee kontekstissa
 # jokaisella vuorolla, ja esimerkit kuuluvat promptteihin ja resursseihin.
-# Mitattu 27.9.2026: koko vanha pinta maksoi 9 127 tokenia per vuoro.
+# Koko vanha pinta (28 työkalua read-only-tilassa) maksoi noin 9 000
+# tokenia jokaisella vuorolla ennen ensimmäistä kysymystä.
 _PUBLIC = (
     "Aura: Suomen avoin data. Kolme askelta:\n"
     "1) find_data(query, region) — aineistot, ja valmiit tunnusluvut jos "

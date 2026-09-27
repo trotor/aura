@@ -1,10 +1,9 @@
 """find_data — yksi hakutyökalu kaikille hakuaikomuksille.
 
 Korvaa neljä päällekkäistä työkalua: ``search``, ``search_structured``,
-``search_by_region`` ja ``recommend``. Mitattuna 27.9.2026 (tehtäväsarja,
-31 kysymystä) agentti kutsui niitä ristiin saman kysymyksen aikana —
-yksittäinen faktakysymys vaati mediaanina seitsemän kutsua, joista useimmat
-olivat hakuja eri työkaluilla samalla aikomuksella.
+``search_by_region`` ja ``recommend``. Neljä työkalua samalle aikomukselle
+sai agentin kutsumaan niitä ristiin saman kysymyksen aikana: yksittäinen
+faktakysymys kulki tavallisesti usean haun kautta eri työkaluilla.
 
 Järjestys on sama kuin ``search``issä (mitattu hakupino), ei ``recommend``in
 uudelleenpisteytys: sille ei ole mittausta joka osoittaisi sen paremmaksi.
