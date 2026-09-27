@@ -306,18 +306,31 @@ def _code_match(conn: sqlite3.Connection, code: str, raw: str) -> AreaMatch | No
     return None
 
 
-def _name_candidates(raw: str) -> list[str]:
-    """Nimi sellaisenaan, ilman tasopäätettä, ja perusmuodossa.
+#: Sijapäätteet jotka riisutaan ennen lemmatisointia. Lemmatisoija osaa
+#: astevaihtelun ("Helsingin" → helsinki) mutta erehtyy harvinaisissa
+#: nimissä: "Vantaan" → "vannas". Pelkkä päätteen poisto osuu niihin oikein.
+_CASE_SUFFIXES = ("lla", "llä", "ssa", "ssä", "sta", "stä", "lta", "ltä", "lle", "n")
 
-    "Pirkanmaan maakunta" → "Pirkanmaan", "Pirkanmaa". Taivutettu muoto
-    ("Tampereella") palautetaan perusmuotoon lemmatisoijalla, jos se on
-    asennettu.
+
+def _name_candidates(raw: str) -> list[str]:
+    """Nimi sellaisenaan, ilman tasopäätettä, ilman sijapäätettä ja perusmuodossa.
+
+    "Pirkanmaan maakunta" → "Pirkanmaan", "Pirkanmaa". "Vantaalla" →
+    "Vantaa". Taivutettu muoto ("Tampereella") palautetaan perusmuotoon
+    lemmatisoijalla, jos se on asennettu.
     """
     out = [raw]
     low = raw.lower()
     for suffix in _LEVEL_SUFFIXES:
         if low.endswith(suffix):
             out.append(raw[: -len(suffix)].strip())
+    for name in list(out):
+        if " " in name:
+            continue
+        for suffix in _CASE_SUFFIXES:
+            if name.lower().endswith(suffix) and len(name) - len(suffix) >= 3:
+                out.append(name[: -len(suffix)])
+                break
     try:
         from aura.lemmatize import lemma
 

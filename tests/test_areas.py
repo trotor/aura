@@ -93,6 +93,17 @@ def test_lakkautettu_kunta_tulkitaan_seuraajaksi_ja_kerrotaan(conn: sqlite3.Conn
         assert "2016" in m.note and "Nastola" in m.note
 
 
+def test_taivutettu_nimi(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO ref_areas (level, code, name_fi, name_sv, vintage)"
+        " VALUES ('kunta', '092', 'Vantaa', 'Vanda', 2026)"
+    )
+    for query in ("Vantaan", "Vantaalla", "Tampereella"):
+        m = resolve_area(conn, query)
+        assert m is not None, query
+        assert m.area.name_fi in ("Vantaa", "Tampere"), query
+
+
 def test_postinumero(conn: sqlite3.Connection) -> None:
     m = resolve_area(conn, "33100")
     assert m is not None and m.area.level == "postinumero"
