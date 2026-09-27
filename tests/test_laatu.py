@@ -71,7 +71,7 @@ async def _call(name: str, args: dict[str, Any]) -> dict[str, Any]:
     async with Client(mcp) as client:
         tools = {t.name: t for t in await client.list_tools()}
         result = await client.call_tool(name, args, raise_on_error=False)
-    jsonschema.validate(result.structured_content, tools[name].outputSchema)
+    jsonschema.validate(result.structured_content, tools[name].output_schema)
     data: dict[str, Any] = result.structured_content
     return data
 

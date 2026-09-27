@@ -22,7 +22,7 @@ pytest tests/
 
 - Kieli: Python 3.11+
 - Tietokanta: SQLite (data/aura.db) — osa git-repoa
-- MCP-server: FastMCP 3.x
+- MCP-server: FastMCP 4.x
 - Testit: pytest
 - Lintteri: ruff
 - Tyypintarkistus: mypy (strict)

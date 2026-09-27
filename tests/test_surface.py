@@ -103,7 +103,7 @@ async def _call(name: str, args: dict[str, Any]) -> dict[str, Any]:
     async with Client(mcp) as client:
         tools = {t.name: t for t in await client.list_tools()}
         result = await client.call_tool(name, args, raise_on_error=False)
-    schema = tools[name].outputSchema
+    schema = tools[name].output_schema
     assert schema, f"{name}: outputSchema puuttuu"
     data = result.structured_content
     assert isinstance(data, dict), f"{name}: structuredContent puuttuu"
@@ -117,7 +117,7 @@ async def test_julkisessa_profiilissa_enintaan_8_tyokalua(public: sqlite3.Connec
     async with Client(mcp) as client:
         names = {t.name for t in await client.list_tools()}
         prompts = {p.name for p in await client.list_prompts()}
-        templates = {t.uriTemplate for t in await client.list_resource_templates()}
+        templates = {t.uri_template for t in await client.list_resource_templates()}
     assert names == PUBLIC_TOOLS
     assert len(names) <= 8
     assert {"kuntavertailu", "loyda-ja-hae", "aluekatsaus"} <= prompts
@@ -127,7 +127,7 @@ async def test_julkisessa_profiilissa_enintaan_8_tyokalua(public: sqlite3.Connec
 async def test_jokaisella_julkisella_on_output_schema(public: sqlite3.Connection) -> None:
     async with Client(mcp) as client:
         for tool in await client.list_tools():
-            assert tool.outputSchema, tool.name
+            assert tool.output_schema, tool.name
 
 
 async def test_admin_profiili_nayttaa_kaiken_ja_merkitsee_vanhentuneet() -> None:
