@@ -46,6 +46,7 @@ BaseHarvester (base.py)
 ├── StaticHarvester (static.py) — konfiguraatiopohjainen, ei API-kutsuja
 │   ├── FinaviaHarvester (finavia.py) — lentoliikennetilastot (XLSX)
 │   ├── GtkHarvester (gtk.py)
+│   ├── KirjastotHarvester (kirjastot.py) — kirjastotilastot (XLS, vuodet sivulta) ja Kirkanta API v4
 │   ├── KunnatHarvester (kunnat.py) — 36 kunnan WMS/WFS/ArcGIS
 │   ├── LipasHarvester (lipas.py) — Jyväskylän yliopisto liikuntapaikat
 │   ├── LukeKarttaHarvester (luke_kartta.py)
@@ -53,7 +54,7 @@ BaseHarvester (base.py)
 │   ├── MmlHarvester (mml.py) — Maanmittauslaitos
 │   ├── OvertureHarvester (overture.py)
 │   ├── PaituliHarvester (paituli.py) — CSC:n paikkatietopalvelu
-│   ├── PrhHarvester (prh.py) — YTJ-koodistot (YTJ-rajapinta ja bulk tulevat avoindata.fi:stä)
+│   ├── PrhHarvester (prh.py) — YTJ-yrityshaku ja koodistot (bulk tulee avoindata.fi:stä)
 │   ├── RuokavirastoHarvester (ruokavirasto.py)
 │   ├── StatfinGeoHarvester (statfin_geo.py)
 │   ├── StukHarvester (stuk.py) — Säteilyturvakeskus

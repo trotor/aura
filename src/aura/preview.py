@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 
 from aura.constants import PREVIEWABLE_FORMATS, user_agent
+from aura.formats import resource_format
 from aura.wfs import fetch_features
 
 logger = logging.getLogger(__name__)
@@ -41,16 +42,29 @@ def _pick_resource(
         if 0 <= resource_index < len(resources):
             return resources[resource_index]
         return None
+    # Formaatiton resurssi arvioidaan URL:sta päätellyllä formaatilla
+    # (aura.formats): SYKE:n WFS-palvelut ovat katalogissa ilman formaattia,
+    # ja ilman päättelyä valinta osui aineiston ZIP-lataukseen.
     if format_hint:
         hint = format_hint.upper()
         for r in resources:
-            if (r.get("format") or "").upper() == hint:
+            if resource_format(r) == hint:
                 return r
     # Suosi formaatteja joille kysely osaa tehdä jotain. Koneluettavuus on
     # eri asia: XLSX on koneluettava mutta esikatselu ei osaa avata sitä.
-    for r in resources:
-        if (r.get("format") or "").upper() in PREVIEWABLE_FORMATS:
-            return r
+    queryable = [r for r in resources if resource_format(r) in PREVIEWABLE_FORMATS]
+    # WFS-resurssi joka nimeää tason on tarkempi kuin palvelun oletustaso:
+    # Paavon tilastotaso lisättiin rajatason rinnalle, mutta valinta osui
+    # rajatasoon (vain postinumero ja nimi) koska se oli listassa ensin.
+    named = [
+        r
+        for r in queryable
+        if resource_format(r) == "WFS" and "typename" in str(r.get("url", "")).lower()
+    ]
+    if named:
+        return named[0]
+    if queryable:
+        return queryable[0]
     return resources[0]
 
 

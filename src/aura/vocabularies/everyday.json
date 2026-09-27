@@ -1,0 +1,22 @@
+{
+  "domain": "everyday",
+  "description": "Arkisanat, joilla ihmiset kysyvät tilastoja (ulkoinen arvio 27.9.2026)",
+  "mappings": {
+    "kirjasto": ["kirjastotilasto", "yleiset kirjastot", "kirjastot"],
+    "päiväkoti": ["varhaiskasvatus"],
+    "lainaus": ["lainat", "kirjastolainat"],
+    "uudet yritykset": ["aloittaneet yritykset"],
+    "yrityksen perustaminen": ["aloittaneet yritykset"],
+    "new enterprises": ["aloittaneet yritykset"],
+    "asuntojen hinnat": ["osakeasuntojen hinnat", "neliöhinnat"],
+    "asuntohinta": ["osakeasuntojen hinnat", "neliöhinta"],
+    "päiväkotipaikka": ["varhaiskasvatus", "varhaiskasvatukseen osallistuneet"],
+    "sää": ["säähavainnot", "sääasema"],
+    "lämpötila": ["säähavainnot", "lämpötilahavainnot"],
+    "rikos": ["tietoon tulleet rikokset", "rikostilasto"],
+    "crimes": ["tietoon tulleet rikokset"],
+    "työttömyys": ["työttömät työnhakijat", "työllisyyskatsaus"],
+    "tulot": ["tulonjako", "käytettävissä olevat tulot"],
+    "suojelualue": ["luonnonsuojelualueet", "suojelualueet"]
+  }
+}

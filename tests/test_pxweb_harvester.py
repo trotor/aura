@@ -222,6 +222,69 @@ class TestCrawl:
         assert h._english == {}
 
 
+    @pytest.mark.asyncio
+    async def test_harvest_hakee_ruotsin_ja_englannin_otsikot(self):
+        """Ulkoinen arvio 27.9.2026: title_sv oli PxWeb-tauluilla aina tyhjä."""
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        base = h.pxweb_base_url
+        pages = {
+            f"{base}/en/StatFin/": [{"id": "asvu", "type": "l", "text": "Dwellings"}],
+            f"{base}/en/StatFin/asvu/": [{"id": "t1.px", "type": "t", "text": "Prices"}],
+            f"{base}/sv/StatFin/": [{"id": "asvu", "type": "l", "text": "Bostäder"}],
+            f"{base}/sv/StatFin/asvu/": [{"id": "t1.px", "type": "t", "text": "Priser"}],
+            f"{base}/fi/StatFin/": [{"id": "asvu", "type": "l", "text": "Asunnot"}],
+            f"{base}/fi/StatFin/asvu/": [
+                {"id": "t1.px", "type": "t", "text": "Hinnat", "updated": ""},
+            ],
+        }
+        seen: list[str] = []
+
+        async def fake_get(url, **_):
+            seen.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = pages[url]
+            resp.raise_for_status = MagicMock()
+            return resp
+
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=fake_get)
+        with patch.object(h, "_make_client") as make:
+            make.return_value.__aenter__ = AsyncMock(return_value=client)
+            make.return_value.__aexit__ = AsyncMock(return_value=False)
+            assert await h.harvest() == 1
+        row = conn.execute(
+            "SELECT title_fi, title_en, title_sv FROM datasets WHERE id = 'statfin-t1.px'"
+        ).fetchone()
+        assert tuple(row) == ("Hinnat", "Prices", "Priser")
+        assert any("/sv/" in u for u in seen)
+
+    @pytest.mark.asyncio
+    async def test_kielivalinta_ja_englannin_poiskytkenta(self):
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        h.harvest_english = False
+        seen: list[str] = []
+
+        async def fake_get(url, **_):
+            seen.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = []
+            resp.raise_for_status = MagicMock()
+            return resp
+
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=fake_get)
+        with patch.object(h, "_make_client") as make:
+            make.return_value.__aenter__ = AsyncMock(return_value=client)
+            make.return_value.__aexit__ = AsyncMock(return_value=False)
+            await h.harvest()
+        assert not any("/en/" in u for u in seen)
+        assert any("/sv/" in u for u in seen)
+
+
 SAMPLE_TABLE_META = {
     "title": "Testitaulu muuttujina Vuosi ja Tiedot",
     "variables": [

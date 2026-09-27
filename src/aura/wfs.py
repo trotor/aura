@@ -19,6 +19,7 @@ suoraan — eli valtaosalle.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import urllib.parse
@@ -271,6 +272,33 @@ def request_params(
     return base_url, params
 
 
+def type_name_from_url(url: str) -> str | None:
+    """Kerroksen nimi (``typeName``/``typeNames``) resurssin URL:sta, jos on."""
+    query = urllib.parse.urlparse(url).query
+    for key, values in urllib.parse.parse_qs(query).items():
+        if key.lower() in ("typename", "typenames") and values:
+            return values[0]
+    return None
+
+
+def with_layer(url: str, layer: str) -> str:
+    """Aseta URL:n kerrokseksi ``layer`` — korvaa URL:n oman typeNamen.
+
+    ``query_source(layer=...)`` käyttää tätä. Kerros kirjoitetaan URL:iin
+    eikä erilliseksi parametriksi, koska kaikki WFS-polut (kohteiden haku,
+    bbox+suodatin-yhdistelmän geometriakentän tunnustelu, postinumerokentän
+    tunnistus) lukevat kerroksen jo URL:sta ``request_params``in kautta.
+    """
+    split = urllib.parse.urlsplit(url)
+    pairs = [
+        (k, v)
+        for k, v in urllib.parse.parse_qsl(split.query, keep_blank_values=True)
+        if k.lower() not in ("typename", "typenames")
+    ]
+    pairs.append(("typeNames", layer))
+    return urllib.parse.urlunsplit(split._replace(query=urllib.parse.urlencode(pairs)))
+
+
 @dataclass(frozen=True)
 class Features:
     """Yhdestä GetFeature-kutsusta luettu tulos, formaatista riippumatta."""
@@ -284,6 +312,11 @@ class Features:
     geometry_name: str | None = None
     output_format: str = ""
     error: str | None = None
+    #: Palvelun kerrokset kyvyistä, jos kerros valittiin neuvottelussa
+    #: (URL ei kertonut kerrosta). Tyhjä kun kerros tuli URL:sta.
+    feature_types: list[str] = field(default_factory=list)
+    #: Neuvottelussa valittu kerros (kykyjen ensimmäinen), tai None.
+    type_name: str | None = None
 
 
 def _from_geojson(data: dict[str, Any], max_rows: int) -> Features:
@@ -355,15 +388,28 @@ async def fetch_features(
     if cql_filter:
         params["CQL_FILTER"] = cql_filter
 
+    layer_in_url = type_name_from_url(url) is not None
     async with httpx.AsyncClient(
         timeout=timeout, headers={"User-Agent": user_agent()}
     ) as client:
         resp = await client.get(base_url, params=params, follow_redirects=True)
-        resp.raise_for_status()
-        result = _read_body(resp.text, max_rows)
-        if result is not None and result.error is None:
-            return result
-        first_error = result.error if result else None
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            # geo.stat.fi vastaa kerroksettomaan GetFeatureen HTTP 400:lla
+            # (ei ExceptionReportilla), jolloin neuvottelu jäi kokonaan
+            # tekemättä ja Paavo-aineiston kysely kaatui "HTTP 400":aan.
+            # Kerroksen puute korjautuu neuvottelulla; URL:n oman kerroksen
+            # kanssa virhe on aito ja nostetaan sellaisenaan.
+            if layer_in_url:
+                raise
+            first_error: str | None = f"HTTP {e.response.status_code}"
+            result = None
+        else:
+            result = _read_body(resp.text, max_rows)
+            if result is not None and result.error is None:
+                return result
+            first_error = result.error if result else None
 
         # Neuvottelu: kysy mitä palvelu oikeasti tukee. Jos kyvyt eivät
         # vastaa, alkuperäinen virhe on silti paras tieto käyttäjälle —
@@ -416,4 +462,10 @@ async def fetch_features(
         return Features(error=first_error or "Vastausta ei osattu tulkita.")
     if result.error and first_error and result.error != first_error:
         return Features(error=f"{first_error} | {result.error}")
+    if type_name and not layer_in_url:
+        # Kerros valittiin palvelun puolesta: kerrotaan mikä ja mistä
+        # joukosta, jotta vastaus ei näytä koko palvelun sisällöltä.
+        result = dataclasses.replace(
+            result, feature_types=list(caps.feature_types), type_name=type_name
+        )
     return result

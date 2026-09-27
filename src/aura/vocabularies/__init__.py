@@ -72,6 +72,81 @@ def expand_with_vocabularies(query: str) -> list[str]:
     return expansions
 
 
+#: Muunnelmien enimmäismäärä yhdelle kyselylle. Jokainen muunnelma on oma
+#: tiukka FTS-haku, joten määrä rajaa kyselyn hinnan.
+MAX_VARIANTS = 6
+
+
+def _lemma_key(text: str) -> str:
+    from aura.lemmatize import lemma, tokenize
+
+    return " ".join(lemma(t) or t for t in tokenize(text))
+
+
+def synonym_variants(query: str, lexicon: object | None = None) -> list[str]:
+    """Muunnelmat tekstinä (ks. ``synonym_variants_ranked``)."""
+    return [v for v, _ in synonym_variants_ranked(query, lexicon)]
+
+
+def synonym_variants_ranked(
+    query: str, lexicon: object | None = None
+) -> list[tuple[str, bool]]:
+    """Kysely, jossa arkisana on korvattu sanaston termillä.
+
+    Eroaa ``expand_with_vocabularies``ista kahdella tavalla, ja kumpikin on
+    syy siihen, miksi arkisanat eivät löytäneet mitään (ulkoinen arvio
+    27.9.2026: "päiväkotipaikat", "kirjastojen lainaukset kunnittain"):
+
+    1. Sanaa verrataan **perusmuotoon ja yhdyssanan osiin**, ei vain
+       pintamuotoon: "päiväkotipaikat" → päiväkoti + paikka → varhaiskasvatus.
+    2. Tulos on **kokonainen kysely** jossa yksi sana on vaihdettu, joten se
+       voidaan hakea tiukasti (kaikki sanat osuvat) heti tiukan vaiheen
+       jälkeen — ei vasta viimeisenä OR-hakuna, jossa se ei ehtinyt mukaan.
+    """
+    from aura.decompound import split_compound
+    from aura.lemmatize import lemma, tokenize
+
+    by_key: dict[str, list[str]] = {}
+    # Vain arkisanasto: muut sanastot ovat aihealueen laajennuksia ("koulu" →
+    # kouluverkko, oppilaaksiottoalue), ja tiukkana hakuna ne toivat
+    # kysymyssetteihin kohinaa (mitattu 27.9.2026). Arkisanaston jokainen rivi
+    # on sama asia eri sanoin.
+    for vocab in load_all():
+        if vocab.get("domain") != "everyday":
+            continue
+        for term, synonyms in vocab.get("mappings", {}).items():
+            by_key.setdefault(_lemma_key(term), []).extend(synonyms)
+    tokens = tokenize(query)
+    if not tokens:
+        return []
+    variants: list[tuple[str, bool]] = []
+
+    def add(text: str, strong: bool = False) -> None:
+        if text and text != query and all(text != v for v, _ in variants):
+            variants.append((text, strong))
+
+    # Monisanainen avain ("uudet yritykset") on vahva: se on sama asia eri
+    # sanoin eikä yksittäisen sanan tulkinta, joten se haetaan aina.
+    whole = _lemma_key(query)
+    for syn in by_key.get(whole, [])[:3]:
+        add(syn, strong=" " in whole)
+    for i, tok in enumerate(tokens):
+        base = lemma(tok) or tok
+        keys = [tok.lower(), base]
+        parts = split_compound(base, lexicon) if lexicon is not None else None  # type: ignore[arg-type]
+        if parts:
+            keys += parts
+        for key in keys:
+            for syn in by_key.get(key, [])[:3]:
+                add(" ".join([*tokens[:i], syn, *tokens[i + 1 :]]))
+        # Kahden sanan avaimet ("asuntojen hinnat", "uudet yritykset")
+        if i + 1 < len(tokens):
+            pair = f"{base} {lemma(tokens[i + 1]) or tokens[i + 1]}"
+            for syn in by_key.get(pair, [])[:3]:
+                add(" ".join([*tokens[:i], syn, *tokens[i + 2 :]]), strong=True)
+    return sorted(variants, key=lambda v: not v[1])[:MAX_VARIANTS]
+
+
 def reset_cache() -> None:
     """Tyhjennä välimuisti (testejä varten)."""
     global _loaded_vocabs

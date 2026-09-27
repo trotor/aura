@@ -86,6 +86,10 @@ class Table:
     codes: dict[str, dict[str, str]] | None = None
     error: str | None = None
     error_code: str | None = None
+    #: WFS: palvelun kerrokset, jos kerros valittiin palvelun puolesta.
+    layers: list[str] | None = None
+    #: WFS: kerros jota kysely käytti, jos se tiedetään.
+    layer: str | None = None
 
 
 def _client() -> httpx.AsyncClient:
@@ -95,9 +99,16 @@ def _client() -> httpx.AsyncClient:
 
 
 def _num(value: Any) -> Any:
-    """Muunna numeerinen merkkijono luvuksi, muut sellaisenaan."""
+    """Muunna numeerinen merkkijono luvuksi, muut sellaisenaan.
+
+    Etunollallinen kokonaisluku jätetään merkkijonoksi: se on koodi eikä
+    luku. Postinumero ``00100`` muuttui muuten luvuksi 100 ja kuntakoodi
+    ``091`` luvuksi 91 — ja kumpikaan ei enää osunut omaan suodattimeensa.
+    """
     if isinstance(value, str):
         v = value.strip()
+        if re.fullmatch(r"0\d+", v):
+            return value
         if re.fullmatch(r"-?\d+", v):
             try:
                 return int(v)
@@ -243,12 +254,34 @@ async def fetch_json(
         records = _annotate_sotkanet(conn, records, table)
     headers = list(records[0].keys())
     rows, total, unknown = _filter_rows(records, filters, max_rows)
+    # Osumien määrä kerrotaan vain kokonaan luetusta vastauksesta: katkaistun
+    # vastauksen luku väittäisi lähteen olevan esikatselun kokoinen.
+    table.total = None if cut else total
+    reported = _reported_total(data)
+    if reported is not None and not filters and reported > len(records):
+        # Sivutettu rajapinta (YTJ totalResults, Kirkanta total): sivun
+        # rivimäärä ei ole lähteen koko, joten lähteen oma luku voittaa.
+        table.total = reported
+        table.notes.append(
+            f"Lähde kertoo {reported} osumaa; vastauksessa oli yksi sivu ({len(records)} riviä)."
+        )
     if path and path != "$":
         table.notes.append(f"Rivit polusta '{path}'.")
     if unknown:
         table.error_code = "unknown_filter"
         table.error = f"Tuntemattomat kentät: {', '.join(unknown)}. Kentät: {headers}"
-    return _finish(table, headers, rows, None, total)
+    return _finish(table, headers, rows, None, table.total if table.total is not None else total)
+
+
+def _reported_total(data: Any) -> int | None:
+    """Lähteen oma osumamäärä JSON-vastauksen juuresta, jos se kerrotaan."""
+    if not isinstance(data, dict):
+        return None
+    for key in ("totalResults", "total", "totalCount", "count"):
+        value = data.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return None
 
 
 def vipunen_filter_url(url: str, filters: dict[str, list[str]]) -> str:
@@ -271,30 +304,92 @@ def vipunen_filter_url(url: str, filters: dict[str, list[str]]) -> str:
     return urllib.parse.urlunsplit(split._replace(query=urllib.parse.urlencode(query)))
 
 
-def _annotate_sotkanet(
-    conn: sqlite3.Connection, records: list[dict[str, Any]], table: Table
-) -> list[dict[str, Any]]:
-    """Lisää Sotkanetin aluetunnuksen rinnalle kuntakoodi ja nimi."""
+#: Sotkanetin aluekategoria → Auran aluetaso (``aura.areas``in nimet
+#: niille jotka Aura tuntee). Muut kategoriat pienaakkosin sellaisenaan.
+_SOTKANET_LEVELS = {
+    "KUNTA": "kunta",
+    "MAAKUNTA": "maakunta",
+    "HYVINVOINTIALUE": "hyvinvointialue",
+    "SEUTUKUNTA": "seutukunta",
+    "SUURALUE": "suuralue",
+    "NUTS1": "nuts1",
+    "MAA": "koko_maa",
+    "ELY-KESKUS": "ely",
+    "ALUEHALLINTOVIRASTO": "avi",
+    "SAIRAANHOITOPIIRI": "sairaanhoitopiiri",
+    "ERVA": "erva",
+    "YTA": "yta",
+    "EUROOPPA": "maa_eurooppa",
+    "POHJOISMAAT": "maa_pohjoismaat",
+    "EURALUEET": "maaryhma",
+}
+
+
+def _sotkanet_regions(conn: sqlite3.Connection) -> dict[int, tuple[str | None, str, str]]:
+    """Sotkanetin aluetunnus → (koodi, nimi, taso).
+
+    Ensisijaisesti koko rekisteri (``ref_sotkanet_regions``, migraatio 26).
+    Vanhemmassa kannassa taulua ei ole: silloin vain kunnat
+    ``ref_municipalities.sotkanet_id``-sarakkeesta, kuten ennenkin.
+    """
     try:
         rows = conn.execute(
+            "SELECT id, category, code, name_fi FROM ref_sotkanet_regions"
+        ).fetchall()
+    except sqlite3.Error:
+        rows = []
+    out: dict[int, tuple[str | None, str, str]] = {}
+    for rid, category, code, name in rows:
+        level = _SOTKANET_LEVELS.get(category, str(category).lower())
+        # Koko maan koodi 358 on suuntanumero; Tilastokeskuksen koodi on SSS.
+        out[int(rid)] = ("SSS" if category == "MAA" else code, name or "", level)
+    if out:
+        return out
+    try:
+        kunnat = conn.execute(
             "SELECT sotkanet_id, code, name_fi FROM ref_municipalities"
             " WHERE sotkanet_id IS NOT NULL"
         ).fetchall()
     except sqlite3.Error:
-        return records
-    by_id = {int(r[0]): (r[1], r[2]) for r in rows}
+        return {}
+    return {int(r[0]): (r[1], r[2], "kunta") for r in kunnat}
+
+
+def _annotate_sotkanet(
+    conn: sqlite3.Connection, records: list[dict[str, Any]], table: Table
+) -> list[dict[str, Any]]:
+    """Lisää Sotkanetin aluetunnuksen rinnalle alueen koodi, nimi ja taso."""
+    by_id = _sotkanet_regions(conn)
     if not by_id:
         return records
+    full = any(level != "kunta" for _, _, level in by_id.values())
     out = []
     for rec in records:
         rid = rec.get("region")
-        code, name = by_id.get(int(rid), ("", "")) if isinstance(rid, int) else ("", "")
-        out.append({**rec, "region_code": code or None, "region_name": name or None})
-    table.notes.append(
-        "Sotkanet: 'region' on Sotkanetin oma aluetunnus, EI kuntakoodi. "
-        "Kuntakoodi ja nimi ovat kentissä region_code ja region_name "
-        '(tyhjä = alue ei ole kunta). Suodata esim. {"region_name": ["Joensuu"]}.'
-    )
+        code, name, level = (
+            by_id.get(int(rid), (None, "", "")) if isinstance(rid, int) else (None, "", "")
+        )
+        out.append(
+            {
+                **rec,
+                "region_code": code or None,
+                "region_name": name or None,
+                "region_level": level or None,
+            }
+        )
+    if full:
+        table.notes.append(
+            "Sotkanet: 'region' on Sotkanetin oma aluetunnus, EI kuntakoodi. Alueen "
+            "koodi, nimi ja taso ovat kentissä region_code, region_name ja region_level "
+            "(kunta, maakunta, hyvinvointialue, seutukunta, koko_maa ...). Suodata esim. "
+            '{"region_name": ["Joensuu"]}.'
+        )
+    else:
+        table.notes.append(
+            "Sotkanet: 'region' on Sotkanetin oma aluetunnus, EI kuntakoodi. "
+            "Kuntakoodi ja nimi ovat kentissä region_code ja region_name "
+            '(tyhjä = alue ei ole kunta). Suodata esim. {"region_name": ["Joensuu"]}.'
+        )
     return out
 
 
@@ -336,40 +431,119 @@ async def fetch_odata(
 # --- WFS ---
 
 
+#: Postinumerokentät WFS-kerroksissa. Paavon tilastokerros käyttää nimeä
+#: ``postinumeroalue``, rajakerros ``posti_alue``.
+POSTAL_FIELDS = ("postinumeroalue", "posti_alue", "postinumero", "postinro", "postal_code")
+
+#: Kuinka monta kerrosta muistiinpanossa luetellaan.
+_MAX_LAYERS_LISTED = 10
+
+
+def _cql_literal(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _postal_field(headers: list[str]) -> str | None:
+    by_lower = {h.lower(): h for h in headers}
+    return next((by_lower[f] for f in POSTAL_FIELDS if f in by_lower), None)
+
+
 async def fetch_wfs(
-    url: str, filters: dict[str, list[str]] | None, max_rows: int, bbox: tuple[float, ...] | None
+    url: str,
+    filters: dict[str, list[str]] | None,
+    max_rows: int,
+    bbox: tuple[float, ...] | None,
+    *,
+    layer: str = "",
+    postal_code: str = "",
 ) -> Table:
-    from aura.wfs import fetch_features
+    """WFS-kysely. ``layer`` valitsee kerroksen, ``postal_code`` rajaa postinumeroon.
+
+    Postinumerorajaus on attribuuttisuodatin eikä bbox: postinumeroalueen
+    rajaus laatikkona osuisi naapurialueisiin. Se toimii vain kerroksessa
+    jossa on postinumerokenttä (``POSTAL_FIELDS``); kenttä tunnistetaan
+    yhden kohteen koehaulla, koska tallennettu kenttäskeema voi olla eri
+    kerroksesta (ks. inspect_dataset).
+    """
+    from aura.wfs import fetch_features, type_name_from_url, with_layer
+
+    if layer:
+        url = with_layer(url, layer)
+    explicit_layer = bool(layer) or type_name_from_url(url) is not None
+
+    parts: list[str] = []
+    for f, values in (filters or {}).items():
+        ors = [f"{f}={_cql_literal(v)}" for v in values]
+        parts.append(ors[0] if len(ors) == 1 else "(" + " OR ".join(ors) + ")")
+
+    probe = None
+    layers: list[str] = []
+    if postal_code:
+        probe = await fetch_features(url, 1, timeout=TIMEOUT)
+        if probe.error:
+            return Table(
+                protocol="wfs", request_url=url, error_code="service_error", error=probe.error
+            )
+        layers = list(probe.feature_types)
+        used = probe.type_name or type_name_from_url(url) or "?"
+        postal_field = _postal_field(list(probe.headers))
+        if postal_field is None:
+            return Table(
+                protocol="wfs",
+                request_url=url,
+                error_code="area_not_supported",
+                error=(
+                    f"Postinumero {postal_code} tunnistettiin, mutta kerroksessa {used} ei ole "
+                    "postinumerokenttää (kentät: "
+                    + ", ".join(list(probe.headers)[:12])
+                    + "). Valitse kerros jossa se on (layer) tai käytä kunnan nimeä."
+                ),
+                layers=layers or None,
+                layer=used,
+            )
+        if probe.type_name and not explicit_layer:
+            # Sama kerros varsinaiseen hakuun kuin jolla kenttä tunnistettiin.
+            url = with_layer(url, probe.type_name)
+        parts.append(f"{postal_field}={_cql_literal(postal_code)}")
 
     cql = None
     bbox_param = None
-    if filters:
-        parts = []
-        for f, values in filters.items():
-            ors = [f"{f}='{v}'" for v in values]
-            parts.append(ors[0] if len(ors) == 1 else "(" + " OR ".join(ors) + ")")
-        if bbox is not None:
-            probe = await fetch_features(url, 1, timeout=TIMEOUT)
-            if probe.geometry_name is None:
-                return Table(
-                    protocol="wfs",
-                    request_url=url,
-                    error_code="bbox_and_filters",
-                    error="Aluerajausta ei voi yhdistää suodattimiin: palvelu ei kerro "
-                    "geometriakentän nimeä. Aja kysely ilman toista niistä.",
-                )
-            parts.append(
-                f"BBOX({probe.geometry_name},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'EPSG:3067')"
+    if parts and bbox is not None:
+        probe = probe or await fetch_features(url, 1, timeout=TIMEOUT)
+        if probe.geometry_name is None:
+            return Table(
+                protocol="wfs",
+                request_url=url,
+                error_code="bbox_and_filters",
+                error="Aluerajausta ei voi yhdistää suodattimiin: palvelu ei kerro "
+                "geometriakentän nimeä. Aja kysely ilman toista niistä.",
             )
+        parts.append(
+            f"BBOX({probe.geometry_name},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'EPSG:3067')"
+        )
+    if parts:
         cql = " AND ".join(parts)
     elif bbox is not None:
         bbox_param = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},EPSG:3067"
     result = await fetch_features(url, max_rows, bbox=bbox_param, cql_filter=cql, timeout=TIMEOUT)
     table = Table(protocol="wfs", request_url=url)
+    layers = list(result.feature_types) or layers
+    probed = probe.type_name if probe else None
+    table.layer = result.type_name or probed or type_name_from_url(url)
+    if layers:
+        table.layers = layers
     if result.error:
         table.error_code = "service_error"
         table.error = result.error
         return table
+    if len(layers) > 1 and not explicit_layer:
+        listed = ", ".join(layers[:_MAX_LAYERS_LISTED])
+        extra = len(layers) - _MAX_LAYERS_LISTED
+        more = f" (+{extra} muuta)" if extra > 0 else ""
+        table.notes.append(
+            f"Palvelussa on {len(layers)} kerrosta; käytettiin ensimmäistä ({table.layer}). "
+            f"Valitse kerros layer-parametrilla: {listed}{more}."
+        )
     rows = [{h: _num(v) for h, v in zip(result.headers, r, strict=False)} for r in result.rows]
     total = int(result.total) if result.total and str(result.total).isdigit() else None
     if total is None:

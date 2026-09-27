@@ -89,3 +89,46 @@ class TestSykeHarvest:
             "SELECT source FROM datasets WHERE id = 'syke-test-1'"
         ).fetchone()
         assert row[0] == "syke"
+
+
+class TestSuojelualueidenKerrokset:
+    """Ulkoinen arvio 27.9.2026: suojelualueiden WFS osui rakennussuojelun kerrokseen."""
+
+    RAW = {
+        "id": "{C8FC4A42-A2C3-40C4-92CD-2299C688514E}",
+        "name": "luonnonsuojelu-ja-eramaa-alueet",
+        "title": "Luonnonsuojelu- ja erämaa-alueet",
+        "resources": [
+            {"id": "z", "name": "ZIP", "format": "ZIP", "url": "https://x.fi/a.zip"},
+            {
+                "id": "w",
+                "name": "SuojellutAlueet WFS-latauspalvelu",
+                "format": "",
+                "url": "https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wfs",
+            },
+        ],
+    }
+
+    def test_kerrokset_lisataan_ensimmaisiksi(self):
+        from aura.preview import _pick_resource
+        from aura.wfs import type_name_from_url
+
+        ds = SykeHarvester(conn=_memory_db())._to_dataset(self.RAW)
+        layers = [type_name_from_url(r.url) for r in ds.resources[:3]]
+        assert layers == [
+            "inspire_ps:PS.ProtectedSitesValtionOmistamaLuonnonsuojelualue",
+            "inspire_ps:PS.ProtectedSitesYksityistenMaillaOlevaLuonnonsuojelualue",
+            "inspire_ps:PS.ProtectedSitesEramaaAlue",
+        ]
+        assert ds.resources[0].name_fi == "Valtion omistamat luonnonsuojelualueet (WFS)"
+        assert ds.num_resources == 5
+        picked = _pick_resource([r.model_dump() for r in ds.resources])
+        assert picked is not None and "ValtionOmistama" in picked["url"]
+
+    def test_muut_aineistot_ennallaan_ja_lisays_idempotentti(self):
+        h = SykeHarvester(conn=_memory_db())
+        other = h._to_dataset({**self.RAW, "id": "muu"})
+        assert len(other.resources) == 2
+        ds = h._to_dataset(self.RAW)
+        again = h._to_dataset({**self.RAW, "resources": [r.model_dump() for r in ds.resources]})
+        assert len(again.resources) == len(ds.resources)

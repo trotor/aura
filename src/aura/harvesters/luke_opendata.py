@@ -29,3 +29,5 @@ class LukeOpendataHarvester(CkanHarvester):
     url = "https://opendata.luke.fi"
     ckan_base_url = "https://opendata.luke.fi/api/3/action"
     ckan_source = "luke-opendata"
+    #: Kuten SYKE: ei ``title_translated``-kenttää, otsikot suomeksi.
+    source_language = "fi"

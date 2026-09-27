@@ -15,6 +15,7 @@ from aura.harvesters.fmi import FmiHarvester
 from aura.harvesters.gtk import GtkHarvester
 from aura.harvesters.hri import HriHarvester
 from aura.harvesters.kelasto import KelastoHarvester
+from aura.harvesters.kirjastot import KirjastotHarvester
 from aura.harvesters.koodistot import KoodistotHarvester
 from aura.harvesters.kunnat import KunnatHarvester
 from aura.harvesters.lajitietokeskus import LajitietokeskusHarvester
@@ -56,6 +57,7 @@ HARVESTERS: dict[str, type[BaseHarvester]] = {
     "vipunen": VipunenHarvester,
     "prh": PrhHarvester,
     "kelasto": KelastoHarvester,
+    "kirjastot": KirjastotHarvester,
     "avoindata.fi": AvoindataHarvester,
     "hri.fi": HriHarvester,
     "syke": SykeHarvester,
