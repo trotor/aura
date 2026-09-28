@@ -138,6 +138,9 @@ class StaticHarvester(BaseHarvester):
             "license_id", "license_title", "collection_type",
             "geographical_coverage", "access_level",
             "update_frequency", "metadata_modified",
+            # Englanninkieliset kentät: ilman niitä staattinen aineisto ei
+            # osunut englanninkieliseen hakuun ("registered dogs").
+            "title_en", "keywords_en",
         ):
             if key in cfg:
                 kwargs[key] = cfg[key]

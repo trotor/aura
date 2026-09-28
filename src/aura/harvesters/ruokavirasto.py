@@ -253,6 +253,48 @@ _RESTRICTED_DATASETS = [
 ]
 
 
+#: Koirarekisterin tilastosivu (tarkistettu 28.9.2026). Sivu on Google Looker
+#: Studio -upotus: datarajapintaa, latausta eikä lisenssiä ei ole, joten
+#: lukua ei voi hakea ohjelmallisesti. Aineisto on katalogissa, jotta
+#: "montako koiraa kunnassa on" löytää lähteen ja sen rajoitukset
+#: (telemetria 28.9.2026: kysymys ei tunnistanut mitään).
+_KOIRAREKISTERI = {
+    "id": "ruokavirasto-koirarekisteri-tilastot",
+    "title": "Koirarekisterin tilastot (rekisteröidyt koirat kunnittain)",
+    "title_en": "Dog registry statistics (registered dogs by municipality)",
+    "notes_fi": (
+        "Ruokaviraston koirarekisteriin ilmoitetut koirat alueittain, roduittain ja"
+        " iän mukaan. Tilasto päivittyy päivittäin. Rekisteröinti on ollut"
+        " pakollista vuodesta 2023, mutta keväällä 2025 rekisterissä oli noin puolet"
+        " Suomen koirista, joten luku ei ole koirien kokonaismäärä. Tietosuojan"
+        " vuoksi luku näytetään vain kun omistajia on vähintään viisi. Sivu on"
+        " interaktiivinen raportti (Looker Studio): avointa rajapintaa tai"
+        " latausta ei ole, eikä lisenssiä ole ilmoitettu."
+    ),
+    "keywords_fi": [
+        "koira",
+        "koirat",
+        "koirarekisteri",
+        "rekisteröidyt koirat",
+        "koirien määrä",
+        "lemmikit",
+        "Ruokavirasto",
+    ],
+    "keywords_en": ["dogs", "dog registry", "registered dogs", "pets"],
+    "license_id": "",
+    "license_title": "Lisenssiä ei ilmoitettu",
+    "access_level": "open",
+    "resources": [
+        {
+            "format": "HTML",
+            "url": "https://koira.lemmikkielainrekisteri.fi/report",
+            "name_fi": "Koirarekisterin tilastot — raportti",
+            "description": "Interaktiivinen raportti; valitse alue raportin suodattimesta.",
+        },
+    ],
+}
+
+
 class RuokavirastoHarvester(StaticHarvester):
     """Kerää Ruokaviraston avoimet ja rajoitetut aineistot.
 
@@ -269,4 +311,6 @@ class RuokavirastoHarvester(StaticHarvester):
     org_name = "ruokavirasto"
     org_title = "Ruokavirasto"
 
-    datasets_config = _INSPIRE_DATASETS + _DASHBOARD_DATASETS + _RESTRICTED_DATASETS
+    datasets_config = (
+        _INSPIRE_DATASETS + _DASHBOARD_DATASETS + _RESTRICTED_DATASETS + [_KOIRAREKISTERI]
+    )

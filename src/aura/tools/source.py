@@ -231,6 +231,29 @@ async def query_source(
         bbox, area_note = _resolve_area(conn, area)
         if bbox is None:
             return fail(QuerySourceResult, "unknown_area", area_note, dataset_id=ds_id)
+    elif area and protocol == "json" and "sotkanet.fi" in url:
+        # Sotkanet palauttaa kaikki alueet; rivit on jo nimetty Tilastokeskuksen
+        # tunnuksilla (region_code/region_level, ks. fetch._annotate_sotkanet),
+        # joten alue rajataan niillä. Ilman tätä "Oulu" → area_not_supported
+        # (telemetria 28.9.2026).
+        match = resolve_area(conn, area)
+        if match is None:
+            return fail(
+                QuerySourceResult,
+                "unknown_area",
+                f"Aluetta '{area}' ei tunnistettu.",
+                hint="Anna kunnan, maakunnan tai hyvinvointialueen nimi tai koodi.",
+                dataset_id=ds_id,
+                resource=res_ref,
+            )
+        filters = {
+            **(filters or {}),
+            "region_code": [match.area.code],
+            "region_level": [match.area.level],
+        }
+        area_note = f"{match.area.level} {match.area.name_fi} ({match.area.code})"
+        if match.note:
+            notes_pre.append(match.note)
     elif area and protocol not in ("pxweb",):
         return fail(
             QuerySourceResult,

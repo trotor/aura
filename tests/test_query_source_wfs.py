@@ -300,3 +300,34 @@ def test_nimetty_taso_ennen_oletustasoa() -> None:
         },
     ]
     assert "pno_tilasto" in _pick_resource(resources)["url"]
+
+
+async def test_sotkanet_aluerajaus_tunnuksilla() -> None:
+    """Telemetria 28.9.2026: query_source(sotkanet-N, area="Oulu") → area_not_supported.
+
+    Sotkanet palauttaa kaikki alueet; alue rajataan Tilastokeskuksen
+    tunnuksilla, joilla rivit on nimetty (region_code, region_level).
+    """
+    conn = sqlite3.connect("file:data/aura.db?mode=ro", uri=True, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    seen: dict[str, Any] = {}
+
+    async def fake_json(url: str, filters: Any, max_rows: int, c: Any = None) -> Any:
+        seen["filters"] = filters
+        table = fetch.Table(protocol="json", request_url=url)
+        return fetch._finish(table, ["region"], [], None, 0)
+
+    apply_tool_profile(mcp, profile="public")
+    try:
+        with (
+            patch("aura.server._get_conn", return_value=conn),
+            patch.object(fetch, "fetch_json", fake_json),
+        ):
+            async with Client(mcp) as client:
+                r = await client.call_tool(
+                    "query_source", {"dataset_id": "sotkanet-3114", "area": "Oulu"}
+                )
+    finally:
+        reset_tool_profile(mcp)
+    assert seen["filters"] == {"region_code": ["564"], "region_level": ["kunta"]}
+    assert "Aluerajaus" in " ".join(r.structured_content["notes"])
