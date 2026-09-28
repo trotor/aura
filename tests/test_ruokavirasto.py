@@ -68,6 +68,7 @@ class TestDashboardConfig:
             for c in h.datasets_config
             if any(r["format"] == "HTML" for r in c["resources"])
             and c.get("access_level") == "open"
+            and c["id"] != "ruokavirasto-koirarekisteri-tilastot"
         ]
         assert len(dashboards) == 5
         for cfg in dashboards:
@@ -132,3 +133,12 @@ class TestHarvest:
         assert len(inspire) == len(odotetut)
         years_found = {row["id"].split("-")[-1] for row in inspire}
         assert years_found == odotetut
+
+
+def test_koirarekisteri_kertoo_rajoitukset() -> None:
+    """Koirarekisterin tilasto löytyy, mutta ei väitä olevansa avointa dataa."""
+    h = _harvester()
+    cfg = next(c for c in h.datasets_config if c["id"] == "ruokavirasto-koirarekisteri-tilastot")
+    assert cfg["license_id"] == ""
+    assert "rajapintaa" in cfg["notes_fi"] and "puolet" in cfg["notes_fi"]
+    assert "koirat" in cfg["keywords_fi"]
