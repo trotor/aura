@@ -567,7 +567,10 @@ class TestTahdinsaatoJaRinnakkaisuus:
         )
         kesto = time.monotonic() - alku
         assert yhteenveto["ok"] == 4
-        assert kesto < 0.25, f"näyttää sarjalliselta: {kesto:.2f} s"
+        # Sarjallisena 4 × 0,1 s = 0,4 s. Raja oli 0,25 s, ja CI:n Python 3.11
+        # ylitti sen kahdesti peräkkäin (0,25 ja 0,27 s) pelkällä
+        # ajoympäristön viiveellä. 0,35 s erottaa yhä rinnakkaisen sarjallisesta.
+        assert kesto < 0.35, f"näyttää sarjalliselta: {kesto:.2f} s"
 
     @pytest.mark.anyio
     async def test_saman_isannan_kutsut_pysyvat_sarjallisina(self) -> None:

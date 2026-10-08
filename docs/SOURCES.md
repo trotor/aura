@@ -14,7 +14,7 @@ Tämä sivu dokumentoi kaikki Auran harvesteroimat datalähteet.
 | [SYKE](#syke-suomen-ympäristökeskus) | CKAN API | ~615 | ~1 200 | ~50 GB |
 | [HRI (hri.fi)](#hri-helsinki-region-infoshare) | CKAN API | 549 | 1 594 | 39 GB |
 | [LUKE](#luke-luonnonvarakeskus) | PxWeb API | 495 | 990 | 2,3 GB |
-| [Tilastokeskus (StatFin)](#tilastokeskus-statfin) | PxWeb API | 374 | 748 | 1,7 GB |
+| [Tilastokeskus (StatFin)](#tilastokeskus-statfin) | PxWeb API | 2 119 | 4 238 | — |
 | [Digitraffic](#digitraffic) | REST/OpenAPI | 162 | 162 | 1,5 GB |
 | [Ilmatieteen laitos (FMI)](#ilmatieteen-laitos-fmi) | WFS 2.0 | 160 | 160 | 14 GB |
 | [Overture Maps](#overture-maps) | GeoParquet (S3) | 6 | 12 | ~215 GB |
@@ -125,17 +125,31 @@ Luonnonvarakeskuksen tilastotietokannat. Maatalous-, metsä-, kala- ja riistatil
 ## Tilastokeskus (StatFin)
 
 **URL:** https://stat.fi
-**API:** PxWeb REST (`https://statfin.stat.fi/PxWeb/api/v1/fi/StatFin/`)
+**API:** PxWeb REST (`https://statfin.stat.fi/PxWeb/api/v1/fi/<tietokanta>/`)
 **Autentikointi:** Ei tarvita
-**Datasettejä:** 374
-**Resursseja:** 748
-**Arvioitu koko:** 1,7 GB
+**Rajoitus:** 30 pyyntöä / 10 s, ylitys antaa 429:n ja minuutin odotuksen
+**Datasettejä:** 2 119 (8.10.2026)
 
 Suomen virallinen tilastoviranomainen. Harvester käy rekursiivisesti läpi PxWeb-puun ja kerää jokaisen tilastotaulun metadatan.
 
+Samalla palvelimella on StatFinin lisäksi muita tietokantoja, jotka kerätään samalla ajolla (`StatfinHarvester.extra_databases`):
+
+| Tietokanta | Tunnisteen etuliite | Tauluja | Rajaus |
+|---|---|---|---|
+| StatFin | `statfin-` | 1 547 | koko puu |
+| Kuntien_talous_ja_toiminta | `statfin-kuntatalous-` | 414 | koko puu (1975–2020) |
+| Kokeelliset_tilastot | `statfin-kokeelliset-` | 122 | koko puu |
+| Maahanmuuttajat_ja_kotoutuminen | `statfin-maahanmuuttajat-` | 13 | koko puu |
+| Postinumeroalueittainen_avoin_tieto (Paavo) | `statfin-paavo-` | 10 | vain `uusin` |
+| Toimipaikkalaskuri | `statfin-toimipaikat-` | 8 | koko puu |
+| Kuntien_avainluvut | `statfin-avainluvut-` | 3 | vain `uusin` |
+| Hyvinvointialueet, SDG | `statfin-hyvinvointialueet-`, `statfin-sdg-` | 1 + 1 | koko puu |
+
+Pois jätetyt: `StatFin_Passiivi` (3 615 lakkautettua taulua), `Muuttaneiden_taustatiedot` (vuodet 2000–2001) ja `Check`. Paavon `arkisto` (92 taulua) ja kuntien avainlukujen vuosikansiot ovat saman taulun vanhoja versioita.
+
 #### Harvester-toteutus
 
-`src/aura/harvesters/statfin.py` — PxWeb-puun rekursiivinen läpikäynti. Jokainen taulu saa kaksi resurssia: PxWeb API -endpoint ja ihmisluettava web-sivu.
+`src/aura/harvesters/statfin.py` — PxWeb-puun rekursiivinen läpikäynti. Jokainen taulu saa kaksi resurssia: PxWeb API -endpoint ja ihmisluettava web-sivu. Lisätietokantojen taulut saavat tietokannan kuvauksen ja avainsanat (fi/en), koska taulun otsikko ei yleensä kerro tietokantaa.
 
 **Aihealueita:** Asuminen, energia, hinnat, kansantalous, koulutus, oikeus, palkat, terveys, työ, väestö, ympäristö...
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 import httpx
 
@@ -13,6 +13,28 @@ from aura.harvesters.base import BaseHarvester
 from aura.models import Dataset, Resource
 
 logger = logging.getLogger(__name__)
+
+
+class PxWebDatabase(NamedTuple):
+    """Yksi PxWeb-palvelimen tietokanta (``/api/v1/fi/<dbid>/``).
+
+    Sama palvelin voi tarjota useita tietokantoja. Tilastokeskuksella
+    StatFinin vieressä ovat esimerkiksi Paavo ja kuntien talous.
+    """
+
+    dbid: str
+    #: Tunnisteen etuliitteen osa: ``<harvesterin etuliite>-<slug>-<taulu>``.
+    slug: str
+    #: Vain nämä ylimmän tason kansiot. Tyhjä = koko puu. Rajaus pitää
+    #: arkistot poissa: Paavon ``arkisto`` on 92 vanhaa vuosiversiota.
+    folders: tuple[str, ...] = ()
+    #: Kuvauksen pohja tietokannan tauluille.
+    notes: str = ""
+    #: Avainsanat jokaiselle tietokannan taululle. Taulun otsikko ei yleensä
+    #: kerro tietokantaa ("3. Asukkaiden käytettävissä olevat rahatulot"),
+    #: ja avainsana painaa haussa kuvausta enemmän.
+    keywords_fi: tuple[str, ...] = ()
+    keywords_en: tuple[str, ...] = ()
 
 
 class PxWebHarvester(BaseHarvester):
@@ -47,6 +69,11 @@ class PxWebHarvester(BaseHarvester):
     #: aina tyhjä, vaikka StatFin, Luke ja Traficom tarjoavat ``/sv/``-puun
     #: samoilla tunnisteilla. ``harvest_english = False`` jättää englannin pois.
     harvest_languages: tuple[str, ...] = ("en", "sv")
+    #: Vain nämä ylimmän tason kansiot ``root_path``in alta. Tyhjä = koko puu.
+    root_folders: tuple[str, ...] = ()
+    #: Avainsanat jotka lisätään jokaiselle kerättävälle taululle.
+    database_keywords_fi: tuple[str, ...] = ()
+    database_keywords_en: tuple[str, ...] = ()
 
     @classmethod
     def source_config(cls) -> dict[str, Any]:
@@ -66,22 +93,25 @@ class PxWebHarvester(BaseHarvester):
             # suomeksi.
             self._english: dict[str, tuple[str, list[str]]] = {}
             self._swedish: dict[str, tuple[str, list[str]]] = {}
+            roots = [
+                f"{self.root_path}/{folder}" for folder in self.root_folders
+            ] or [self.root_path]
             for lang in self.harvest_languages:
                 if lang == "en" and not self.harvest_english:
                     continue
                 into = self._translations(lang)
                 if into is None:
                     continue
-                await self._crawl_language(
-                    client, f"{self.pxweb_base_url}/{lang}/{self.root_path}/",
-                    self.root_path, [], into,
-                )
+                for root in roots:
+                    await self._crawl_language(
+                        client, f"{self.pxweb_base_url}/{lang}/{root}/", root, [], into,
+                    )
                 logger.info("[%s] Otsikoita kielellä %s: %d", self.name, lang, len(into))
-            total = await self._crawl_folder(
-                client,
-                f"{self.pxweb_base_url}/fi/{self.root_path}/",
-                path=self.root_path,
-            )
+            total = 0
+            for root in roots:
+                total += await self._crawl_folder(
+                    client, f"{self.pxweb_base_url}/fi/{root}/", path=root
+                )
 
         logger.info("[%s] Harvest valmis: %d taulua", self.name, total)
         return total
@@ -200,14 +230,14 @@ class PxWebHarvester(BaseHarvester):
             title_fi=title,
             title_en=title_en,
             title_sv=title_sv,
-            keywords_en=[f for f in folders_en if f],
+            keywords_en=[*self.database_keywords_en, *(f for f in folders_en if f)],
             notes_fi=f"{self.notes_template}. Polku: {path}/{table_id}",
             update_frequency=freq,
             organization_id=self.org_id,
             organization_name=self.org_name,
             organization_title=self.org_title,
             metadata_modified=updated,
-            keywords_fi=self._path_to_keywords(path),
+            keywords_fi=[*self.database_keywords_fi, *self._path_to_keywords(path)],
             num_resources=2,
             resources=[
                 Resource(
@@ -348,4 +378,5 @@ class PxWebHarvester(BaseHarvester):
     def _path_to_keywords(self, path: str) -> list[str]:
         """Muunna polku avainsanoiksi."""
         parts = path.split("/")
-        return [p for p in parts if p and p != self.root_path]
+        skip = {self.root_path, *self.root_folders}
+        return [p for p in parts if p and p not in skip]

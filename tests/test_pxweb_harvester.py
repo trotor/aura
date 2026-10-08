@@ -8,7 +8,7 @@ import pytest
 
 from aura.database import get_enrichments, init_db
 from aura.harvesters.luke import LukeHarvester
-from aura.harvesters.pxweb import PxWebHarvester
+from aura.harvesters.pxweb import PxWebDatabase, PxWebHarvester
 from aura.harvesters.statfin import StatfinHarvester
 
 
@@ -177,7 +177,6 @@ class TestCrawl:
         count = await h._crawl_folder(mock_client, "https://example.com/bad/", "StatFin")
         assert count == 0
 
-
     @pytest.mark.asyncio
     async def test_english_titles_join_by_path(self):
         """Englanninkielinen puu antaa otsikon ja kansioiden nimet samalle polulle."""
@@ -221,12 +220,12 @@ class TestCrawl:
         await h._crawl_english(client, "https://x/en/StatFin/", "StatFin", [])
         assert h._english == {}
 
-
     @pytest.mark.asyncio
     async def test_harvest_hakee_ruotsin_ja_englannin_otsikot(self):
         """Ulkoinen arvio 27.9.2026: title_sv oli PxWeb-tauluilla aina tyhjä."""
         conn = _memory_db()
         h = StatfinHarvester(conn=conn)
+        h.extra_databases = ()
         base = h.pxweb_base_url
         pages = {
             f"{base}/en/StatFin/": [{"id": "asvu", "type": "l", "text": "Dwellings"}],
@@ -265,6 +264,7 @@ class TestCrawl:
         conn = _memory_db()
         h = StatfinHarvester(conn=conn)
         h.harvest_english = False
+        h.extra_databases = ()
         seen: list[str] = []
 
         async def fake_get(url, **_):
@@ -312,6 +312,7 @@ class TestHarvestDimensions:
         h = StatfinHarvester(conn=conn)
         item = {"id": "testi.px", "type": "t", "text": "Taulu", "updated": "2024-01-01"}
         from aura.database import upsert_dataset
+
         ds = h._table_to_dataset(item, "StatFin", "https://pxdata.stat.fi/PxWeb/api/v1/fi/StatFin/")
         upsert_dataset(conn, ds)
 
@@ -376,6 +377,7 @@ class TestHarvestDimensions:
 
         # Rikasta ensin
         from aura.database import add_enrichment
+
         add_enrichment(conn, "statfin-testi.px", "data_fields", "[]")
 
         mock_client = AsyncMock()
@@ -413,6 +415,7 @@ class TestHarvestDimensions:
 
         # Lisää kaksi datasettia
         from aura.database import upsert_dataset
+
         for i in range(2):
             item = {"id": f"t{i}.px", "type": "t", "text": f"Taulu {i}", "updated": ""}
             ds = h._table_to_dataset(item, "StatFin", "https://example.com/")
@@ -430,3 +433,168 @@ class TestHarvestDimensions:
             count = await h.harvest_dimensions(limit=1)
 
         assert count == 1
+
+
+class TestStatfinMuutTietokannat:
+    """Tilastokeskuksen palvelimella on StatFinin lisäksi muita tietokantoja.
+
+    Paavo, kuntien talous ja toiminta, kuntien avainluvut ja kokeelliset
+    tilastot olivat Aurasta kokonaan poissa, vaikka ne ovat samassa
+    rajapinnassa. Tunnisteiden on pysyttävä StatFinin osalta ennallaan,
+    koska pro-kerrokset ja tunnusluvut viittaavat niihin.
+    """
+
+    def _client_for(self, pages: dict[str, list[dict[str, str]]], seen: list[str]) -> AsyncMock:
+        async def fake_get(url, **_):
+            seen.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = pages.get(url, [])
+            resp.raise_for_status = MagicMock()
+            return resp
+
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=fake_get)
+        return client
+
+    async def _harvest(self, h: StatfinHarvester, client: AsyncMock) -> int:
+        with patch.object(h, "_make_client") as make:
+            make.return_value.__aenter__ = AsyncMock(return_value=client)
+            make.return_value.__aexit__ = AsyncMock(return_value=False)
+            return await h.harvest()
+
+    def test_oletuksena_mukana_kuntatalous_paavo_ja_avainluvut(self):
+        dbids = {db.dbid for db in StatfinHarvester.extra_databases}
+        assert {
+            "Kuntien_talous_ja_toiminta",
+            "Postinumeroalueittainen_avoin_tieto",
+            "Kuntien_avainluvut",
+            "Kokeelliset_tilastot",
+        } <= dbids
+        # Arkisto toisi tuhansia vanhentuneita tauluja hakutuloksiin.
+        assert "StatFin_Passiivi" not in dbids
+
+    def test_etuliitteet_ovat_yksikasitteisia(self):
+        slugs = [db.slug for db in StatfinHarvester.extra_databases]
+        assert len(slugs) == len(set(slugs))
+
+    @pytest.mark.asyncio
+    async def test_muun_tietokannan_taulu_saa_oman_etuliitteen(self):
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        h.harvest_languages = ()
+        h.extra_databases = (
+            PxWebDatabase(
+                dbid="Postinumeroalueittainen_avoin_tieto",
+                slug="paavo",
+                folders=("uusin",),
+                notes="Paavo – postinumeroalueittainen avoin tieto",
+            ),
+        )
+        base = h.pxweb_base_url
+        pages = {
+            f"{base}/fi/StatFin/": [
+                {"id": "t1.px", "type": "t", "text": "StatFin-taulu", "updated": ""}
+            ],
+            f"{base}/fi/Postinumeroalueittainen_avoin_tieto/uusin/": [
+                {"id": "paavo_pxt_12f1.px", "type": "t", "text": "Väestö", "updated": ""}
+            ],
+        }
+        seen: list[str] = []
+        assert await self._harvest(h, self._client_for(pages, seen)) == 2
+
+        ids = {r[0] for r in conn.execute("SELECT id FROM datasets")}
+        assert ids == {"statfin-t1.px", "statfin-paavo-paavo_pxt_12f1.px"}
+        row = conn.execute(
+            "SELECT source, notes_fi FROM datasets WHERE id = 'statfin-paavo-paavo_pxt_12f1.px'"
+        ).fetchone()
+        assert row["source"] == "statfin"
+        assert row["notes_fi"].startswith("Paavo – postinumeroalueittainen avoin tieto")
+        # Vain uusin-kansio: arkistoa ei pyydetä lainkaan.
+        assert not any("arkisto" in u for u in seen)
+        # Harvesterin tila palautuu: seuraava ajo kerää taas StatFinin.
+        assert h.root_path == "StatFin"
+        assert h.dataset_id_prefix == "statfin"
+
+    @pytest.mark.asyncio
+    async def test_resurssit_osoittavat_oikeaan_tietokantaan(self):
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        h.harvest_languages = ()
+        h.extra_databases = (
+            PxWebDatabase(dbid="Kuntien_avainluvut", slug="avainluvut", folders=("uusin",)),
+        )
+        base = h.pxweb_base_url
+        pages = {
+            f"{base}/fi/Kuntien_avainluvut/uusin/": [
+                {
+                    "id": "kuntien_avainluvut_2026.px",
+                    "type": "t",
+                    "text": "Avainluvut",
+                    "updated": "",
+                }
+            ],
+        }
+        await self._harvest(h, self._client_for(pages, []))
+        urls = dict(
+            conn.execute(
+                "SELECT format, url FROM resources "
+                "WHERE dataset_id = 'statfin-avainluvut-kuntien_avainluvut_2026.px'"
+            ).fetchall()
+        )
+        assert urls["PXWEB"] == f"{base}/fi/Kuntien_avainluvut/uusin/kuntien_avainluvut_2026.px"
+        assert urls["HTML"].endswith(
+            "/Kuntien_avainluvut/Kuntien_avainluvut__uusin/kuntien_avainluvut_2026.px"
+        )
+
+    @pytest.mark.asyncio
+    async def test_statfinin_tunnisteet_ennallaan(self):
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        h.harvest_languages = ()
+        h.extra_databases = ()
+        base = h.pxweb_base_url
+        pages = {
+            f"{base}/fi/StatFin/": [{"id": "vaerak", "type": "l", "text": "Väestö"}],
+            f"{base}/fi/StatFin/vaerak/": [
+                {"id": "11ra.px", "type": "t", "text": "Väestö", "updated": ""}
+            ],
+        }
+        await self._harvest(h, self._client_for(pages, []))
+        assert [r[0] for r in conn.execute("SELECT id FROM datasets")] == ["statfin-11ra.px"]
+
+    @pytest.mark.asyncio
+    async def test_tietokannan_avainsanat_tauluille(self):
+        """Paavon taulun otsikko on '3. Asukkaiden käytettävissä olevat
+        rahatulot' – ilman tietokannan nimeä se ei osu hakuun
+        'postinumeroalue tulot'. Avainsanat painavat haussa kuvausta enemmän."""
+        conn = _memory_db()
+        h = StatfinHarvester(conn=conn)
+        h.harvest_languages = ()
+        h.extra_databases = (
+            PxWebDatabase(
+                dbid="Postinumeroalueittainen_avoin_tieto",
+                slug="paavo",
+                folders=("uusin",),
+                keywords_fi=("Paavo", "postinumeroalue"),
+                keywords_en=("postal code area",),
+            ),
+        )
+        base = h.pxweb_base_url
+        pages = {
+            f"{base}/fi/Postinumeroalueittainen_avoin_tieto/uusin/": [
+                {"id": "12f1.px", "type": "t", "text": "3. Rahatulot", "updated": ""}
+            ],
+        }
+        await self._harvest(h, self._client_for(pages, []))
+        row = conn.execute(
+            "SELECT keywords_fi, keywords_en FROM datasets WHERE id = 'statfin-paavo-12f1.px'"
+        ).fetchone()
+        assert {"Paavo", "postinumeroalue"} <= set(json.loads(row["keywords_fi"]))
+        assert "postal code area" in json.loads(row["keywords_en"])
+        # Avainsanat eivät vuoda StatFinin tauluihin seuraavassa ajossa.
+        assert h.database_keywords_fi == ()
+
+    def test_kaikilla_lisatietokannoilla_avainsanat(self):
+        for db in StatfinHarvester.extra_databases:
+            assert db.keywords_fi and db.keywords_en, db.dbid

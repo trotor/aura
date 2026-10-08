@@ -39,7 +39,7 @@ BaseHarvester (base.py)
 │   ├── SykeHarvester (syke.py)
 │   └── LukeOpendataHarvester (luke_opendata.py)
 ├── PxWebHarvester (pxweb.py) — rekursiivinen puunavigaatio
-│   ├── StatfinHarvester (statfin.py)
+│   ├── StatfinHarvester (statfin.py) — StatFin + Paavo, kuntatalous, kuntien avainluvut ym. (extra_databases)
 │   ├── LukeHarvester (luke.py)
 │   └── TraficomTilastotHarvester (traficom_tilastot.py) — liikennetilastot
 │   (englanninkieliset otsikot haetaan /en/-puusta samalla polulla)
