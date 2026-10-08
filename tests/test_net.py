@@ -96,3 +96,32 @@ async def test_estetty_osoite_on_httpx_virhe() -> None:
     """Olemassa oleva ``except httpx.HTTPError`` käsittelee estetyn osoitteen."""
     with pytest.raises(httpx.HTTPError):
         await ensure_public(httpx.Request("GET", "http://10.0.0.1/"))
+
+
+@pytest.mark.anyio
+async def test_kokoraja_ilman_content_length_otsaketta() -> None:
+    """Chunked-vastaus ilman Content-Lengthiä ei saa ohittaa rajaa (katselmointi)."""
+
+    async def body():
+        for _ in range(50):
+            yield b"x" * 1000
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=body())
+
+    async with public_client(
+        transport=httpx.MockTransport(handler), max_content_length=10_000
+    ) as client:
+        with pytest.raises(ResponseTooLargeError):
+            await client.get("https://93.184.215.14/iso")
+
+
+@pytest.mark.anyio
+async def test_kokoraja_ei_esta_pientaa_vastausta() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"ok")
+
+    async with public_client(
+        transport=httpx.MockTransport(handler), max_content_length=10_000
+    ) as client:
+        assert (await client.get("https://93.184.215.14/")).text == "ok"
