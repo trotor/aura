@@ -157,9 +157,20 @@ class _CappedTransport(httpx.AsyncBaseTransport):
             raise ResponseTooLargeError(
                 f"vastaus {declared} tavua ylittää rajan {self._limit}", request=request
             )
-        encoding = response.headers.get("content-encoding", "").strip().lower()
-        decode = encoding in _DECODED_ENCODINGS
-        if decode:
+        # Puretaan itse tai hylätään. Jos httpx purkaisi jotain (useampi
+        # kerros "gzip, gzip", tai "br"), raja ohittuisi (katselmointi).
+        codings = [
+            c.strip().lower()
+            for c in response.headers.get("content-encoding", "").split(",")
+            if c.strip() and c.strip().lower() != "identity"
+        ]
+        if len(codings) > 1 or (codings and codings[0] not in _DECODED_ENCODINGS):
+            await response.aclose()
+            raise httpx.DecodingError(
+                f"pakkausta {', '.join(codings)!r} ei tueta", request=request
+            )
+        decode = bool(codings)
+        if decode or "content-encoding" in response.headers:
             # Purettu virta: httpx ei saa purkaa toista kertaa, eikä pakatun
             # koon Content-Length pidä enää paikkaansa.
             del response.headers["content-encoding"]
