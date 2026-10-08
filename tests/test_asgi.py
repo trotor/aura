@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from aura.asgi import create_asgi_app
 from aura.database import init_db
-from aura.server import WRITE_TOOL_NAMES
+from aura.server import SESSION_MEMORY_TOOL_NAMES, WRITE_TOOL_NAMES
 from aura.server import mcp as _mcp
 
 
@@ -58,7 +58,7 @@ def readonly_client(
     monkeypatch.setenv("AURA_READONLY", "1")
     saved_tools = {
         name: asyncio.run(_mcp.local_provider.get_tool(name))
-        for name in WRITE_TOOL_NAMES
+        for name in WRITE_TOOL_NAMES | SESSION_MEMORY_TOOL_NAMES
     }
     try:
         with TestClient(create_asgi_app()) as c:

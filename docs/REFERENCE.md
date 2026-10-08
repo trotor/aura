@@ -153,7 +153,7 @@ Julkaisijalle ja ylläpitäjälle: metatiedon laatu ja resurssien saatavuus. Kai
 | `metadata_gaps` | Puuttuvat kentät (kuvaus, avainsanat, päivitystiheys, lisenssi, englanninkieliset) ja helpoimmin parannettavat aineistot |
 | `availability_report` | Tallennettujen saatavuustarkistusten tulos ja ikä, rikkinäiset linkit |
 | `find_data`, `inspect_dataset` | Yksittäisen aineiston tarkastelu |
-| `log_finding`, `list_findings` | Havaintojen kirjaus istunnon ajaksi |
+| `log_finding`, `list_findings` | Havaintojen kirjaus istunnon ajaksi (vain oma instanssi; read-only-palvelimelta poistettu) |
 
 Saatavuusraportti ei aja tarkistuksia; ne ajetaan ylläpidossa (`aura health`), ja raportti kertoo milloin viimeksi.
 

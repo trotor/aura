@@ -26,20 +26,41 @@ VALID_FINDING_CATEGORIES = set(_CATEGORY_FIELD_MAP.keys())
 
 _fallback_findings: list[dict[str, str]] = []
 
+#: Enintään näin monen istunnon löydökset muistissa; vanhin poistuu ensin.
+MAX_SESSIONS = 200
+#: Enintään näin monta löydöstä istuntoa kohden.
+MAX_FINDINGS = 100
+#: Löydöksen enimmäispituus merkkeinä.
+MAX_FINDING_LENGTH = 2000
+
 
 def _get_findings(ctx: Context | None) -> list[dict[str, str]]:
-    """Hae session-tason findings-lista lifespan-kontekstista.
+    """Hae **tämän istunnon** löydöslista.
 
-    MCP-kontekstilla palauttaa session oman listan.
-    Ilman kontekstia palauttaa module-level fallbackin (testit).
+    Löydökset erotellaan istunnoittain. Aiemmin koko prosessilla oli yksi
+    lista, jolloin julkisessa /mcp/laatu-profiilissa käyttäjä näki toisen
+    kirjaamat tekstit ja lista kasvoi rajatta (8.10.2026). Tilattomassa
+    HTTP:ssä istuntoa ei ole: silloin lista on kutsukohtainen eikä jaettu.
+    Ilman kontekstia palautetaan moduulitason lista (testit).
     """
-    if ctx is not None:
-        try:
-            findings: list[dict[str, str]] = ctx.lifespan_context["findings"]
-            return findings
-        except (AttributeError, KeyError):
-            pass
-    return _fallback_findings
+    if ctx is None:
+        return _fallback_findings
+    try:
+        store = ctx.lifespan_context["findings"]
+    except (AttributeError, KeyError):
+        return _fallback_findings
+    try:
+        session = str(ctx.session_id)
+    except Exception:  # noqa: BLE001 — tilaton HTTP: ei istuntoa
+        return []
+    if not isinstance(store, dict):
+        return _fallback_findings
+    if session not in store:
+        while len(store) >= MAX_SESSIONS:
+            store.pop(next(iter(store)))
+        store[session] = []
+    findings: list[dict[str, str]] = store[session]
+    return findings
 
 
 def reset_findings() -> None:
@@ -73,9 +94,11 @@ def log_finding(
         )
 
     findings = _get_findings(ctx)
+    if len(findings) >= MAX_FINDINGS:
+        return f"Istunnossa on jo {MAX_FINDINGS} löydöstä; tallenna tai aloita uusi istunto."
     findings.append({
-        "dataset_id": dataset_id,
-        "finding": finding,
+        "dataset_id": dataset_id[:200],
+        "finding": finding[:MAX_FINDING_LENGTH],
         "category": category,
         "timestamp": datetime.now(tz=UTC).isoformat(),
     })

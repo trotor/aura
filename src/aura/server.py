@@ -65,7 +65,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     warm_caches(conn)
     yso = YsoClient()
     try:
-        yield {"db": conn, "findings": [], "yso": yso}
+        yield {"db": conn, "findings": {}, "yso": yso}
     finally:
         # Keskeneräiset ketjut kirjataan sammutuksessa, muuten ne katoaisivat.
         import time
@@ -122,6 +122,14 @@ WRITE_TOOL_NAMES = frozenset(
         "health_check",
     }
 )
+
+
+#: Istuntomuistiin kirjaavat työkalut. Ne poistetaan read-only-tilassa
+#: kirjoittavien tapaan: tilattomassa HTTP:ssä istuntotunniste on asiakkaan
+#: oma ``mcp-session-id``-otsake, joten istuntokohtainen erottelu ei ole
+#: luotettava raja käyttäjien välillä, eikä read-only-palvelin tallenna
+#: löydöksiä pysyvästi muutenkaan (8.10.2026).
+SESSION_MEMORY_TOOL_NAMES = frozenset({"log_finding", "list_findings"})
 
 
 class TelemetryMiddleware(Middleware):
@@ -225,7 +233,7 @@ def apply_readonly_gating(
     if not readonly:
         return []
     removed: list[str] = []
-    for name in WRITE_TOOL_NAMES:
+    for name in sorted(WRITE_TOOL_NAMES | SESSION_MEMORY_TOOL_NAMES):
         try:
             server.local_provider.remove_tool(name)
         except KeyError:
@@ -240,21 +248,14 @@ def apply_readonly_gating(
 _INTRO = "Suomalaisen avoimen datan discovery-palvelu. Hae ja ymmärrä Suomen avoimia datasettejä. "
 
 # Löydösten kirjaus. log_finding/list_findings ovat session-muistia ja
-# toimivat molemmissa moodeissa; save_session_findings kirjoittaa kantaan
-# ja gataan pois read-only-moodissa (WRITE_TOOL_NAMES), joten remote-ohje
+# toimivat vain paikallisesti (SESSION_MEMORY_TOOL_NAMES); save_session_findings
+# kirjoittaa kantaan ja gataan pois read-only-moodissa, joten remote-ohje
 # ei saa kehottaa kutsumaan sitä.
 _FINDINGS_LOCAL = (
     "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
     "(kenttiä, käyttöohjeita, laatuhuomioita), "
     "kirjaa löydökset log_finding()-työkalulla tutkimuksen aikana. "
     "Lopuksi tallenna ne enrichmenteiksi save_session_findings()-kutsulla.\n\n"
-)
-_FINDINGS_REMOTE = (
-    "Kun tutkit datasettejä ja löydät uutta tietoa niistä "
-    "(kenttiä, käyttöohjeita, laatuhuomioita), "
-    "kirjaa löydökset log_finding()-työkalulla ja näytä ne "
-    "list_findings()-kutsulla. Tämä instanssi on read-only, joten "
-    "löydöksiä ei tallenneta pysyvästi — ne elävät vain session ajan.\n\n"
 )
 
 # Toimii molemmissa moodeissa: query_data hakee ulkoisista rajapinnoista
@@ -343,9 +344,11 @@ _LAATU = (
     "saatavuustarkistusten tulos ja ikä; rikkinäiset linkit.\n"
     "find_data ja inspect_dataset yksittäisen aineiston tarkasteluun. "
     "organization-rajaukseen riittää osa julkaisijan nimestä (esim. 'Espoo').\n"
-    "Kirjaa havainnot log_finding()-työkalulla; list_findings() näyttää ne. "
     "Vastaukset ovat strukturoituja: seuraa next_actions-kenttää."
 )
+
+#: Vain paikalliseen laatuprofiiliin: read-only-tilassa työkalut poistetaan.
+_LAATU_FINDINGS = "\nKirjaa havainnot log_finding()-työkalulla; list_findings() näyttää ne."
 
 
 def build_instructions(readonly: bool = False, profile: str = "admin") -> str:
@@ -367,9 +370,9 @@ def build_instructions(readonly: bool = False, profile: str = "admin") -> str:
 
         return "\n".join([_PUBLIC, *INSTRUCTION_ADDENDA])
     if profile == "laatu":
-        return _LAATU
+        return _LAATU if readonly else _LAATU + _LAATU_FINDINGS
     if readonly:
-        return _INTRO + _FINDINGS_REMOTE + _API_USAGE + _BOUNDARIES_REMOTE
+        return _INTRO + _API_USAGE + _BOUNDARIES_REMOTE
     return _INTRO + _FINDINGS_LOCAL + _API_USAGE + _BOUNDARIES_LOCAL
 
 
