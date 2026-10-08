@@ -399,3 +399,46 @@ class TestStaticSiteBuild:
             data = json.loads(data_path.read_text())
             assert len(data) == 2
             assert data[0]["s"] in ("avoindata.fi", "hri.fi")
+
+
+class TestWebApiKatalogirajaus:
+    """Web-API:n välitysreitit hakevat vain katalogin osoitteita (SSRF 8.10.2026)."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/wms/capabilities?url=http://127.0.0.1:8000/sisainen",
+            "/api/wfs/capabilities?url=http://172.17.0.1/",
+            "/api/wfs/features?url=http://169.254.169.254/latest&typeName=x",
+            "/api/wfs/features?url=https://ei-katalogissa.example/wfs&typeName=x",
+        ],
+    )
+    def test_katalogin_ulkopuolista_ei_haeta(self, client: TestClient, path: str) -> None:
+        with patch("aura.web.routes.api.read_capped") as fetch:
+            data = client.get(path).json()
+        fetch.assert_not_called()
+        assert "katalog" in data["error"]
+
+    def test_katalogin_osoite_sisaverkossa_estetaan(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Katalogin osoitekin voi osoittaa sisäverkkoon (vanhentunut verkkotunnus)."""
+        test_db.execute(
+            "INSERT INTO resources (id, dataset_id, name, format, url) VALUES (?, ?, ?, ?, ?)",
+            ("res-int", "test-ds-1", "Sisäinen", "WFS", "http://127.0.0.1:9/wfs"),
+        )
+        test_db.commit()
+        data = client.get("/api/wfs/capabilities?url=http://127.0.0.1:9/wfs").json()
+        assert data["error"] == "Palvelua ei voitu hakea"
+        assert "127.0.0.1" not in json.dumps(data)
+
+    def test_virheteksti_ei_vuoda(self, client: TestClient, test_db: sqlite3.Connection) -> None:
+        test_db.execute(
+            "INSERT INTO resources (id, dataset_id, name, format, url) VALUES (?, ?, ?, ?, ?)",
+            ("res-x", "test-ds-1", "X", "WMS", "https://x.example/wms"),
+        )
+        test_db.commit()
+        virhe = OSError("All connection attempts failed")
+        with patch("aura.web.routes.api.read_capped", side_effect=virhe):
+            data = client.get("/api/wms/capabilities?url=https://x.example/wms").json()
+        assert "connection" not in json.dumps(data).lower()

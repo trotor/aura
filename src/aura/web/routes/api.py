@@ -11,11 +11,46 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from aura.net import public_client, read_capped
 from aura.web.app import get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+#: Virheviesti joka ei kerro syytä. Tarkka syy (yhteys evätty, nimi ei
+#: ratkea) kertoisi kutsujalle mitä palvelimen verkossa on.
+FETCH_FAILED = "Palvelua ei voitu hakea"
+NOT_IN_CATALOG = "Osoite ei ole katalogin resurssi"
+
+
+def catalog_endpoint(conn: sqlite3.Connection, url: str) -> str | None:
+    """Palauta palvelun perusosoite, jos se on jonkin katalogin resurssin osoite.
+
+    Karttanäkymä kutsuu näitä reittejä vain resurssin omalla osoitteella,
+    joten rajaus ei muuta käyttöä. Ilman sitä reitti oli avoin
+    välityspalvelin mihin tahansa osoitteeseen (8.10.2026).
+    """
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return None
+    base = f"{parts.scheme}://{parts.netloc}{parts.path}"
+    pattern = base.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    row = conn.execute(
+        "SELECT 1 FROM resources WHERE url LIKE ? ESCAPE '\\' LIMIT 1", (pattern,)
+    ).fetchone()
+    return base if row else None
+
+
+async def _fetch_service(base_url: str, params: dict[str, str], timeout: float) -> tuple[str, str]:
+    """Hae palvelusta suojatusti; palauta (content-type, teksti)."""
+    async with public_client(timeout=timeout) as client:
+        resp, body = await read_capped(client, base_url, params=params, follow_redirects=True)
+        resp.raise_for_status()
+        text = body.decode(resp.encoding or "utf-8", "replace")
+        return resp.headers.get("content-type", ""), text
 
 BOUNDARIES_DIR = Path(__file__).parent.parent.parent.parent.parent / "data" / "boundaries"
 
@@ -148,30 +183,21 @@ async def dataset_counts_by_municipality(request: Request) -> dict[str, Any]:
 
 
 @router.get("/wms/capabilities")
-async def wms_capabilities(url: str = Query(...)) -> dict[str, Any]:
+async def wms_capabilities(request: Request, url: str = Query(...)) -> dict[str, Any]:
     """Parsii WMS GetCapabilities XML:n ja palauttaa tasot."""
-    import httpx
-
+    base_url = catalog_endpoint(get_db(request), url)
+    if base_url is None:
+        return {"error": NOT_IN_CATALOG, "layers": []}
     try:
-        base_url = url.split("?")[0]
-        params = {
-            "service": "WMS",
-            "request": "GetCapabilities",
-        }
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(base_url, params=params, follow_redirects=True)
-            resp.raise_for_status()
-            ct = resp.headers.get("content-type", "")
-            if "html" in ct:
-                return {
-                    "error": "URL palauttaa HTML-sivun eikä WMS-palvelua",
-                    "layers": [],
-                }
-            xml_text = resp.text
-
-        return _parse_wms_capabilities(xml_text)
-    except Exception as e:
-        return {"error": str(e), "layers": []}
+        ct, xml_text = await _fetch_service(
+            base_url, {"service": "WMS", "request": "GetCapabilities"}, 20.0
+        )
+    except Exception:
+        logger.info("WMS capabilities epäonnistui: %s", base_url, exc_info=True)
+        return {"error": FETCH_FAILED, "layers": []}
+    if "html" in ct:
+        return {"error": "URL palauttaa HTML-sivun eikä WMS-palvelua", "layers": []}
+    return _parse_wms_capabilities(xml_text)
 
 
 def _parse_wms_capabilities(xml_text: str) -> dict[str, Any]:
@@ -236,30 +262,21 @@ def _parse_wms_capabilities(xml_text: str) -> dict[str, Any]:
 
 
 @router.get("/wfs/capabilities")
-async def wfs_capabilities(url: str = Query(...)) -> dict[str, Any]:
+async def wfs_capabilities(request: Request, url: str = Query(...)) -> dict[str, Any]:
     """Parsii WFS GetCapabilities XML:n ja palauttaa featuretyypit."""
-    import httpx
-
+    base_url = catalog_endpoint(get_db(request), url)
+    if base_url is None:
+        return {"error": NOT_IN_CATALOG, "feature_types": []}
     try:
-        base_url = url.split("?")[0]
-        params = {
-            "service": "WFS",
-            "request": "GetCapabilities",
-        }
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(base_url, params=params, follow_redirects=True)
-            resp.raise_for_status()
-            ct = resp.headers.get("content-type", "")
-            if "html" in ct:
-                return {
-                    "error": "URL palauttaa HTML-sivun eikä WFS-palvelua",
-                    "feature_types": [],
-                }
-            xml_text = resp.text
-
-        return _parse_wfs_capabilities(xml_text)
-    except Exception as e:
-        return {"error": str(e), "feature_types": []}
+        ct, xml_text = await _fetch_service(
+            base_url, {"service": "WFS", "request": "GetCapabilities"}, 20.0
+        )
+    except Exception:
+        logger.info("WFS capabilities epäonnistui: %s", base_url, exc_info=True)
+        return {"error": FETCH_FAILED, "feature_types": []}
+    if "html" in ct:
+        return {"error": "URL palauttaa HTML-sivun eikä WFS-palvelua", "feature_types": []}
+    return _parse_wfs_capabilities(xml_text)
 
 
 def _parse_wfs_capabilities(xml_text: str) -> dict[str, Any]:
@@ -292,15 +309,16 @@ def _parse_wfs_capabilities(xml_text: str) -> dict[str, Any]:
 
 @router.get("/wfs/features")
 async def wfs_features(
+    request: Request,
     url: str = Query(...),
     type_name: str = Query(..., alias="typeName"),
     max_features: int = Query(default=500, le=2000, alias="maxFeatures"),
 ) -> dict[str, Any]:
     """Hakee WFS-featuret GeoJSON-muodossa."""
-    import httpx
-
+    base_url = catalog_endpoint(get_db(request), url)
+    if base_url is None:
+        return {"error": NOT_IN_CATALOG}
     try:
-        base_url = url.split("?")[0]
         params = {
             "service": "WFS",
             "request": "GetFeature",
@@ -310,14 +328,12 @@ async def wfs_features(
             "maxFeatures": str(max_features),
             "count": str(max_features),  # WFS 2.0 käyttää count-parametria
         }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(base_url, params=params, follow_redirects=True)
-            resp.raise_for_status()
-            geojson = resp.json()
-
-        return {"geojson": geojson}
-    except Exception as e:
-        return {"error": str(e)}
+        _, text = await _fetch_service(base_url, params, 30.0)
+        geojson = json.loads(text)
+    except Exception:
+        logger.info("WFS features epäonnistui: %s", base_url, exc_info=True)
+        return {"error": FETCH_FAILED}
+    return {"geojson": geojson}
 
 
 @router.get("/preview/{resource_id}")
