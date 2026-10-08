@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="fi" data-theme="light">
+<html lang="{{ t.html_lang if t is defined else 'fi' }}" data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Aura{% endblock %} — Avoin data</title>
+    <title>{% block full_title %}{% block title %}Aura{% endblock %} — Avoin data{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     {% block head %}{% endblock %}
@@ -15,9 +16,16 @@
             <li><a href="/" class="nav-brand"><strong>Aura</strong></a></li>
         </ul>
         <ul>
-            <li><a href="/">Etusivu</a></li>
-            <li><a href="/search">Haku</a></li>
-            <li><a href="/map">Kartta</a></li>
+            <li><a href="{{ '/' if lang is not defined or lang == 'fi' else '/' ~ lang }}">{{ t.nav_home if t is defined else 'Etusivu' }}</a></li>
+            <li><a href="/search">{{ t.nav_search if t is defined else 'Haku' }}</a></li>
+            <li><a href="/map">{{ t.nav_map if t is defined else 'Kartta' }}</a></li>
+            {% if alternates is defined %}
+            <li class="lang-switch">
+                {% for code, name, path in alternates %}
+                {% if code == lang %}<span aria-current="true" lang="{{ code }}">{{ code|upper }}</span>{% else %}<a href="{{ path }}" hreflang="{{ code }}" lang="{{ code }}" title="{{ name }}">{{ code|upper }}</a>{% endif %}
+                {% endfor %}
+            </li>
+            {% endif %}
         </ul>
     </nav>
 
@@ -27,7 +35,7 @@
 
     <footer class="container">
         <hr>
-        <p><small>Aura — Suomalaisen avoimen datan selain | <a href="https://github.com/trotor/aura/issues" target="_blank" rel="noopener">Raportoi ongelma</a></small></p>
+        <p><small>{{ t.footer if t is defined else 'Aura – Suomen avoimen datan hakemisto' }} | <a href="https://github.com/trotor/aura" target="_blank" rel="noopener">GitHub</a> | <a href="https://github.com/trotor/aura/issues" target="_blank" rel="noopener">{{ t.report if t is defined else 'Raportoi ongelma' }}</a></small></p>
     </footer>
 
     {% block scripts %}{% endblock %}

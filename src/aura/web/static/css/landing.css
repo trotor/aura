@@ -1,0 +1,458 @@
+/* Auran etusivu.
+ *
+ * Aihe: aura kääntää vaon ja tuo maan alta esiin sen mikä on piilossa.
+ * Ainoa koriste on heron vakoviivoitus; kaikki muu on hiljaista.
+ * Värit: huurteinen pohja, kuusenvihreä teksti, ruis korostuksena
+ * (vain vastausten luvuissa ja vaiheissa), järvensininen linkeissä.
+ */
+
+/* ---- Rakenne ---- */
+
+.landing {
+    font-size: 1.0625rem;
+    line-height: 1.55;
+}
+
+.landing section {
+    margin: 0 0 4.5rem;
+}
+
+.landing h2 {
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    margin-bottom: 0.9rem;
+}
+
+.landing h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+
+.landing .intro {
+    max-width: 62ch;
+    color: var(--sammal);
+}
+
+.landing .fine {
+    max-width: 70ch;
+    font-size: 0.92rem;
+    color: var(--sammal);
+}
+
+.landing code {
+    font-size: 0.88em;
+}
+
+/* ---- Hero: kysymys ja vastaus vaon päällä ---- */
+
+.hero {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: clamp(2rem, 5vw, 4rem);
+    align-items: start;
+    padding: clamp(2rem, 6vw, 4.5rem) 0 1rem;
+}
+
+/* Vaot: tiheät vaakaviivat jotka haalistuvat oikealle ja alas. */
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0 -50vw 0 -50vw;
+    z-index: -1;
+    background: repeating-linear-gradient(
+        176deg,
+        transparent 0 13px,
+        var(--vako) 13px 14px
+    );
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 60%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 60%, transparent 100%);
+}
+
+.hero-text h1 {
+    color: var(--kuusi);
+    font-size: clamp(2.6rem, 6.4vw, 4.6rem);
+    font-weight: 700;
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    margin: 0 0 1.5rem;
+    max-width: 11ch;
+    background: var(--huurre);
+    box-shadow: 0 0 0 0.35rem var(--huurre);
+}
+
+.hero-text .lede {
+    max-width: 46ch;
+    font-size: 1.15rem;
+    background: var(--huurre);
+    box-shadow: 0 0 0 0.5rem var(--huurre);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2rem;
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.7rem 1.2rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 2px solid var(--kuusi);
+    line-height: 1.2;
+}
+
+.btn-primary {
+    background: var(--kuusi);
+    color: var(--huurre);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+    background: var(--jarvi);
+    border-color: var(--jarvi);
+    color: #fff;
+}
+
+.btn-quiet {
+    background: var(--pinta);
+    color: var(--kuusi);
+}
+
+.btn-quiet:hover,
+.btn-quiet:focus-visible {
+    border-color: var(--jarvi);
+    color: var(--jarvi);
+}
+
+.btn:focus-visible,
+.landing a:focus-visible {
+    outline: 3px solid var(--ruis);
+    outline-offset: 2px;
+}
+
+/* Vastausluettelo: kysymys isolla, vastaus rukiin värillä, lähde pienellä. */
+.ledger {
+    background: var(--pinta);
+    border-left: 4px solid var(--ruis);
+    padding: 1.5rem 1.6rem 1.1rem;
+    box-shadow: 0 1px 0 var(--vako), 0 18px 40px -28px rgba(16, 48, 42, 0.45);
+}
+
+.ledger h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--sammal);
+    letter-spacing: 0;
+    margin-bottom: 0.6rem;
+}
+
+.ledger ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.ledger li.qa {
+    list-style: none;
+    padding: 0.95rem 0;
+    border-top: 1px solid var(--vako);
+}
+
+.ledger li.qa:first-child {
+    border-top: 0;
+    padding-top: 0.2rem;
+}
+
+.ledger p {
+    margin: 0;
+}
+
+.qa .q {
+    font-size: 1.12rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.qa .a {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--ruis);
+    letter-spacing: -0.01em;
+    margin-top: 0.25rem;
+}
+
+.qa .more {
+    font-size: 0.92rem;
+    color: var(--sammal);
+    margin-top: 0.2rem;
+}
+
+.qa .src {
+    font-size: 0.8rem;
+    color: var(--sammal);
+    margin-top: 0.35rem;
+}
+
+.tag {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 1rem;
+    background: var(--ruis-vaalea);
+    color: #6b4c05;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ledger-note {
+    font-size: 0.78rem;
+    color: var(--sammal);
+    margin-top: 0.6rem !important;
+}
+
+/* ---- Kolme vaihetta: oikea järjestys, siksi numeroitu ---- */
+
+.steps {
+    counter-reset: vaihe;
+    list-style: none;
+    padding: 0;
+    margin: 1.75rem 0 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem;
+}
+
+.steps li {
+    list-style: none;
+    counter-increment: vaihe;
+    position: relative;
+    padding-top: 2.6rem;
+    border-top: 2px solid var(--kuusi);
+}
+
+.steps li::before {
+    content: counter(vaihe);
+    position: absolute;
+    top: 0.55rem;
+    left: 0;
+    font-weight: 700;
+    font-size: 1.4rem;
+    color: var(--ruis);
+}
+
+.steps h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.steps .verb {
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.steps p {
+    color: var(--sammal);
+    font-size: 0.98rem;
+}
+
+/* ---- Liittäminen ---- */
+
+.connect-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    margin: 1.5rem 0 1rem;
+}
+
+.connect pre,
+.open pre {
+    background: var(--kuusi);
+    color: #e3ece8;
+    border-radius: 0.35rem;
+    margin: 0;
+}
+
+.connect pre code,
+.open pre code {
+    background: transparent;
+    color: inherit;
+    font-size: 0.86rem;
+}
+
+.open pre {
+    max-width: 44rem;
+    margin: 1rem 0;
+}
+
+/* ---- Agentille ---- */
+
+.plain {
+    padding-left: 1.1rem;
+    max-width: 68ch;
+}
+
+.plain li {
+    margin-bottom: 0.55rem;
+}
+
+/* ---- Kenelle ja Pro: termi + selitys ---- */
+
+.who dl,
+.pro dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 2.5rem;
+    margin: 1.25rem 0 0;
+}
+
+.who dl > div,
+.pro dl > div {
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--vako);
+}
+
+.who dt,
+.pro dt {
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.who dd {
+    margin: 0;
+    font-size: 1.08rem;
+}
+
+.who dd::before {
+    content: "\201D";
+    color: var(--ruis);
+    font-weight: 700;
+    margin-right: 0.15rem;
+}
+
+.who dd::after {
+    content: "\201D";
+    color: var(--ruis);
+    font-weight: 700;
+    margin-left: 0.1rem;
+}
+
+.pro dd {
+    margin: 0;
+    color: var(--sammal);
+}
+
+.pro {
+    background: var(--pinta);
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+    border-top: 4px solid var(--kuusi);
+}
+
+/* ---- Luvut ---- */
+
+.figures {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0 2.5rem;
+}
+
+.figures > div {
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+.figures dd {
+    margin: 0;
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+
+.figures dt {
+    color: var(--sammal);
+    font-weight: 400;
+}
+
+.bars {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2.5rem;
+}
+
+.landing .bar-fill {
+    background: var(--kuusi);
+}
+
+.sources {
+    margin: 2rem 0;
+}
+
+.sources summary {
+    font-weight: 600;
+}
+
+/* ---- Kapeat näytöt ---- */
+
+@media (max-width: 860px) {
+    .hero,
+    .connect-grid,
+    .bars {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .steps {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.5rem;
+    }
+
+    .figures {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .who dl,
+    .pro dl {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .landing .bar-label {
+        min-width: 7rem;
+    }
+
+    .lang-switch {
+        gap: 0.4rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Pitkä komento rivittyy eikä piiloudu vierityksen taakse. */
+.connect pre code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.landing .bar-track {
+    background: var(--vako);
+}
+
+/* Englannin lainausmerkit avautuvat eri suuntaan kuin suomen ja ruotsin. */
+.who dd:lang(en)::before {
+    content: "\201C";
+}

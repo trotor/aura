@@ -1,5 +1,83 @@
 /* Aura — minimaalinen oma CSS */
 
+/* Koko sivuston fontti ja värit (huurre, kuusi, ruis, järvi). */
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("/static/fonts/familjen-grotesk-latin-400-normal.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("/static/fonts/familjen-grotesk-latin-600-normal.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("/static/fonts/familjen-grotesk-latin-700-normal.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root:not([data-theme="dark"]),
+[data-theme="light"] {
+    --huurre: #f3f6f5;
+    --pinta: #ffffff;
+    --kuusi: #10302a;
+    --sammal: #4b625c;
+    --vako: #d6e0dc;
+    --ruis: #9a6f0c;
+    --ruis-vaalea: #f4ead2;
+    --jarvi: #1d5c86;
+
+    --pico-font-family: "Familjen Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --pico-background-color: var(--huurre);
+    --pico-color: var(--kuusi);
+    --pico-h1-color: var(--kuusi);
+    --pico-h2-color: var(--kuusi);
+    --pico-h3-color: var(--kuusi);
+    --pico-muted-color: var(--sammal);
+    --pico-primary: var(--jarvi);
+    --pico-primary-hover: var(--kuusi);
+    --pico-primary-background: var(--kuusi);
+    --pico-primary-border: var(--kuusi);
+    --pico-primary-hover-background: var(--jarvi);
+    --pico-primary-hover-border: var(--jarvi);
+    --pico-primary-focus: rgba(154, 111, 12, 0.35);
+    --pico-primary-inverse: #ffffff;
+    --pico-primary-underline: rgba(29, 92, 134, 0.4);
+    --pico-code-background-color: #e6edea;
+    --pico-code-color: var(--kuusi);
+    --pico-card-background-color: var(--pinta);
+    --pico-muted-border-color: var(--vako);
+    --pico-secondary-background: var(--vako);
+}
+
+body {
+    background: var(--huurre);
+}
+
+.nav-brand strong {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.lang-switch {
+    display: flex;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+}
+
+.lang-switch span[aria-current] {
+    font-weight: 700;
+    color: var(--kuusi);
+}
+
+
 .stat-number {
     font-size: 2.5rem;
     font-weight: bold;
@@ -171,4 +249,21 @@ a.outline.small[role="button"] {
     .map-container {
         height: 400px;
     }
+}
+
+/* Pico tyylittää [role=button]-elementit napeiksi, ja Leafletin zoomaus on
+ * juuri sellainen linkki. Palautetaan Leafletin oma ulkoasu. */
+.leaflet-control-zoom a[role="button"] {
+    padding: 0;
+    margin: 0;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 20px;
+    border-radius: 0;
+    background: #fff;
+    color: var(--kuusi);
+    border: 0;
+    border-bottom: 1px solid #ccc;
+    box-shadow: none;
 }
