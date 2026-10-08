@@ -70,10 +70,19 @@ def create_app(lifespan: object = lifespan) -> FastAPI:
         lifespan: Ohitettavissa, jotta yhdistetty ASGI-sovellus voi ketjuttaa
             tämän ja FastMCP:n lifespanin (ks. ``aura.asgi``).
     """
+    # Julkisella (read-only) palvelimella ei automaattista rajapintakuvausta:
+    # /docs ja /openapi.json luettelivat kaikki sisäiset reitit, eikä niitä
+    # tarvita palvelun käyttöön. Omalla koneella ne ovat kehittäjän apu.
+    from aura.config import is_readonly
+
+    public = is_readonly()
     app = FastAPI(
         title="Aura",
         description="Suomalaisen avoimen datan selain",
         lifespan=lifespan,  # type: ignore[arg-type]
+        docs_url=None if public else "/docs",
+        redoc_url=None if public else "/redoc",
+        openapi_url=None if public else "/openapi.json",
     )
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))

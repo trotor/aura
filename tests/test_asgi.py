@@ -211,6 +211,14 @@ class TestReadonly:
     def test_readonly_serves_landing(self, readonly_client: TestClient) -> None:
         assert readonly_client.get("/").status_code == 200
 
+    def test_readonly_piilottaa_rajapintakuvauksen(self, readonly_client: TestClient) -> None:
+        """Julkinen palvelin ei luettele sisäisiä reittejään (tietoturva 8.10.2026)."""
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert readonly_client.get(path).status_code == 404, path
+
+    def test_paikallisesti_rajapintakuvaus_tallella(self, client: TestClient) -> None:
+        assert client.get("/openapi.json").status_code == 200
+
 
 class TestInstanssikuvaus:
     """Ländärin on kerrottava totuus siitä mitä palvelin ajaa.
