@@ -65,7 +65,7 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     warm_caches(conn)
     yso = YsoClient()
     try:
-        yield {"db": conn, "findings": [], "yso": yso}
+        yield {"db": conn, "findings": {}, "yso": yso}
     finally:
         # Keskeneräiset ketjut kirjataan sammutuksessa, muuten ne katoaisivat.
         import time

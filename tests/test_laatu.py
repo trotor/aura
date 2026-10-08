@@ -129,3 +129,46 @@ def test_erillinen_palvelin_sisaltaa_vain_laatutyokalut() -> None:
             return {t.name for t in await client.list_tools()}
 
     assert asyncio.run(names()) == QUALITY_TOOLS
+
+
+class TestLoydostenErottelu:
+    """Löydökset kuuluvat istunnolle, eivät koko prosessille (8.10.2026).
+
+    Julkisessa /mcp/laatu-profiilissa yksi lista jaettiin kaikkien käyttäjien
+    kesken: A:n kirjaama teksti näkyi B:n list_findings-kutsussa, ja lista kasvoi
+    rajatta.
+    """
+
+    class _Ctx:
+        def __init__(self, store: dict, session: str | None) -> None:
+            self.lifespan_context = {"findings": store}
+            self._session = session
+
+        @property
+        def session_id(self) -> str:
+            if self._session is None:
+                raise RuntimeError("tilaton HTTP")
+            return self._session
+
+    def test_istunnot_eivat_nae_toisiaan(self) -> None:
+        from aura.tools.research import _get_findings
+
+        store: dict = {}
+        _get_findings(self._Ctx(store, "a")).append({"finding": "A:n salaisuus"})
+        assert _get_findings(self._Ctx(store, "b")) == []
+        assert len(_get_findings(self._Ctx(store, "a"))) == 1
+
+    def test_ilman_istuntoa_ei_jaeta(self) -> None:
+        from aura.tools.research import _get_findings
+
+        store: dict = {}
+        _get_findings(self._Ctx(store, None)).append({"finding": "x"})
+        assert _get_findings(self._Ctx(store, None)) == []
+
+    def test_istuntojen_maara_rajattu(self) -> None:
+        from aura.tools.research import MAX_SESSIONS, _get_findings
+
+        store: dict = {}
+        for i in range(MAX_SESSIONS + 5):
+            _get_findings(self._Ctx(store, f"s{i}")).append({"finding": "x"})
+        assert len(store) == MAX_SESSIONS
