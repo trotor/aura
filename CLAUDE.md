@@ -122,7 +122,9 @@ Laajennuspisteet (`aura.extensions`): `find_data.indicators`, `inspect_dataset.r
 
 Aluetunnisteet tulkitaan aina `aura.areas.resolve_area()`:lla (nimi fi/sv taivutettuna, kuntakoodi, `KU837`, `MK06`, postinumero, lakkautettu kunta → seuraaja).
 
-**Laatuprofiili** (tagi `quality`, oma palvelin `build_quality_server()`): `quality_summary`, `metadata_gaps`, `availability_report` + `find_data`, `inspect_dataset`, `log_finding`, `list_findings`. Ei kirjoittavia työkaluja eikä `health_check`ia — saatavuus luetaan tallennetuista tarkistuksista (`tests/test_laatu.py`).
+**Laatuprofiili** (tagi `quality`, oma palvelin `build_quality_server()`): `quality_summary`, `metadata_gaps`, `availability_report` + `find_data`, `inspect_dataset`, `log_finding`, `list_findings`. Ei kirjoittavia työkaluja eikä `health_check`ia — saatavuus luetaan tallennetuista tarkistuksista (`tests/test_laatu.py`). Read-only-tilassa myös `log_finding`/`list_findings` poistetaan (`SESSION_MEMORY_TOOL_NAMES`): tilattomassa HTTP:ssä istuntotunniste on asiakkaan oma otsake.
+
+Ulkoiset pyynnöt käyttäjän antamiin tai katalogin osoitteisiin tehdään `aura.net.public_client`illa (vain julkiset osoitteet, myös uudelleenohjauksissa) ja `read_capped`illa (kokoraja).
 
 **Admin-profiili:** kaikki alla olevat. Korvatut työkalut näkyvät kuvauksella "Vanhentunut: käytä X" (`aura.server.DEPRECATED_TOOLS`) yhden version ajan.
 

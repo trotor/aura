@@ -172,3 +172,28 @@ class TestLoydostenErottelu:
         for i in range(MAX_SESSIONS + 5):
             _get_findings(self._Ctx(store, f"s{i}")).append({"finding": "x"})
         assert len(store) == MAX_SESSIONS
+
+
+def test_read_only_poistaa_istuntomuistin_tyokalut() -> None:
+    """Julkisessa palvelussa istuntotunniste on asiakkaan otsake: ei jaettua muistia."""
+    import asyncio
+
+    from fastmcp import FastMCP
+
+    from aura.server import SESSION_MEMORY_TOOL_NAMES, apply_readonly_gating
+
+    server = FastMCP("t")
+    for name in (*SESSION_MEMORY_TOOL_NAMES, "find_data"):
+        @server.tool(name=name)
+        def _fn() -> str:
+            return "ok"
+    apply_readonly_gating(server, readonly=True)
+
+    async def names() -> set[str]:
+        async with Client(server) as client:
+            return {t.name for t in await client.list_tools()}
+
+    assert asyncio.run(names()) == {"find_data"}
+    assert "log_finding" not in build_instructions(readonly=True, profile="laatu")
+    assert "log_finding" not in build_instructions(readonly=True)
+    assert "log_finding" in build_instructions(readonly=False, profile="laatu")

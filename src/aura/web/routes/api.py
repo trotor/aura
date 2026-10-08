@@ -34,14 +34,26 @@ def catalog_endpoint(conn: sqlite3.Connection, url: str) -> str | None:
     from urllib.parse import urlsplit
 
     parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.netloc:
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    # Käyttäjätunnus osoitteessa (``https://a@b/``) ja kenoviiva ovat
+    # jäsentimien välisten erojen klassisia lähteitä; katalogissa niitä ei ole.
+    if "@" in parts.netloc or "\\" in url:
         return None
     base = f"{parts.scheme}://{parts.netloc}{parts.path}"
+    # Ehdokkaat haetaan etuliitteellä, mutta hyväksytään vain **täsmälleen**
+    # sama skeema, isäntä, portti ja polku. Pelkkä etuliite päästäisi läpi
+    # eri isännän: ``https://kartta.hel`` on ``https://kartta.hel.fi/…``:n alku.
     pattern = base.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-    row = conn.execute(
-        "SELECT 1 FROM resources WHERE url LIKE ? ESCAPE '\\' LIMIT 1", (pattern,)
-    ).fetchone()
-    return base if row else None
+    rows = conn.execute(
+        "SELECT url FROM resources WHERE url LIKE ? ESCAPE '\\' LIMIT 200", (pattern,)
+    ).fetchall()
+    wanted = base.casefold()
+    for (candidate,) in rows:
+        c = urlsplit(str(candidate))
+        if f"{c.scheme}://{c.netloc}{c.path}".casefold() == wanted:
+            return base
+    return None
 
 
 async def _fetch_service(base_url: str, params: dict[str, str], timeout: float) -> tuple[str, str]:

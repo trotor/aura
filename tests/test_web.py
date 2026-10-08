@@ -442,3 +442,38 @@ class TestWebApiKatalogirajaus:
         with patch("aura.web.routes.api.read_capped", side_effect=virhe):
             data = client.get("/api/wms/capabilities?url=https://x.example/wms").json()
         assert "connection" not in json.dumps(data).lower()
+
+
+class TestKatalogiosoitteenTasmays:
+    """Katalogiosoitteen on täsmättävä kokonaan, ei etuliitteenä (katselmointi 8.10.2026)."""
+
+    @pytest.fixture()
+    def conn(self, test_db: sqlite3.Connection) -> sqlite3.Connection:
+        test_db.execute(
+            "INSERT INTO resources (id, dataset_id, name, format, url) VALUES (?, ?, ?, ?, ?)",
+            ("res-hel", "test-ds-1", "Helsinki", "WMS",
+             "https://kartta.hel.fi/ws/geoserver/avoindata/wms?service=wms"),
+        )
+        test_db.commit()
+        return test_db
+
+    def test_tasmalleen_sama_kelpaa(self, conn: sqlite3.Connection) -> None:
+        from aura.web.routes.api import catalog_endpoint
+
+        url = "https://kartta.hel.fi/ws/geoserver/avoindata/wms?request=GetCapabilities"
+        assert catalog_endpoint(conn, url) == "https://kartta.hel.fi/ws/geoserver/avoindata/wms"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://kartta.hel/ws/geoserver/avoindata/wms",
+            "https://kartta.hel.fi/ws",
+            "https://kartta.hel.fi@127.0.0.1/ws/geoserver/avoindata/wms",
+            "https://kartta.hel.fi\\@evil.example/ws/geoserver/avoindata/wms",
+            "ftp://kartta.hel.fi/ws/geoserver/avoindata/wms",
+        ],
+    )
+    def test_etuliite_tai_kikka_ei_kelpaa(self, conn: sqlite3.Connection, url: str) -> None:
+        from aura.web.routes.api import catalog_endpoint
+
+        assert catalog_endpoint(conn, url) is None
