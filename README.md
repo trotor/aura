@@ -99,6 +99,12 @@ Täydellinen luettelo: [datasettikatalogi](docs/CATALOG.md) ja [lähteiden tekni
 
 Palvelua ylläpitää Futuai Oy. Pro-kerroksen koodi ei ole tässä repositoriossa. Kaikki tässä repositoriossa oleva on MIT-lisensoitua ja toimii itsenäisesti.
 
+## Sama tekniikka omalle datalle
+
+Aura ei ole sidottu avoimeen dataan. Sama rakenne toimii myös organisaation omille tietokannoille, rajapinnoille ja paikkatietopalveluille: keräin lähdettä kohden, yksi metatietohakemisto, suomea ymmärtävä haku ja MCP-työkalut, jotka kertovat jokaisen luvun lähteen. Silloin tekoälyavustaja löytää organisaation oman datan samalla tavalla kuin se nyt löytää Tilastokeskuksen taulun.
+
+Valmiita keräimiä on CKAN-, PxWeb-, WFS-, WMS-, ArcGIS-, OData-, OpenAPI- ja GTFS-lähteille, ja uusi lähde on yleensä yksi tiedosto ([ohje](CONTRIBUTING.md)). Laatuprofiili kertoo samalla, mistä aineistoista puuttuu kuvaus, lisenssi tai toimiva linkki. Koodi on MIT-lisensoitua, ja kysymykset ja ideat ovat tervetulleita [GitHubissa](https://github.com/trotor/aura/issues).
+
 ## Aja itse
 
 Tietokanta tulee repositorion mukana ([Git LFS](https://git-lfs.github.com/)), joten aineistot ovat käytössä heti kloonauksen jälkeen.
@@ -126,6 +132,10 @@ Oma instanssi on täysi versio: kanta on kirjoitettavissa ja kaikki työkalut, m
 [Tekninen referenssi](docs/REFERENCE.md) | [Käyttöönotto](docs/MCP_SETUP.md) | [Datasettikatalogi](docs/CATALOG.md) | [Lähteet](docs/SOURCES.md) | [Formaatit](docs/formats.md) | [Mitä uutta](docs/WHATSNEW.md) | [Muutosloki](CHANGELOG.md)
 
 *Aura* on kyntöaura, joka kääntää maan alle jääneen pintaan, ja valon kehä, joka tekee näkyväksi sen mikä muuten jää piiloon.
+
+## Tekijä
+
+Auran on rakentanut Tero Rönkkö ([tero@futuai.fi](mailto:tero@futuai.fi)). Projektin on mahdollistanut [Futuai Oy](https://aura.futuai.fi), joka tarjoaa julkisen palvelun ja sen ylläpidon, jotta kuka tahansa voi liittää Auran avustajaansa ilman omaa asennusta.
 
 ## Lisenssi
 

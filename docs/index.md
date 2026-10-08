@@ -41,6 +41,12 @@ Aura kerää lähteistä metatiedot ja pitää ne haettavana hakemistona. Tekoä
 
 ---
 
+## Sama tekniikka omalle datalle
+
+Aura ei ole sidottu avoimeen dataan. Sama rakenne – keräin lähdettä kohden, yksi metatietohakemisto, suomea ymmärtävä haku ja MCP-työkalut, jotka kertovat lähteen – toimii myös organisaation omille tietokannoille, rajapinnoille ja paikkatietopalveluille. Koodi ja ohjeet uuden keräimen tekemiseen ovat [GitHubissa](https://github.com/trotor/aura).
+
+---
+
 ## Dokumentaatio
 
 - [README](https://github.com/trotor/aura#readme): esittely, esimerkit ja Aura Pro
@@ -49,6 +55,10 @@ Aura kerää lähteistä metatiedot ja pitää ne haettavana hakemistona. Tekoä
 - [Organisaatiot](organisaatiot.md) ja [kunnat](kunnat.md)
 - [Dataformaatit](formats.md)
 - [Mitä uutta](WHATSNEW.md)
+
+## Tekijä
+
+Auran on rakentanut Tero Rönkkö ([tero@futuai.fi](mailto:tero@futuai.fi)). Projektin on mahdollistanut Futuai Oy, joka tarjoaa julkisen palvelun osoitteessa [aura.futuai.fi](https://aura.futuai.fi).
 
 ## Lähdekoodi
 

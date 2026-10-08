@@ -87,6 +87,12 @@ Fullständiga förteckningar: [datamängdskatalog](docs/CATALOG.md) och [källor
 
 Tjänsten drivs av Futuai Oy. Pro-lagrets kod finns inte i detta repository. Allt i detta repository är MIT-licensierat och fungerar självständigt.
 
+## Samma teknik för egen data
+
+Aura är inte bunden till öppna data. Samma struktur fungerar för en organisations egna databaser, gränssnitt och geodatatjänster: en insamlare per källa, en metadatakatalog, sökning som förstår finska och MCP-verktyg som anger källan till varje siffra. Då hittar AI-assistenten organisationens egna data på samma sätt som den nu hittar en tabell från Statistikcentralen.
+
+Det finns insamlare för CKAN, PxWeb, WFS, WMS, ArcGIS, OData, OpenAPI och GTFS, och en ny källa är oftast en fil ([instruktioner](CONTRIBUTING.md), på finska). Koden är MIT-licensierad, och frågor och idéer är välkomna [på GitHub](https://github.com/trotor/aura/issues).
+
 ## Kör den själv
 
 Databasen följer med repositoryt ([Git LFS](https://git-lfs.github.com/)), så datamängderna finns direkt efter kloning.
@@ -110,6 +116,10 @@ Mer om klienter, kommandoraden och verktygsprofiler finns i den [tekniska refere
 - Berätta vad som saknas: [öppna ett ärende](https://github.com/trotor/aura/issues).
 
 *Aura* betyder plog på finska: den vänder upp det som ligger dolt under ytan. Det är också en ljusring som gör synligt det som annars förblir i mörker.
+
+## Upphovsperson
+
+Aura är byggd av Tero Rönkkö ([tero@futuai.fi](mailto:tero@futuai.fi)). Projektet möjliggörs av [Futuai Oy](https://aura.futuai.fi), som tillhandahåller och underhåller den offentliga tjänsten så att vem som helst kan koppla Aura till sin assistent utan egen installation.
 
 ## Licens
 

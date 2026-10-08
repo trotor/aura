@@ -456,3 +456,7 @@
 .who dd:lang(en)::before {
     content: "\201C";
 }
+
+.author p {
+    max-width: 62ch;
+}

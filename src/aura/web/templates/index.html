@@ -32,6 +32,8 @@
         "isAccessibleForFree": true,
         "license": "https://opensource.org/licenses/MIT",
         "codeRepository": "https://github.com/trotor/aura",
+        "author": {"@type": "Person", "name": "Tero Rönkkö", "email": "tero@futuai.fi"},
+        "provider": {"@type": "Organization", "name": "Futuai Oy"},
         "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}
     } | tojson }}
     </script>
@@ -138,6 +140,14 @@
     </dl>
 </section>
 
+<section class="own" aria-labelledby="own-title">
+    <h2 id="own-title">{{ t.own_title }}</h2>
+    {% for para in t.own_body %}
+    <p class="intro">{{ para }}</p>
+    {% endfor %}
+    <p>{{ html.own_cta }}</p>
+</section>
+
 <section class="open" aria-labelledby="open-title">
     <h2 id="open-title">{{ t.open_title }}</h2>
     {% if instance.is_extended %}
@@ -163,6 +173,12 @@ aura serve --http</code></pre>
     {% if instance.telemetry %}
     <p class="fine">{{ t.telemetry }}</p>
     {% endif %}
+</section>
+
+<section class="author" aria-labelledby="author-title">
+    <h2 id="author-title">{{ t.author_title }}</h2>
+    <p>{{ t.author_body }}</p>
+    <p class="fine">{{ html.author_contact }}</p>
 </section>
 
 <section class="numbers" aria-labelledby="numbers-title">

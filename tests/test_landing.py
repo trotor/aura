@@ -142,3 +142,32 @@ def test_mallipohjassa_ei_ole_safe_suodatinta() -> None:
     from aura.web.app import TEMPLATES_DIR
 
     assert "| safe" not in (TEMPLATES_DIR / "index.html").read_text()
+
+
+@pytest.mark.parametrize("path,lang", [("/", "fi"), ("/en", "en"), ("/sv", "sv")])
+def test_tekija_ja_mahdollistaja_nakyvat(client: TestClient, path: str, lang: str) -> None:
+    """Tekijä, yhteystieto ja Futuai projektin mahdollistajana kaikilla kielillä.
+
+    Tekijä kuuluu projektiin, ei instanssiin, joten se näkyy myös omalla
+    koneella ajettavassa avoimessa versiossa.
+    """
+    body = client.get(path).text
+    assert "Tero Rönkkö" in body
+    assert 'href="mailto:tero@futuai.fi"' in body
+    assert "Futuai Oy" in body
+    assert TEXTS[lang]["author_title"] in body
+
+
+@pytest.mark.parametrize("path,lang", [("/", "fi"), ("/en", "en"), ("/sv", "sv")])
+def test_oma_data_ohjaa_githubiin(client: TestClient, path: str, lang: str) -> None:
+    body = client.get(path).text
+    assert TEXTS[lang]["own_title"] in body
+    section = body.split('id="own-title"')[1].split("</section>")[0]
+    assert 'href="https://github.com/trotor/aura"' in section
+    assert "mailto:" not in section
+
+
+def test_llms_txt_kertoo_tekijan(client: TestClient) -> None:
+    text = client.get("/llms.txt").text
+    assert "Tero Rönkkö" in text
+    assert "tero@futuai.fi" in text
