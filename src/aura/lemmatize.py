@@ -82,6 +82,16 @@ def tokenize(text: str) -> list[str]:
 
 _lemma_cache: dict[str, str] = {}
 
+#: Taivutusmuodot jotka simplemma tulkitsee väärän sanan muodoiksi.
+#: Lista on lyhyt ja jokainen rivi on mitattu virhe, ei arvaus: ``puiden``
+#: → ``puida`` (verbi "puida") teki kyselystä "puiden keskikorkeus" sellaisen,
+#: joka ei osunut yhteenkään puuaineistoon (8.10.2026).
+LEMMA_OVERRIDES: dict[str, str] = {
+    "puiden": "puu",
+    "puuta": "puu",
+    "puista": "puu",
+}
+
 
 def lemma(token: str) -> str:
     """Palauta yhden tokenin perusmuoto.
@@ -91,6 +101,10 @@ def lemma(token: str) -> str:
     """
     if not LEMMATIZER_AVAILABLE:
         return token
+
+    override = LEMMA_OVERRIDES.get(token)
+    if override is not None:
+        return override
 
     cached = _lemma_cache.get(token)
     if cached is not None:

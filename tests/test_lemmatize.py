@@ -283,3 +283,23 @@ class TestIndexLemmas:
 
         results = search_datasets(conn, "pyörätiet")
         assert [row["id"] for row in results] == ["ds-1"]
+
+
+class TestPoikkeukset:
+    """simplemma tulkitsee osan taivutusmuodoista väärän sanan muodoiksi.
+
+    ``puiden`` → ``puida`` (verbi "puida") teki kyselystä "puiden
+    keskikorkeus" sellaisen, joka ei osu yhteenkään puuaineistoon.
+    """
+
+    @pytest.mark.parametrize("token", ["puiden", "puuta", "puista"])
+    def test_puun_taivutusmuodot(self, token: str) -> None:
+        if not LEMMATIZER_AVAILABLE:
+            pytest.skip("simplemma puuttuu")
+        assert lemma(token) == "puu"
+
+    def test_oikeat_tulokset_ennallaan(self) -> None:
+        if not LEMMATIZER_AVAILABLE:
+            pytest.skip("simplemma puuttuu")
+        assert lemma("puita") == "puu"
+        assert lemma("metsien") == "metsä"
