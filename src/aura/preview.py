@@ -21,6 +21,7 @@ import httpx
 
 from aura.constants import PREVIEWABLE_FORMATS, user_agent
 from aura.formats import resource_format
+from aura.net import DEFAULT_LIMIT, public_client
 from aura.wfs import fetch_features
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,9 @@ async def _asiakas(
     if client is not None:
         yield client
         return
-    async with httpx.AsyncClient(
+    # Ei kokorajaa otsakkeen perusteella: CSV luetaan virtana ja vain alku,
+    # joten iso tiedosto on sallittu. Rajat ovat lukukohdissa.
+    async with public_client(
         timeout=_HTTP_TIMEOUT,
         headers={"User-Agent": user_agent()},
     ) as oma:
@@ -145,10 +148,16 @@ async def _preview_json(
 ) -> str:
     """Esikatsele JSON/GeoJSON-resurssi."""
     async with _asiakas(client) as client_:
-        resp = await client_.get(url, follow_redirects=True)
-        resp.raise_for_status()
-        # Rajoita luetun vastauksen kokoa
-        text = resp.text[:_MAX_DOWNLOAD_BYTES]
+        # Luetaan virtana ja katkaistaan rajaan: koko vastausta ei ladata
+        # muistiin ennen rajausta, kuten aiemmin ``resp.text[:raja]``.
+        async with client_.stream("GET", url, follow_redirects=True) as resp:
+            resp.raise_for_status()
+            content = b""
+            async for chunk in resp.aiter_bytes():
+                content += chunk
+                if len(content) >= _MAX_DOWNLOAD_BYTES:
+                    break
+        text = content[:_MAX_DOWNLOAD_BYTES].decode(resp.encoding or "utf-8", "replace")
 
     try:
         data = json.loads(text)
@@ -215,7 +224,8 @@ async def _preview_pxweb(
 
     # Hae metadata API:sta
     try:
-        async with httpx.AsyncClient(
+        async with public_client(
+        max_content_length=DEFAULT_LIMIT,
             timeout=_HTTP_TIMEOUT,
             headers={"User-Agent": user_agent()},
         ) as client:
@@ -289,7 +299,8 @@ async def _preview_odata(url: str, max_rows: int) -> str:
     sep = "&" if "?" in url else "?"
     query_url = f"{url}{sep}$top={max_rows}"
     try:
-        async with httpx.AsyncClient(
+        async with public_client(
+        max_content_length=DEFAULT_LIMIT,
             timeout=_HTTP_TIMEOUT,
             headers={"User-Agent": user_agent()},
         ) as client:

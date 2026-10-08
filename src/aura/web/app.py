@@ -50,6 +50,19 @@ def get_db(request: Request) -> sqlite3.Connection:
     return _db_conn
 
 
+def safe_href(url: object) -> str:
+    """Linkin osoite vain jos se on http(s); muuten ``#``.
+
+    Katalogin osoitteet tulevat kolmansilta osapuolilta. Jinja escapaa
+    merkit mutta ei skeemaa, joten ``javascript:``-osoite päätyisi
+    sellaisenaan klikattavaksi linkiksi.
+    """
+    text = str(url or "").strip()
+    if text.lower().startswith(("http://", "https://")):
+        return text
+    return "#"
+
+
 def create_app(lifespan: object = lifespan) -> FastAPI:
     """Luo ja konfiguroi FastAPI-sovellus.
 
@@ -71,6 +84,7 @@ def create_app(lifespan: object = lifespan) -> FastAPI:
     templates.env.filters["format_date"] = lambda v: format_date(v)
     templates.env.filters["format_date_time"] = lambda v: format_date(v, include_time=True)
     templates.env.filters["parse_json_list"] = lambda v: parse_json_list(v)
+    templates.env.filters["safe_href"] = safe_href
 
     # Staattinen palvelu
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

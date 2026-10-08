@@ -14,6 +14,7 @@ from fastmcp import Context
 import aura.server as _server
 from aura.constants import user_agent
 from aura.database import get_dataset, get_latest_enrichments, get_source
+from aura.net import DEFAULT_LIMIT, public_client
 from aura.preview import (
     _format_md_table,
     _pick_resource,
@@ -242,7 +243,8 @@ async def _handle_pxweb(
 
     # Hae metadata
     try:
-        async with httpx.AsyncClient(
+        async with public_client(
+        max_content_length=DEFAULT_LIMIT,
             timeout=_HTTP_TIMEOUT,
             headers={"User-Agent": user_agent()},
         ) as client:
@@ -312,7 +314,8 @@ async def _handle_pxweb(
     }
 
     try:
-        async with httpx.AsyncClient(
+        async with public_client(
+        max_content_length=DEFAULT_LIMIT,
             timeout=_HTTP_TIMEOUT,
             headers={"User-Agent": user_agent()},
         ) as client:
@@ -365,7 +368,8 @@ async def _query_odata(
     sep = "&" if "?" in url else "?"
     query_url = url + sep + "&".join(f"{k}={v}" for k, v in params.items())
 
-    async with httpx.AsyncClient(
+    async with public_client(
+        max_content_length=DEFAULT_LIMIT,
         timeout=_HTTP_TIMEOUT,
         headers={"User-Agent": user_agent()},
     ) as client:
@@ -464,7 +468,8 @@ async def _query_csv(
     max_rows: int,
 ) -> str:
     """Lataa CSV ja suodata client-side."""
-    async with httpx.AsyncClient(
+    async with public_client(
+        max_content_length=DEFAULT_LIMIT,
         timeout=_HTTP_TIMEOUT,
         headers={"User-Agent": user_agent()},
     ) as client:
@@ -522,7 +527,8 @@ async def _query_json(
     max_rows: int,
 ) -> str:
     """Lataa JSON ja suodata client-side."""
-    async with httpx.AsyncClient(
+    async with public_client(
+        max_content_length=DEFAULT_LIMIT,
         timeout=_HTTP_TIMEOUT,
         headers={"User-Agent": user_agent()},
     ) as client:

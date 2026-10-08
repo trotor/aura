@@ -53,7 +53,7 @@
 
 {% if viewer_type == "info" %}
 <article>
-    <p><strong>{{ fmt }}-palvelu:</strong> <a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></p>
+    <p><strong>{{ fmt }}-palvelu:</strong> <a href="{{ url | safe_href }}" target="_blank" rel="noopener">{{ url }}</a></p>
 </article>
 {% else %}
 <div class="viewer-controls" id="viewer-controls">

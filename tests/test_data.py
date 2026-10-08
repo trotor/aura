@@ -6,6 +6,7 @@ import json
 import sqlite3
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from aura.database import init_db, upsert_dataset, upsert_source
@@ -104,18 +105,16 @@ class TestQueryDataRouting:
         ])
 
         data = [{"nimi": "Helsinki"}, {"nimi": "Tampere"}]
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.text = json.dumps(data)
 
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=data)
+
+        def mock_client(**_: object) -> httpx.AsyncClient:
+            return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
         with (
             patch("aura.tools.data._server._get_conn", return_value=conn),
-            patch("aura.preview.httpx.AsyncClient", return_value=mock_client),
+            patch("aura.preview.public_client", mock_client),
         ):
             result = await query_data("test-1")
 

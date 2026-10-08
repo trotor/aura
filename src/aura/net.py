@@ -32,11 +32,16 @@ import httpx
 DEFAULT_LIMIT = 20 * 1024 * 1024
 
 
-class BlockedURLError(ValueError):
-    """Osoitetta ei saa hakea: väärä skeema tai ei-julkinen kohde."""
+class BlockedURLError(httpx.RequestError):
+    """Osoitetta ei saa hakea: väärä skeema tai ei-julkinen kohde.
+
+    ``httpx.RequestError``in aliluokka, jotta olemassa oleva verkkovirheiden
+    käsittely (``except httpx.HTTPError``) kohtelee sitä kuten mitä tahansa
+    tavoittamatonta palvelua eikä työkalu kaadu.
+    """
 
 
-class ResponseTooLargeError(ValueError):
+class ResponseTooLargeError(httpx.RequestError):
     """Vastaus ylitti kokorajan."""
 
 
@@ -48,25 +53,87 @@ async def ensure_public(request: httpx.Request) -> None:
     """
     url = request.url
     if url.scheme not in ("http", "https"):
-        raise BlockedURLError(f"skeema {url.scheme!r} ei ole sallittu")
+        raise BlockedURLError(f"skeema {url.scheme!r} ei ole sallittu", request=request)
     host = url.host
     if not host:
-        raise BlockedURLError("osoitteessa ei ole isäntää")
+        raise BlockedURLError("osoitteessa ei ole isäntää", request=request)
     port = url.port or (443 if url.scheme == "https" else 80)
     try:
         infos = await asyncio.get_running_loop().getaddrinfo(host, port)
     except OSError as exc:
-        raise BlockedURLError(f"isäntää {host} ei voitu selvittää") from exc
+        raise BlockedURLError(f"isäntää {host} ei voitu selvittää", request=request) from exc
     for info in infos:
         address = ipaddress.ip_address(info[4][0])
         if not address.is_global:
-            raise BlockedURLError(f"isäntä {host} ei ole julkisessa verkossa")
+            raise BlockedURLError(f"isäntä {host} ei ole julkisessa verkossa", request=request)
 
 
-def public_client(**kwargs: Any) -> httpx.AsyncClient:
-    """httpx-asiakas joka tarkistaa jokaisen pyynnön ``ensure_public``illa."""
-    hooks = kwargs.pop("event_hooks", {}) or {}
-    hooks = {**hooks, "request": [ensure_public, *hooks.get("request", [])]}
+class _CappedStream(httpx.AsyncByteStream):
+    """Vastausvirta joka keskeytyy, kun luettuja tavuja on yli rajan."""
+
+    def __init__(self, inner: httpx.AsyncByteStream, limit: int, request: httpx.Request) -> None:
+        self._inner = inner
+        self._limit = limit
+        self._request = request
+
+    async def __aiter__(self) -> Any:
+        size = 0
+        async for chunk in self._inner:
+            size += len(chunk)
+            if size > self._limit:
+                raise ResponseTooLargeError(
+                    f"vastaus ylitti {self._limit} tavua", request=self._request
+                )
+            yield chunk
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+class _CappedTransport(httpx.AsyncBaseTransport):
+    """Kuljetus joka rajaa jokaisen vastauksen **luetut** tavut.
+
+    ``Content-Length``-otsakkeeseen ei voi luottaa: chunked-vastauksella sitä
+    ei ole lainkaan (katselmointi 8.10.2026). Raja koskee siksi itse virtaa,
+    ja ilmoitettu liian iso koko hylätään jo ennen lukemista.
+    """
+
+    def __init__(self, inner: httpx.AsyncBaseTransport, limit: int) -> None:
+        self._inner = inner
+        self._limit = limit
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        response = await self._inner.handle_async_request(request)
+        declared = response.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > self._limit:
+            await response.aclose()
+            raise ResponseTooLargeError(
+                f"vastaus {declared} tavua ylittää rajan {self._limit}", request=request
+            )
+        stream = response.stream
+        assert isinstance(stream, httpx.AsyncByteStream)
+        response.stream = _CappedStream(stream, self._limit, request)
+        return response
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+def public_client(
+    *, max_content_length: int | None = None, **kwargs: Any
+) -> httpx.AsyncClient:
+    """httpx-asiakas joka tarkistaa jokaisen pyynnön ``ensure_public``illa.
+
+    ``max_content_length`` rajaa jokaisen vastauksen luetut tavut (myös
+    chunked-vastauksilla). Virtana luettavat koodipolut (``read_capped``,
+    ``fetch._download``, CSV-esikatselu) rajaavat itse eivätkä käytä sitä;
+    ne lukevat isosta tiedostosta vain alun.
+    """
+    hooks = dict(kwargs.pop("event_hooks", {}) or {})
+    hooks["request"] = [ensure_public, *hooks.get("request", [])]
+    if max_content_length is not None:
+        inner = kwargs.pop("transport", None) or httpx.AsyncHTTPTransport()
+        kwargs["transport"] = _CappedTransport(inner, max_content_length)
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)
 
 
@@ -84,6 +151,8 @@ async def read_capped(
         async for chunk in response.aiter_bytes():
             size += len(chunk)
             if size > limit:
-                raise ResponseTooLargeError(f"vastaus ylitti {limit} tavua")
+                raise ResponseTooLargeError(
+                    f"vastaus ylitti {limit} tavua", request=response.request
+                )
             chunks.append(chunk)
     return response, b"".join(chunks)

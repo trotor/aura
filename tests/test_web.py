@@ -477,3 +477,42 @@ class TestKatalogiosoitteenTasmays:
         from aura.web.routes.api import catalog_endpoint
 
         assert catalog_endpoint(conn, url) is None
+
+
+class TestUlkoisenSisallonEscapaus:
+    """Katalogin ja esikatselun sisältö on kolmannen osapuolen dataa (XSS 8.10.2026)."""
+
+    def test_javascript_osoite_ei_paase_linkiksi(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        test_db.execute(
+            "INSERT INTO resources (id, dataset_id, name, format, url) VALUES (?, ?, ?, ?, ?)",
+            ("res-js", "test-ds-1", "Paha", "CSV", "javascript:alert(1)"),
+        )
+        test_db.commit()
+        body = client.get("/dataset/test-ds-1").text
+        assert 'href="javascript:' not in body
+        assert "Paha" in body
+
+    def test_esikatselu_ei_kayta_htmx_innerhtml_vaihtoa(self, client: TestClient) -> None:
+        """htmx sijoitti JSON-vastauksen raakana innerHTML:ään ennen muotoilua."""
+        body = client.get("/dataset/test-ds-1").text
+        assert 'hx-get="/api/preview' not in body
+        assert 'data-preview="res-1"' in body
+
+    @pytest.mark.parametrize(
+        ("url", "expected"),
+        [
+            ("https://a.fi/x", "https://a.fi/x"),
+            ("http://a.fi/x", "http://a.fi/x"),
+            ("javascript:alert(1)", "#"),
+            ("  JavaScript:alert(1)", "#"),
+            ("data:text/html,<b>", "#"),
+            ("", "#"),
+            (None, "#"),
+        ],
+    )
+    def test_safe_href(self, url: str | None, expected: str) -> None:
+        from aura.web.app import safe_href
+
+        assert safe_href(url) == expected
