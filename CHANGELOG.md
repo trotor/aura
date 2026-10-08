@@ -15,6 +15,13 @@ datasettiin. Lisäksi korjattiin 7 544 kuollutta resurssilinkkiä — noin
 neljännes koko katalogista.
 
 ### Added
+- **Etusivu ja README näyteikkunaksi kolmella kielellä**: `/`, `/en` ja
+  `/sv` sekä `README.md`, `README.en.md` ja `README.sv.md`. Oikeat
+  esimerkkikysymykset vastauksineen ja lähteineen, MCP-liittäminen
+  yhdellä komennolla, osiot agentille ja ihmiselle, arkkitehtuurikaavio
+  ja Aura Pro -esittely. Tekninen sisältö siirtyi `docs/REFERENCE.md`:hen.
+- **`/llms.txt`**: koneluettava kuvaus palvelusta agentille (endpoint,
+  työkalujen järjestys, käyttöohje).
 - **Nollatuloskirjaus** (`aura.telemetry`, `aura gaps`): mitä haettiin kun
   mitään ei löytynyt. Katalogin aukkoja on tähän asti arvattu käsin — tämän
   julkaisun Finavia, Traficomin tilastot ja Finlex löytyivät siksi että joku
@@ -141,6 +148,7 @@ neljännes koko katalogista.
   alussa tulostettu häviää vieritykseen
 
 ### Fixed
+- Kartan ääkköset (kahdesti koodatut merkit) ja Leafletin zoomausnapit.
 - **Taulukkoformaatit puuttuivat koneluettavien listalta**: 402 datasettiä sai
   `format_score` 40/100 samalla kun WMS-kuvapalvelu sai täydet sata, vaikka
   openpyxl lukee XLSX:n ja OOXML on ISO/IEC 29500 -standardi. Lista ohjasi

@@ -50,7 +50,7 @@
                     content.innerHTML = html || "<p>Ei datasetteja.</p>";
                 })
                 .catch(function() {
-                    content.innerHTML = "<p>Haku epÃ¤onnistui.</p>";
+                    content.innerHTML = "<p>Haku epäonnistui.</p>";
                 });
         });
     }
@@ -72,7 +72,7 @@
             map.fitBounds(geojsonLayer.getBounds());
         }
     }).catch(function(err) {
-        console.error("Karttadatan lataus epÃ¤onnistui:", err);
+        console.error("Karttadatan lataus epäonnistui:", err);
     });
 
     // Legenda
