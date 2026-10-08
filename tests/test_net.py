@@ -125,3 +125,44 @@ async def test_kokoraja_ei_esta_pientaa_vastausta() -> None:
         transport=httpx.MockTransport(handler), max_content_length=10_000
     ) as client:
         assert (await client.get("https://93.184.215.14/")).text == "ok"
+
+
+@pytest.mark.anyio
+async def test_purkupommi_keskeytyy_puretun_koon_mukaan() -> None:
+    """Pieni gzip voi purkautua valtavaksi; raja koskee purettua kokoa (katselmointi)."""
+    import gzip
+
+    pommi = gzip.compress(b"\0" * 5_000_000)
+    assert len(pommi) < 20_000
+
+    async def virta():
+        # Oikea yhteys antaa rungon virtana; bytes-runko luettaisiin ja
+        # purettaisiin jo Response-olion luonnissa, ohi kuljetuksen.
+        for i in range(0, len(pommi), 4096):
+            yield pommi[i : i + 4096]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=virta(), headers={"content-encoding": "gzip"})
+
+    async with public_client(
+        transport=httpx.MockTransport(handler), max_content_length=100_000
+    ) as client:
+        with pytest.raises(ResponseTooLargeError):
+            await client.get("https://93.184.215.14/pommi")
+
+
+@pytest.mark.anyio
+async def test_tavallinen_gzip_puretaan() -> None:
+    import gzip
+
+    async def virta():
+        yield gzip.compress(b'{"ok": true}')
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["accept-encoding"] == "gzip, deflate"
+        return httpx.Response(200, content=virta(), headers={"content-encoding": "gzip"})
+
+    async with public_client(
+        transport=httpx.MockTransport(handler), max_content_length=100_000
+    ) as client:
+        assert (await client.get("https://93.184.215.14/")).json() == {"ok": True}
