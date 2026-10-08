@@ -189,21 +189,20 @@ class TestPreviewCsv:
 class TestPreviewJson:
     """Testit JSON-esikatselulle."""
 
+    @staticmethod
+    def _client(payload: object) -> httpx.AsyncClient:
+        """Oikea httpx-asiakas mock-kuljetuksella: testaa virtaluvun polun."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=payload)
+
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
     @pytest.mark.anyio
     async def test_json_array(self):
         data = [{"nimi": "Helsinki", "arvo": 100}, {"nimi": "Tampere", "arvo": 200}]
-
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.text = json.dumps(data)
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
-            result = await _preview_json("https://example.com/data.json", 10)
+        async with self._client(data) as client:
+            result = await _preview_json("https://example.com/data.json", 10, client)
 
         assert "Helsinki" in result
         assert "Tampere" in result
@@ -216,21 +215,32 @@ class TestPreviewJson:
                 {"type": "Feature", "properties": {"nimi": "Helsinki"}, "geometry": {}},
             ],
         }
-
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.text = json.dumps(data)
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("aura.preview.httpx.AsyncClient", return_value=mock_client):
-            result = await _preview_json("https://example.com/data.geojson", 10)
+        async with self._client(data) as client:
+            result = await _preview_json("https://example.com/data.geojson", 10, client)
 
         assert "GeoJSON" in result
         assert "Helsinki" in result
+
+    @pytest.mark.anyio
+    async def test_iso_vastaus_katkaistaan_lukematta_kokonaan(self):
+        """Raja koskee luettuja tavuja, ei vasta muistiin ladattua tekstiä."""
+        from aura.preview import _MAX_DOWNLOAD_BYTES
+
+        luettu = 0
+
+        async def body():
+            nonlocal luettu
+            for _ in range(100):
+                luettu += 1024 * 1024
+                yield b"x" * (1024 * 1024)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=body())
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            result = await _preview_json("https://example.com/iso.json", 10, client)
+        assert "ei ole kelvollista JSON" in result
+        assert luettu <= _MAX_DOWNLOAD_BYTES + 2 * 1024 * 1024
 
 
 class TestPreviewPxweb:

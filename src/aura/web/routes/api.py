@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from aura.net import public_client, read_capped
+from aura.net import DEFAULT_LIMIT, public_client, read_capped
 from aura.web.app import get_db
 
 logger = logging.getLogger(__name__)
@@ -374,7 +374,7 @@ async def preview_resource(
     # JSON/API -esikatselu
     if fmt in ("JSON", "API", "GEOJSON"):
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with public_client(timeout=15.0, max_content_length=DEFAULT_LIMIT) as client:
                 resp = await client.get(url, follow_redirects=True)
                 resp.raise_for_status()
                 text = resp.text
@@ -413,7 +413,7 @@ async def preview_resource(
     # CSV-esikatselu
     if fmt == "CSV":
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with public_client(timeout=15.0, max_content_length=DEFAULT_LIMIT) as client:
                 async with client.stream("GET", url, follow_redirects=True) as resp:
                     resp.raise_for_status()
                     content = b""

@@ -32,11 +32,16 @@ import httpx
 DEFAULT_LIMIT = 20 * 1024 * 1024
 
 
-class BlockedURLError(ValueError):
-    """Osoitetta ei saa hakea: väärä skeema tai ei-julkinen kohde."""
+class BlockedURLError(httpx.RequestError):
+    """Osoitetta ei saa hakea: väärä skeema tai ei-julkinen kohde.
+
+    ``httpx.RequestError``in aliluokka, jotta olemassa oleva verkkovirheiden
+    käsittely (``except httpx.HTTPError``) kohtelee sitä kuten mitä tahansa
+    tavoittamatonta palvelua eikä työkalu kaadu.
+    """
 
 
-class ResponseTooLargeError(ValueError):
+class ResponseTooLargeError(httpx.RequestError):
     """Vastaus ylitti kokorajan."""
 
 
@@ -48,25 +53,45 @@ async def ensure_public(request: httpx.Request) -> None:
     """
     url = request.url
     if url.scheme not in ("http", "https"):
-        raise BlockedURLError(f"skeema {url.scheme!r} ei ole sallittu")
+        raise BlockedURLError(f"skeema {url.scheme!r} ei ole sallittu", request=request)
     host = url.host
     if not host:
-        raise BlockedURLError("osoitteessa ei ole isäntää")
+        raise BlockedURLError("osoitteessa ei ole isäntää", request=request)
     port = url.port or (443 if url.scheme == "https" else 80)
     try:
         infos = await asyncio.get_running_loop().getaddrinfo(host, port)
     except OSError as exc:
-        raise BlockedURLError(f"isäntää {host} ei voitu selvittää") from exc
+        raise BlockedURLError(f"isäntää {host} ei voitu selvittää", request=request) from exc
     for info in infos:
         address = ipaddress.ip_address(info[4][0])
         if not address.is_global:
-            raise BlockedURLError(f"isäntä {host} ei ole julkisessa verkossa")
+            raise BlockedURLError(f"isäntä {host} ei ole julkisessa verkossa", request=request)
 
 
-def public_client(**kwargs: Any) -> httpx.AsyncClient:
-    """httpx-asiakas joka tarkistaa jokaisen pyynnön ``ensure_public``illa."""
-    hooks = kwargs.pop("event_hooks", {}) or {}
-    hooks = {**hooks, "request": [ensure_public, *hooks.get("request", [])]}
+def public_client(
+    *, max_content_length: int | None = None, **kwargs: Any
+) -> httpx.AsyncClient:
+    """httpx-asiakas joka tarkistaa jokaisen pyynnön ``ensure_public``illa.
+
+    ``max_content_length`` hylkää vastauksen, jonka ilmoitettu koko ylittää
+    rajan, ennen kuin runkoa luetaan. Virtana luettavat koodipolut
+    (``read_capped``, ``fetch._download``) rajaavat itse eivätkä tarvitse
+    sitä; ne lukevat isosta tiedostosta vain alun.
+    """
+    hooks = dict(kwargs.pop("event_hooks", {}) or {})
+    hooks["request"] = [ensure_public, *hooks.get("request", [])]
+    if max_content_length is not None:
+        limit = max_content_length
+
+        async def check_size(response: httpx.Response) -> None:
+            declared = response.headers.get("content-length", "")
+            if declared.isdigit() and int(declared) > limit:
+                raise ResponseTooLargeError(
+                    f"vastaus {declared} tavua ylittää rajan {limit}",
+                    request=response.request,
+                )
+
+        hooks["response"] = [check_size, *hooks.get("response", [])]
     return httpx.AsyncClient(event_hooks=hooks, **kwargs)
 
 
@@ -84,6 +109,8 @@ async def read_capped(
         async for chunk in response.aiter_bytes():
             size += len(chunk)
             if size > limit:
-                raise ResponseTooLargeError(f"vastaus ylitti {limit} tavua")
+                raise ResponseTooLargeError(
+                    f"vastaus ylitti {limit} tavua", request=response.request
+                )
             chunks.append(chunk)
     return response, b"".join(chunks)

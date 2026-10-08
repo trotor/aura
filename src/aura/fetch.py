@@ -39,6 +39,7 @@ from typing import Any
 import httpx
 
 from aura.constants import user_agent
+from aura.net import public_client
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,9 @@ class Table:
 
 
 def _client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(
+    # Osoitteet tulevat katalogista eli kolmansilta osapuolilta, ja niiden
+    # uudelleenohjaukset voivat osoittaa minne tahansa: vain julkiset kohteet.
+    return public_client(
         timeout=TIMEOUT, headers={"User-Agent": user_agent()}, follow_redirects=True
     )
 

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Testit lukevat vain koodin; token ei tarvitse kirjoitusoikeuksia.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

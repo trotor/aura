@@ -30,6 +30,7 @@ from typing import Any
 import httpx
 
 from aura.constants import user_agent
+from aura.net import DEFAULT_LIMIT, public_client
 
 logger = logging.getLogger(__name__)
 
@@ -389,7 +390,8 @@ async def fetch_features(
         params["CQL_FILTER"] = cql_filter
 
     layer_in_url = type_name_from_url(url) is not None
-    async with httpx.AsyncClient(
+    async with public_client(
+        max_content_length=DEFAULT_LIMIT,
         timeout=timeout, headers={"User-Agent": user_agent()}
     ) as client:
         resp = await client.get(base_url, params=params, follow_redirects=True)

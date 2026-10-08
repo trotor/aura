@@ -76,3 +76,23 @@ async def test_kokoraja() -> None:
         resp, body = await read_capped(client, "https://93.184.215.14/", limit=10_000)
         assert resp.status_code == 200
         assert len(body) == 5000
+
+
+@pytest.mark.anyio
+async def test_query_source_ja_esikatselu_kayttavat_suojattua_asiakasta() -> None:
+    """Katalogin osoite voi osoittaa sisäverkkoon (vanhentunut verkkotunnus)."""
+    from aura import fetch, preview
+
+    async with fetch._client() as client:
+        with pytest.raises(BlockedURLError):
+            await client.get("http://127.0.0.1:9/data.csv")
+    async with preview._asiakas(None) as client:
+        with pytest.raises(BlockedURLError):
+            await client.get("http://169.254.169.254/latest/meta-data")
+
+
+@pytest.mark.anyio
+async def test_estetty_osoite_on_httpx_virhe() -> None:
+    """Olemassa oleva ``except httpx.HTTPError`` käsittelee estetyn osoitteen."""
+    with pytest.raises(httpx.HTTPError):
+        await ensure_public(httpx.Request("GET", "http://10.0.0.1/"))
