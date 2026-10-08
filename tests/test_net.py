@@ -166,3 +166,36 @@ async def test_tavallinen_gzip_puretaan() -> None:
         transport=httpx.MockTransport(handler), max_content_length=100_000
     ) as client:
         assert (await client.get("https://93.184.215.14/")).json() == {"ok": True}
+
+
+@pytest.mark.parametrize("encoding", ["gzip, gzip", "br", "gzip, br", "zstd", "compress"])
+@pytest.mark.anyio
+async def test_tuntematon_tai_moninkertainen_pakkaus_hylataan(encoding: str) -> None:
+    """Raja pätee vain jos purku tehdään itse; muuten httpx purkaisi rajan ohi."""
+    import gzip
+
+    async def virta():
+        yield gzip.compress(gzip.compress(b"\0" * 1000))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=virta(), headers={"content-encoding": encoding})
+
+    async with public_client(
+        transport=httpx.MockTransport(handler), max_content_length=100_000
+    ) as client:
+        with pytest.raises(httpx.DecodingError):
+            await client.get("https://93.184.215.14/")
+
+
+@pytest.mark.anyio
+async def test_identity_kelpaa() -> None:
+    async def virta():
+        yield b"ok"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=virta(), headers={"content-encoding": "identity"})
+
+    async with public_client(
+        transport=httpx.MockTransport(handler), max_content_length=100_000
+    ) as client:
+        assert (await client.get("https://93.184.215.14/")).text == "ok"
