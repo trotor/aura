@@ -13,7 +13,16 @@ from markupsafe import Markup, escape
 from aura.database import get_stats
 from aura.instance import describe_instance
 from aura.web.app import get_db
-from aura.web.i18n import LANGUAGES, PRO_URL, TEXTS, format_number, landing_path
+from aura.web.i18n import (
+    AUTHOR_EMAIL,
+    AUTHOR_NAME,
+    GITHUB_URL,
+    LANGUAGES,
+    PRO_URL,
+    TEXTS,
+    format_number,
+    landing_path,
+)
 
 router = APIRouter()
 
@@ -64,6 +73,8 @@ def landing_html(t: dict[str, Any], base_url: str) -> dict[str, Any]:
     """
     pro_host = PRO_URL.removeprefix("https://")
     llms = Markup('<a href="/llms.txt"><code>/llms.txt</code></a>')
+    github = Markup('<a href="{}">{}</a>').format(GITHUB_URL, GITHUB_URL.removeprefix("https://"))
+    email = Markup('<a href="mailto:{0}">{0}</a>').format(AUTHOR_EMAIL)
     return {
         "connect_quality": escape(t["connect_quality"]).format(
             url=Markup("<code>{}</code>").format(base_url + "mcp/laatu")
@@ -72,6 +83,8 @@ def landing_html(t: dict[str, Any], base_url: str) -> dict[str, Any]:
         "pro_intro_elsewhere": escape(t["pro_intro_elsewhere"]).format(
             url=Markup('<a href="{}">{}</a>').format(PRO_URL, pro_host)
         ),
+        "own_cta": escape(t["own_cta"]).format(github=github),
+        "author_contact": escape(t["author_contact"]).format(email=email, github=github),
     }
 
 
@@ -191,7 +204,9 @@ async def llms_txt(request: Request) -> str:
         "",
         "## Optional",
         "",
-        "- Source code (MIT): https://github.com/trotor/aura",
+        f"- Author: {AUTHOR_NAME} ({AUTHOR_EMAIL}). Public service made possible by Futuai Oy.",
+        f"- Source code (MIT): {GITHUB_URL}. The same harvester + catalogue + MCP "
+        "structure can be pointed at an organisation's own data sources.",
         f"- Human-readable pages: {base} (fi), {base}en, {base}sv",
     ]
     return "\n".join(lines) + "\n"

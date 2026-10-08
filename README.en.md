@@ -99,6 +99,12 @@ Full lists: [dataset catalogue](docs/CATALOG.md) and [source details](docs/SOURC
 
 The service is operated by Futuai Oy. The Pro layer’s code is not in this repository. Everything in this repository is MIT licensed and works on its own.
 
+## The same approach for your own data
+
+Aura is not tied to open data. The same structure works for an organisation’s own databases, APIs and spatial data services: a harvester per source, one metadata catalogue, search that understands Finnish, and MCP tools that cite the source of every number. An AI assistant can then find the organisation’s own data the way it now finds a Statistics Finland table.
+
+Harvesters exist for CKAN, PxWeb, WFS, WMS, ArcGIS, OData, OpenAPI and GTFS sources, and a new source is usually one file ([guide](CONTRIBUTING.md)). The quality profile shows which datasets lack a description, a licence or a working link. The code is MIT licensed, and questions and ideas are welcome [on GitHub](https://github.com/trotor/aura/issues).
+
 ## Run it yourself
 
 The database ships with the repository ([Git LFS](https://git-lfs.github.com/)), so the datasets are there right after cloning.
@@ -126,6 +132,10 @@ Your own instance is the full version: the database is writable and every tool, 
 [Technical reference](docs/REFERENCE.md) | [Setup](docs/MCP_SETUP.md) | [Dataset catalogue](docs/CATALOG.md) | [Sources](docs/SOURCES.md) | [Formats](docs/formats.md) | [What’s new](docs/WHATSNEW.md) | [Changelog](CHANGELOG.md)
 
 *Aura* is Finnish for a plough, which turns over what lies hidden under the surface. It is also a halo of light that makes visible what would otherwise stay in the dark.
+
+## Author
+
+Aura is built by Tero Rönkkö ([tero@futuai.fi](mailto:tero@futuai.fi)). The project is made possible by [Futuai Oy](https://aura.futuai.fi), which provides and maintains the public service so that anyone can connect Aura to their assistant without installing anything.
 
 ## Licence
 

@@ -26,6 +26,11 @@ LANGUAGES: tuple[str, ...] = ("fi", "en", "sv")
 #: Julkisen, laajennetun instanssin osoite. Avoin sivu kertoo siitä.
 PRO_URL = "https://aura.futuai.fi"
 
+#: Projektin lähdekoodi ja tekijän yhteystieto.
+GITHUB_URL = "https://github.com/trotor/aura"
+AUTHOR_NAME = "Tero Rönkkö"
+AUTHOR_EMAIL = "tero@futuai.fi"
+
 
 def landing_path(lang: str) -> str:
     """Kielen etusivun polku: ``/`` suomelle, muuten ``/<kieli>``."""
@@ -212,6 +217,30 @@ TEXTS: dict[str, dict[str, Any]] = {
             "alueet, aineistot ja tunnusluvut sekä työkalujen käyttömäärät "
             "päivittäin. Käyttäjää, istuntoa tai IP-osoitetta ei tallenneta."
         ),
+        "own_title": "Sama tekniikka omalle datalle",
+        "own_body": [
+            "Aura ei ole sidottu avoimeen dataan. Sama rakenne toimii myös "
+            "organisaation omille tietokannoille, rajapinnoille ja "
+            "paikkatietopalveluille: keräin lähdettä kohden, yksi "
+            "metatietohakemisto, suomea ymmärtävä haku ja MCP-työkalut, jotka "
+            "kertovat jokaisen luvun lähteen. Silloin tekoälyavustaja löytää "
+            "organisaation oman datan samalla tavalla kuin se nyt löytää "
+            "Tilastokeskuksen taulun.",
+            "Valmiita keräimiä on CKAN-, PxWeb-, WFS-, WMS-, ArcGIS-, OData-, "
+            "OpenAPI- ja GTFS-lähteille, ja uusi lähde on yleensä yksi "
+            "tiedosto. Laatuprofiili kertoo samalla, mistä aineistoista "
+            "puuttuu kuvaus, lisenssi tai toimiva linkki.",
+        ],
+        "own_cta": (
+            "Koodi, ohjeet uuden keräimen tekemiseen ja keskustelu ovat GitHubissa: {github}."
+        ),
+        "author_title": "Tekijä",
+        "author_body": (
+            "Auran on rakentanut Tero Rönkkö. Projektin on mahdollistanut "
+            "Futuai Oy, joka tarjoaa julkisen palvelun ja sen ylläpidon, jotta "
+            "kuka tahansa voi liittää Auran avustajaansa ilman omaa asennusta."
+        ),
+        "author_contact": "Yhteys: {email}. Lähdekoodi: {github}.",
         "numbers_title": "Hakemisto lukuina",
         "n_datasets": "aineistoa",
         "n_resources": "resurssia",
@@ -405,6 +434,31 @@ TEXTS: dict[str, dict[str, Any]] = {
             "areas, datasets and indicators, and daily tool usage counts. "
             "No user, session or IP address is stored."
         ),
+        "own_title": "The same approach for your own data",
+        "own_body": [
+            "Aura is not tied to open data. The same structure works for an "
+            "organisation’s own databases, APIs and spatial data services: a "
+            "harvester per source, one metadata catalogue, search that "
+            "understands Finnish, and MCP tools that cite the source of every "
+            "number. An AI assistant can then find the organisation’s own "
+            "data the way it now finds a Statistics Finland table.",
+            "Harvesters exist for CKAN, PxWeb, WFS, WMS, ArcGIS, OData, "
+            "OpenAPI and GTFS sources, and a new source is usually one file. "
+            "The quality profile shows which datasets lack a description, a "
+            "licence or a working link.",
+        ],
+        "own_cta": (
+            "The code, instructions for writing a new harvester and the "
+            "discussion are on GitHub: {github}."
+        ),
+        "author_title": "Author",
+        "author_body": (
+            "Aura is built by Tero Rönkkö. The project is made possible by "
+            "Futuai Oy, which provides and maintains the public service so "
+            "that anyone can connect Aura to their assistant without "
+            "installing anything."
+        ),
+        "author_contact": "Contact: {email}. Source code: {github}.",
         "numbers_title": "The catalogue in numbers",
         "n_datasets": "datasets",
         "n_resources": "resources",
@@ -598,6 +652,31 @@ TEXTS: dict[str, dict[str, Any]] = {
             "datamängder och nyckeltal samt verktygens användning per dag. "
             "Användare, session eller IP-adress sparas inte."
         ),
+        "own_title": "Samma teknik för egen data",
+        "own_body": [
+            "Aura är inte bunden till öppna data. Samma struktur fungerar för "
+            "en organisations egna databaser, gränssnitt och geodatatjänster: "
+            "en insamlare per källa, en metadatakatalog, sökning som förstår "
+            "finska och MCP-verktyg som anger källan till varje siffra. Då "
+            "hittar AI-assistenten organisationens egna data på samma sätt som "
+            "den nu hittar en tabell från Statistikcentralen.",
+            "Det finns insamlare för CKAN, PxWeb, WFS, WMS, ArcGIS, OData, "
+            "OpenAPI och GTFS, och en ny källa är oftast en fil. "
+            "Kvalitetsprofilen visar vilka datamängder som saknar beskrivning, "
+            "licens eller fungerande länk.",
+        ],
+        "own_cta": (
+            "Koden, instruktioner för att skriva en ny insamlare och "
+            "diskussionen finns på GitHub: {github}."
+        ),
+        "author_title": "Upphovsperson",
+        "author_body": (
+            "Aura är byggd av Tero Rönkkö. Projektet möjliggörs av Futuai Oy, "
+            "som tillhandahåller och underhåller den offentliga tjänsten så "
+            "att vem som helst kan koppla Aura till sin assistent utan egen "
+            "installation."
+        ),
+        "author_contact": "Kontakt: {email}. Källkod: {github}.",
         "numbers_title": "Katalogen i siffror",
         "n_datasets": "datamängder",
         "n_resources": "resurser",
