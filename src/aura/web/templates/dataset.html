@@ -85,7 +85,7 @@
                 <tr>
                     <td>
                         {% if r.url %}
-                        <a href="{{ r.url }}" target="_blank" rel="noopener">
+                        <a href="{{ r.url | safe_href }}" target="_blank" rel="noopener">
                             {{ r.name_fi or r.name or r.url[:60] }}
                         </a>
                         {% else %}
@@ -97,13 +97,10 @@
                     <td>
                         {% set fmt_upper = r.format.upper() if r.format else "" %}
                         {% if fmt_upper in ("JSON", "CSV", "GEOJSON", "API") %}
-                        <button class="outline secondary small"
-                                hx-get="/api/preview/{{ r.id }}"
-                                hx-target="#preview-{{ r.id }}"
-                                hx-indicator="#preview-spinner-{{ r.id }}">
+                        <button class="outline secondary small" type="button"
+                                data-preview="{{ r.id }}">
                             Esikatsele
                         </button>
-                        <span id="preview-spinner-{{ r.id }}" class="htmx-indicator" aria-busy="true"></span>
                         {% endif %}
                         {% if fmt_upper in ("WMS", "WFS", "GEOJSON", "CSV", "JSON", "API", "PXWEB", "PX") %}
                         <a href="/view/{{ r.id }}" class="outline small" role="button">Avaa</a>
@@ -141,22 +138,30 @@
 
 {% block scripts %}
 <script>
-// Esikatselu-vastauksen renderöinti
-document.body.addEventListener("htmx:afterSwap", function(evt) {
-    if (!evt.detail.target.id.startsWith("preview-")) return;
-    try {
-        const data = JSON.parse(evt.detail.target.textContent);
-        evt.detail.target.innerHTML = renderPreview(data);
-    } catch(e) {
-        // Ei JSON — jätä sellaisenaan
-    }
+// Esikatselu. Vastaus on kolmannen osapuolen dataa, joten se haetaan
+// fetch()-kutsulla ja jokainen kenttä escapataan. Aiempi htmx-toteutus
+// sijoitti JSON-vastauksen raakana innerHTML:ään ennen muotoilua (8.10.2026).
+document.querySelectorAll("[data-preview]").forEach(function(button) {
+    button.addEventListener("click", function() {
+        const id = button.dataset.preview;
+        const target = document.getElementById("preview-" + id);
+        if (!target) return;
+        button.setAttribute("aria-busy", "true");
+        fetch("/api/preview/" + encodeURIComponent(id))
+            .then(function(r) { return r.json(); })
+            .then(function(data) { target.innerHTML = renderPreview(data); })
+            .catch(function() { target.textContent = "Esikatselu epäonnistui."; })
+            .finally(function() { button.removeAttribute("aria-busy"); });
+    });
 });
 
 function renderPreview(data) {
-    if (data.type === "error") return `<p class="error">${data.message}</p>`;
-    if (data.type === "empty") return `<p>${data.message}</p>`;
-    if (data.type === "link") return `<a href="${data.url}" target="_blank">${data.format} resurssi</a>`;
-    if (data.type === "ogc") return `<p>${data.message}</p>`;
+    if (data.type === "error") return `<p class="error">${esc(data.message)}</p>`;
+    if (data.type === "empty") return `<p>${esc(data.message)}</p>`;
+    if (data.type === "link") {
+        return `<a href="${escAttr(safeUrl(data.url))}" target="_blank" rel="noopener">${esc(data.format)} resurssi</a>`;
+    }
+    if (data.type === "ogc") return `<p>${esc(data.message)}</p>`;
 
     if (data.type === "csv" && data.headers) {
         let html = '<table class="preview-table"><thead><tr>';
@@ -181,7 +186,7 @@ function renderPreview(data) {
             html += '</tr>';
         });
         html += '</tbody></table>';
-        if (data.total) html += `<small>${data.total} tietuetta yhteensä</small>`;
+        if (data.total) html += `<small>${esc(data.total)} tietuetta yhteensä</small>`;
         return html;
     }
 
@@ -190,6 +195,8 @@ function renderPreview(data) {
     return '<p>Esikatselua ei saatavilla.</p>';
 }
 
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function esc(s) { const d = document.createElement("div"); d.textContent = String(s ?? ""); return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+function safeUrl(u) { const t = String(u || "").trim(); return /^https?:\/\//i.test(t) ? t : "#"; }
 </script>
 {% endblock %}
