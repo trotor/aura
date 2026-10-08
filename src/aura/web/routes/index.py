@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from aura.database import get_stats
 from aura.instance import describe_instance
@@ -51,6 +53,28 @@ def _catalog_numbers(conn: sqlite3.Connection) -> dict[str, int]:
     }
 
 
+def landing_html(t: dict[str, Any], base_url: str) -> dict[str, Any]:
+    """Tekstit joihin upotetaan linkki tai koodi, valmiiksi escapattuna.
+
+    Käännös on tekstiä, mutta osaan siitä tulee HTML-elementti (osoite
+    ``<code>``-tagissa, linkki). ``base_url`` tulee pyynnön Host-
+    otsakkeesta eli käyttäjältä, joten sitä ei saa liittää HTML:ään
+    merkkijonona. ``Markup.format`` escapaa argumentit ja ``escape``
+    itse tekstin; mallipohja tulostaa tuloksen sellaisenaan.
+    """
+    pro_host = PRO_URL.removeprefix("https://")
+    llms = Markup('<a href="/llms.txt"><code>/llms.txt</code></a>')
+    return {
+        "connect_quality": escape(t["connect_quality"]).format(
+            url=Markup("<code>{}</code>").format(base_url + "mcp/laatu")
+        ),
+        "ai_points": [escape(point).format(llms=llms) for point in t["ai_points"]],
+        "pro_intro_elsewhere": escape(t["pro_intro_elsewhere"]).format(
+            url=Markup('<a href="{}">{}</a>').format(PRO_URL, pro_host)
+        ),
+    }
+
+
 def _render_landing(request: Request, lang: str) -> object:
     conn = get_db(request)
     stats = get_stats(conn)
@@ -76,6 +100,7 @@ def _render_landing(request: Request, lang: str) -> object:
             "instance": describe_instance(),
             "lang": lang,
             "t": TEXTS[lang],
+            "html": landing_html(TEXTS[lang], base_url),
             "n": {k: format_number(v, lang) for k, v in numbers.items()},
             "alternates": [
                 (code, TEXTS[code]["lang_name"], landing_path(code)) for code in LANGUAGES

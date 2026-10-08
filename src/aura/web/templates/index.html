@@ -97,14 +97,14 @@
         </div>
     </div>
     <p class="fine">{{ t.connect_note }} Endpoint: <code>{{ base_url }}mcp</code></p>
-    <p class="fine">{{ t.connect_quality.format(url='<code>' ~ base_url ~ 'mcp/laatu</code>') | safe }}</p>
+    <p class="fine">{{ html.connect_quality }}</p>
 </section>
 
 <section class="ai" aria-labelledby="ai-title">
     <h2 id="ai-title">{{ t.ai_title }}</h2>
     <ul class="plain">
-        {% for point in t.ai_points %}
-        <li>{{ point.format(llms='<a href="/llms.txt"><code>/llms.txt</code></a>') | safe }}</li>
+        {% for point in html.ai_points %}
+        <li>{{ point }}</li>
         {% endfor %}
     </ul>
 </section>
@@ -126,7 +126,7 @@
     {% if instance.is_extended %}
     <p class="intro">{{ t.pro_intro_here }}</p>
     {% else %}
-    <p class="intro">{{ t.pro_intro_elsewhere.format(url='<a href="' ~ pro_url ~ '">' ~ pro_url | replace('https://', '') ~ '</a>') | safe }}</p>
+    <p class="intro">{{ html.pro_intro_elsewhere }}</p>
     {% endif %}
     <dl>
         {% for name, text in t.pro_features %}

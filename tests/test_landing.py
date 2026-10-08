@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from aura.asgi import create_asgi_app
 from aura.database import init_db
 from aura.web.i18n import LANGUAGES, TEXTS, format_number
+from aura.web.routes.index import landing_html
 
 
 @pytest.fixture
@@ -120,3 +121,24 @@ def test_hakusivu_pysyy_suomenkielisena(client: TestClient) -> None:
     resp = client.get("/search")
     assert resp.status_code == 200
     assert '<html lang="fi"' in resp.text
+
+
+def test_kopioitava_osoite_escapataan() -> None:
+    """Julkinen osoite tulee pyynnön Host-otsakkeesta, eli käyttäjältä.
+
+    Starlette hylkää nykyään virheellisen Host-otsakkeen, mutta sivu ei saa
+    nojata siihen: osoite upotetaan tekstiin ``<code>``-elementtinä, joten
+    sen on mentävä escapattuna, muuten väärennetty otsake syöttäisi sivulle
+    omaa HTML:ää.
+    """
+    html = landing_html(TEXTS["fi"], 'http://evil"><script>x()</script>/')
+    assert "<script>" not in str(html["connect_quality"])
+    assert "&lt;script&gt;" in str(html["connect_quality"])
+    assert '<a href="/llms.txt">' in str(html["ai_points"][-1])
+
+
+def test_mallipohjassa_ei_ole_safe_suodatinta() -> None:
+    """HTML:n rakentaminen kuuluu landing_html:ään, ei mallipohjaan."""
+    from aura.web.app import TEMPLATES_DIR
+
+    assert "| safe" not in (TEMPLATES_DIR / "index.html").read_text()
