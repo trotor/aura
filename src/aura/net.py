@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import zlib
 from typing import Any
 
 import httpx
@@ -68,34 +69,79 @@ async def ensure_public(request: httpx.Request) -> None:
             raise BlockedURLError(f"isäntä {host} ei ole julkisessa verkossa", request=request)
 
 
-class _CappedStream(httpx.AsyncByteStream):
-    """Vastausvirta joka keskeytyy, kun luettuja tavuja on yli rajan."""
+#: Pakkaukset jotka puretaan itse rajatusti. Muita ei pyydetä.
+_DECODED_ENCODINGS = {"gzip", "x-gzip", "deflate"}
+#: zlib tunnistaa gzip- ja zlib-otsakkeen itse (32 + MAX_WBITS).
+_AUTO_WBITS = 32 + 15
 
-    def __init__(self, inner: httpx.AsyncByteStream, limit: int, request: httpx.Request) -> None:
+
+class _CappedStream(httpx.AsyncByteStream):
+    """Vastausvirta joka keskeytyy, kun tavuja on yli rajan.
+
+    Pakattu vastaus puretaan tässä eikä httpx:ssä, ja raja lasketaan
+    **puretuista** tavuista: 20 kt:n gzip voi purkautua gigatavuiksi
+    (katselmointi 8.10.2026). Purku tehdään rajatuissa paloissa
+    (``max_length``), joten yksikään välivaihe ei ylitä rajaa paljon.
+    """
+
+    def __init__(
+        self,
+        inner: httpx.AsyncByteStream,
+        limit: int,
+        request: httpx.Request,
+        decode: bool,
+    ) -> None:
         self._inner = inner
         self._limit = limit
         self._request = request
+        self._decode = decode
+
+    def _too_large(self) -> ResponseTooLargeError:
+        return ResponseTooLargeError(
+            f"vastaus ylitti {self._limit} tavua", request=self._request
+        )
 
     async def __aiter__(self) -> Any:
         size = 0
+        decompressor = zlib.decompressobj(_AUTO_WBITS) if self._decode else None
         async for chunk in self._inner:
-            size += len(chunk)
+            if decompressor is None:
+                size += len(chunk)
+                if size > self._limit:
+                    raise self._too_large()
+                yield chunk
+                continue
+            data = chunk
+            while data:
+                try:
+                    out = decompressor.decompress(data, self._limit - size + 1)
+                except zlib.error as exc:
+                    raise httpx.DecodingError(str(exc), request=self._request) from exc
+                size += len(out)
+                if size > self._limit:
+                    raise self._too_large()
+                if out:
+                    yield out
+                data = decompressor.unconsumed_tail
+        if decompressor is not None:
+            tail = decompressor.flush()
+            size += len(tail)
             if size > self._limit:
-                raise ResponseTooLargeError(
-                    f"vastaus ylitti {self._limit} tavua", request=self._request
-                )
-            yield chunk
+                raise self._too_large()
+            if tail:
+                yield tail
 
     async def aclose(self) -> None:
         await self._inner.aclose()
 
 
 class _CappedTransport(httpx.AsyncBaseTransport):
-    """Kuljetus joka rajaa jokaisen vastauksen **luetut** tavut.
+    """Kuljetus joka rajaa jokaisen vastauksen tavut.
 
     ``Content-Length``-otsakkeeseen ei voi luottaa: chunked-vastauksella sitä
-    ei ole lainkaan (katselmointi 8.10.2026). Raja koskee siksi itse virtaa,
-    ja ilmoitettu liian iso koko hylätään jo ennen lukemista.
+    ei ole, ja pakatulla vastauksella se kertoo pakatun koon. Raja koskee
+    siksi purettua virtaa; ilmoitettu liian iso koko hylätään jo ennen
+    lukemista.
     """
 
     def __init__(self, inner: httpx.AsyncBaseTransport, limit: int) -> None:
@@ -103,6 +149,7 @@ class _CappedTransport(httpx.AsyncBaseTransport):
         self._limit = limit
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        request.headers["accept-encoding"] = "gzip, deflate"
         response = await self._inner.handle_async_request(request)
         declared = response.headers.get("content-length", "")
         if declared.isdigit() and int(declared) > self._limit:
@@ -110,9 +157,17 @@ class _CappedTransport(httpx.AsyncBaseTransport):
             raise ResponseTooLargeError(
                 f"vastaus {declared} tavua ylittää rajan {self._limit}", request=request
             )
+        encoding = response.headers.get("content-encoding", "").strip().lower()
+        decode = encoding in _DECODED_ENCODINGS
+        if decode:
+            # Purettu virta: httpx ei saa purkaa toista kertaa, eikä pakatun
+            # koon Content-Length pidä enää paikkaansa.
+            del response.headers["content-encoding"]
+            if "content-length" in response.headers:
+                del response.headers["content-length"]
         stream = response.stream
         assert isinstance(stream, httpx.AsyncByteStream)
-        response.stream = _CappedStream(stream, self._limit, request)
+        response.stream = _CappedStream(stream, self._limit, request, decode)
         return response
 
     async def aclose(self) -> None:
