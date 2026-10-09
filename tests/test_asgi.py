@@ -303,3 +303,24 @@ class TestInstanssikuvaus:
         assert "ulottuu myös aineistojen sisälle" in body
         assert "Koodistojen käsitteet mukana." in body
         assert "tulevat samasta repositoriosta" not in body
+
+
+class TestHeadPyynnot:
+    """Valvontapalvelut ja linkkien tarkistimet käyttävät HEAD-pyyntöä.
+
+    FastAPI:n GET-reitti ei hyväksy HEADia, jolloin pyyntö valui tyhjällä
+    prefiksillä mountattuun MCP-sovellukseen ja palautti 404:n.
+    """
+
+    @pytest.mark.parametrize(
+        "path", ["/", "/en", "/sv", "/llms.txt", "/search", "/avainsanat", "/map", "/health"]
+    )
+    def test_sivu_vastaa_headiin(self, client: TestClient, path: str) -> None:
+        resp = client.head(path)
+        assert resp.status_code == 200, path
+        assert resp.content == b""
+
+    def test_mcp_ennallaan(self, client: TestClient) -> None:
+        """MCP:hen ei kosketa: HEAD ei saa avata SSE-virtaa."""
+        assert client.head("/mcp").status_code == 405
+        assert client.head("/mcp/laatu").status_code == 405

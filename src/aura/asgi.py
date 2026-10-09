@@ -26,7 +26,7 @@ from aura.server import (
     health_payload,
     mcp,
 )
-from aura.web.app import create_app
+from aura.web.app import HeadAsGet, create_app
 from aura.web.app import lifespan as web_lifespan
 
 MCP_PATH = "/mcp"
@@ -112,4 +112,6 @@ def create_asgi_app(stateless_http: bool = True) -> FastAPI:
             conn.close()
 
     app.mount("", _dispatch(quality_app, mcp_app))
+    # HEAD GETinä ilman runkoa koko palvelussa paitsi MCP-poluissa.
+    app.add_middleware(HeadAsGet)
     return app

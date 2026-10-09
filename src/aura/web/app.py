@@ -6,6 +6,7 @@ import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -61,6 +62,40 @@ def safe_href(url: object) -> str:
     if text.lower().startswith(("http://", "https://")):
         return text
     return "#"
+
+
+class HeadAsGet:
+    """ASGI-välikerros: HEAD-pyyntö käsitellään GETinä ilman runkoa.
+
+    FastAPI ei hyväksy HEADia GET-reitille, ja koko palvelussa pyyntö valui
+    tyhjällä prefiksillä mountattuun MCP-sovellukseen, joka vastasi 404 —
+    valvontapalvelut ja linkkien tarkistimet näkivät sivut rikki.
+    Reitteihin ei lisätä HEADia, koska se monistaisi OpenAPI-operaatiot.
+
+    MCP-polkuja ei kosketa: HEAD ei saa avata SSE-virtaa.
+    """
+
+    def __init__(self, app: Any, skip_prefixes: tuple[str, ...] = ("/mcp",)) -> None:
+        self.app = app
+        self.skip_prefixes = skip_prefixes
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if (
+            scope.get("type") != "http"
+            or scope.get("method") != "HEAD"
+            or str(scope.get("path", "")).startswith(self.skip_prefixes)
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_without_body(message: Any) -> None:
+            if message.get("type") == "http.response.body":
+                if not message.get("more_body", False):
+                    await send({"type": "http.response.body", "body": b""})
+                return
+            await send(message)
+
+        await self.app({**scope, "method": "GET"}, receive, send_without_body)
 
 
 def create_app(lifespan: object = lifespan) -> FastAPI:
