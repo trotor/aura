@@ -95,6 +95,19 @@ def create_app(lifespan: object = lifespan) -> FastAPI:
     templates.env.filters["parse_json_list"] = lambda v: parse_json_list(v)
     templates.env.filters["safe_href"] = safe_href
 
+    # Avainsana on linkki vain jos avainsanasivu tuntee sen; kohina
+    # (lähteen nimi, PxWeb-kansiotunniste) näytetään tekstinä. Korteissa
+    # oikeat avainsanat ensin, jotta näytettävät viisi ovat sisältöä.
+    from aura.keywords import is_noise
+
+    def browsable(keyword: object) -> bool:
+        return isinstance(keyword, str) and not is_noise(keyword)
+
+    templates.env.tests["browsable"] = browsable
+    templates.env.filters["browsable_first"] = lambda kws: sorted(
+        kws, key=lambda k: not browsable(k)
+    )
+
     # Staattinen palvelu
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

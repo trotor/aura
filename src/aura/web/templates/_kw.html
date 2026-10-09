@@ -3,3 +3,8 @@
 {% macro kw_link(label, count=None) -%}
 <a class="kw" href="/avainsana/{{ label | urlencode }}">{{ label }}{% if count %} <small>{{ count }}</small>{% endif %}</a>
 {%- endmacro %}
+
+{# Avainsana linkkinä, jos avainsanasivu tuntee sen; kohina tekstinä. #}
+{% macro kw_item(label) -%}
+{% if label is browsable %}{{ kw_link(label) }}{% else %}<kbd>{{ label }}</kbd>{% endif %}
+{%- endmacro %}

@@ -15,6 +15,12 @@ datasettiin. Lisäksi korjattiin 7 544 kuollutta resurssilinkkiä — noin
 neljännes koko katalogista.
 
 ### Added
+- **Avainsanaselain** (`/avainsanat`, `/avainsana/{sana}`): jokainen
+  avainsana on linkki koko sivustolla ja vie avainsanasivulle, jolla ovat sen
+  aineistot, liittyvät aiheet (yhteisesiintymä) ja samankaltaiset sanat
+  (perusmuoto, yhdyssanan osa). Hakutulosten yläpuolella tuloksissa toistuvat
+  avainsanat. Kohina (lähteen nimet, PxWeb-kansiotunnisteet) näytetään
+  tekstinä eikä linkkinä.
 - **Etusivu ja README näyteikkunaksi kolmella kielellä**: `/`, `/en` ja
   `/sv` sekä `README.md`, `README.en.md` ja `README.sv.md`. Oikeat
   esimerkkikysymykset vastauksineen ja lähteineen, MCP-liittäminen

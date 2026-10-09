@@ -66,6 +66,8 @@ Instruktionerna är under 1 500 tecken, så Aura tar inte upp agentens kontext. 
 
 Samma katalog finns i webbläsaren: sökning med filter, sidor för datamängder med resurser, förhandsvisning av tabeller och kartlager samt en karta över datamängderna per område. Bläddringssidorna är på finska; [startsidan](https://aura.futuai.fi/sv) finns även på svenska och engelska.
 
+Nyckelorden gör det möjligt att bläddra efter ämne: varje nyckelord leder till en [nyckelordssida](https://aura.futuai.fi/avainsanat) med dess datamängder, närliggande ämnen (ord i samma datamängder) och liknande ord (samma grundform eller sammansättningsled).
+
 Aura hjälper också utgivare. Kvalitetsprofilen (`/mcp/laatu`) visar vilka av utgivarens datamängder som saknar beskrivning, nyckelord, uppdateringsfrekvens eller licens, och vilka länkar som inte fungerar.
 
 ## Var data kommer ifrån

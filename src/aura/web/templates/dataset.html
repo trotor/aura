@@ -57,8 +57,8 @@
         {% set keywords = dataset.keywords_fi | parse_json_list %}
         {% if keywords %}
         <p>
-            {% from "_kw.html" import kw_link %}
-            {% for kw in keywords %}{{ kw_link(kw) }} {% endfor %}
+            {% from "_kw.html" import kw_item %}
+            {% for kw in keywords | browsable_first %}{{ kw_item(kw) }} {% endfor %}
         </p>
         {% endif %}
         {% set geo = dataset.geographical_coverage | parse_json_list %}

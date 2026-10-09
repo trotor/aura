@@ -67,6 +67,8 @@ The instructions are under 1,500 characters, so Aura does not eat the agent’s 
 
 The same catalogue is available in the browser: search with filters, dataset pages with resources, previews of tables and map layers, and a map of datasets by area. The browsing pages are in Finnish; the [landing page](https://aura.futuai.fi/en) is also in English and Swedish.
 
+Keywords let you browse by topic: each keyword leads to a [keyword page](https://aura.futuai.fi/avainsanat) with its datasets, related topics (keywords that appear in the same datasets) and similar words (same base form or compound part).
+
 ![Search: air quality in the Helsinki region](docs/assets/img/haku.png)
 
 Aura also serves data publishers. The quality profile (`/mcp/laatu`) tells a publisher which of their datasets lack a description, keywords, update frequency or licence, and which links are broken.

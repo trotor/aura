@@ -563,3 +563,30 @@ class TestAvainsanaselain:
 
         expected = "q=a%26b+c&source=&fmt=&organization=&page=2"
         assert results_query("a&b c", "", "", "", 2) == expected
+
+
+class TestKohinaEiLinkiksi:
+    """Kohina-avainsana näytetään tekstinä, ei linkkinä joka päätyisi 404:ään."""
+
+    @pytest.fixture(autouse=True)
+    def _kohinaa(self, test_db: sqlite3.Connection) -> None:
+        from aura import keywords
+
+        keywords._cache.clear()
+        test_db.execute(
+            "UPDATE datasets SET keywords_fi = ? WHERE id = 'test-ds-1'",
+            ('["avoindata.fi", "1._Foo_bar", "testi"]',),
+        )
+        test_db.commit()
+
+    def test_aineistosivu(self, client: TestClient) -> None:
+        body = client.get("/dataset/test-ds-1").text
+        assert 'href="/avainsana/avoindata.fi"' not in body
+        assert "/avainsana/1._Foo_bar" not in body
+        assert "avoindata.fi" in body and "1._Foo_bar" in body
+        assert 'href="/avainsana/testi"' in body
+
+    def test_kortti_nayttaa_oikeat_ensin(self, client: TestClient) -> None:
+        body = client.get("/search/results?q=testidatasetti").text
+        assert 'href="/avainsana/avoindata.fi"' not in body
+        assert body.index('href="/avainsana/testi"') < body.index("avoindata.fi")
