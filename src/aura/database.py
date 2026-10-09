@@ -14,7 +14,7 @@ from typing import Any
 from aura.constants import parse_json_list
 from aura.decompound import load_lexicon
 from aura.dedup import deduplicate
-from aura.lemmatize import build_fts_query
+from aura.lemmatize import build_fts_query, index_dataset_lemmas
 from aura.models import Dataset
 from aura.size_estimator import parse_file_size
 
@@ -523,6 +523,9 @@ def _upsert_dataset_inner(conn: sqlite3.Connection, dataset: Dataset) -> None:
         ),
     )
 
+    # Perusmuodot heti: haku ei löydä taivutetulla sanalla aineistoa, jolta ne puuttuvat.
+    index_dataset_lemmas(conn, dataset.id)
+
     # Upsert resurssit: päivitä olemassaolevat, poista vain poistetut
     new_ids = {r.id for r in dataset.resources}
     existing = conn.execute(
@@ -811,6 +814,7 @@ def search_datasets(
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
     lemma_col = lemma_columns(conn)
+    lemma_only = _has_title_lemma_column(conn)
     sql = f"""
         SELECT d.*, COALESCE(fts.rank, 0) as rank,
                COALESCE(q.score, {NEUTRAL_QUALITY}) AS quality_score,
@@ -862,7 +866,9 @@ def search_datasets(
     attempts: list[tuple[str, str]] = []
     variant_attempts: set[int] = set()
     strong_attempts: set[int] = set()
-    strict_ds = build_fts_query(query, strict=True, lemma_column=lemma_col)
+    strict_ds = build_fts_query(
+        query, strict=True, lemma_column=lemma_col, lemma_only=lemma_only
+    )
     if strict_ds:
         attempts.append((strict_ds, build_fts_query(query, strict=True, lemma_column=None)))
         # Arkisanan muunnelmat tiukkoina hakuina heti tiukan vaiheen jälkeen:
@@ -871,7 +877,9 @@ def search_datasets(
         from aura.vocabularies import synonym_variants_ranked
 
         for variant, strong in synonym_variants_ranked(query, lexicon):
-            v_ds = build_fts_query(variant, strict=True, lemma_column=lemma_col)
+            v_ds = build_fts_query(
+                variant, strict=True, lemma_column=lemma_col, lemma_only=lemma_only
+            )
             if v_ds:
                 pair = (v_ds, build_fts_query(variant, strict=True, lemma_column=None))
                 if strong:
@@ -879,7 +887,9 @@ def search_datasets(
                 else:
                     variant_attempts.add(len(attempts))
                 attempts.append(pair)
-        loose_ds = build_fts_query(query, strict=False, lemma_column=lemma_col, lexicon=lexicon)
+        loose_ds = build_fts_query(
+            query, strict=False, lemma_column=lemma_col, lexicon=lexicon, lemma_only=lemma_only
+        )
         if loose_ds != strict_ds:
             attempts.append(
                 (

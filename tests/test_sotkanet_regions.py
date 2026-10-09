@@ -41,8 +41,7 @@ def _db() -> sqlite3.Connection:
 
 def test_migraatio_luo_taulun_ja_nostaa_tason() -> None:
     conn = _db()
-    assert EXPECTED_SCHEMA_VERSION == 26
-    assert schema_version(conn) == 26
+    assert schema_version(conn) == EXPECTED_SCHEMA_VERSION >= 26
     cols = [r[1] for r in conn.execute("PRAGMA table_info(ref_sotkanet_regions)")]
     assert cols == ["id", "category", "code", "name_fi", "name_sv", "name_en"]
 

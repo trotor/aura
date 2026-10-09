@@ -147,6 +147,7 @@ def build_fts_query(
     strict: bool = True,
     lemma_column: str | None = "lemmas",
     lexicon: Lexicon | None = None,
+    lemma_only: bool = False,
 ) -> str:
     """Rakenna FTS5-hakulauseke, joka osuu sekä pinta- että perusmuotoon.
 
@@ -174,6 +175,14 @@ def build_fts_query(
             AND-termeiksi, mikä vaatisi kaikkien osien esiintyvän eikä toisi
             mitään. Sama periaate kuin pinta- ja perusmuodolla: kyse on samasta
             sanasta eri muodossa.
+        lemma_only: Taivutetusta sanasta haetaan vain perusmuotoa
+            ``lemma_column``-sarakkeista, ei pintamuotoa lainkaan. bm25 laskee
+            OR-haarat erikseen yhteen, joten pinta- ja perusmuoto yhdessä
+            laskivat saman sanan kahdesti: "kunnan tilinpäätös" nosti
+            otsikossaan "kunnan" sanovat ostolaskut "Kuntien tilinpäätösten"
+            ohi. Pintahaara ei tuo lisää osumia, koska lemma-sarakkeet
+            kattavat suomenkielisen tekstin. Vaatii otsikon perusmuodot
+            (migraatio 027), jotta otsikko-osuma painaa edelleen otsikon verran.
 
     Returns:
         FTS5 MATCH -lauseke, tai tyhjä merkkijono jos kysely on tyhjä
@@ -187,7 +196,9 @@ def build_fts_query(
     for token in tokens:
         base = lemma(token)
         alts: list[str] = [_quote(token)]
-        if base != token:
+        if base != token and lemma_column and lemma_only:
+            alts = [f"{lemma_column} : {_quote(base)}"]
+        elif base != token:
             if lemma_column:
                 # Pintamuoto mistä tahansa sarakkeesta, perusmuoto lemmasta
                 alts.append(f"{lemma_column} : {_quote(base)}")
@@ -251,6 +262,50 @@ def title_lemma_text(row: sqlite3.Row) -> str:
     return lemmatize_text(str(title)) if title else ""
 
 
+_LEMMA_SOURCE_SQL = (
+    "SELECT rowid, title_fi, title, notes_fi, notes, organization_title, "
+    "keywords_fi, geographical_coverage FROM datasets"
+)
+
+
+def _lemma_columns(conn: sqlite3.Connection) -> set[str]:
+    """Kannan datasets-taulun perusmuotosarakkeet (migraatiot 018 ja 027)."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(datasets)").fetchall()}
+    return columns & {"lemmas", "title_lemmas"}
+
+
+def _write_lemmas(conn: sqlite3.Connection, rows: list[sqlite3.Row], with_titles: bool) -> None:
+    if with_titles:
+        conn.executemany(
+            "UPDATE datasets SET lemmas = ?, title_lemmas = ? WHERE rowid = ?",
+            [(dataset_lemma_text(row), title_lemma_text(row), row["rowid"]) for row in rows],
+        )
+    else:
+        conn.executemany(
+            "UPDATE datasets SET lemmas = ? WHERE rowid = ?",
+            [(dataset_lemma_text(row), row["rowid"]) for row in rows],
+        )
+
+
+def index_dataset_lemmas(conn: sqlite3.Connection, dataset_id: str) -> None:
+    """Päivitä yhden aineiston perusmuodot tallennuksen yhteydessä.
+
+    Haku hakee taivutetusta sanasta vain perusmuotoa (``build_fts_query``:n
+    ``lemma_only``), joten aineisto jolla perusmuodot puuttuvat ei löytyisi
+    taivutetulla hakusanalla ennen erillistä ``index_lemmas``-ajoa. Ei
+    commitoi: kutsuja (``upsert_dataset``) hallitsee transaktion.
+    """
+    if not LEMMATIZER_AVAILABLE:
+        return
+    columns = _lemma_columns(conn)
+    if "lemmas" not in columns:
+        return
+    cursor = conn.cursor()
+    cursor.row_factory = sqlite3.Row  # type: ignore[assignment]  # typeshed: Callable
+    rows = cursor.execute(_LEMMA_SOURCE_SQL + " WHERE id = ?", (dataset_id,)).fetchall()
+    _write_lemmas(conn, rows, "title_lemmas" in columns)
+
+
 def index_lemmas(conn: sqlite3.Connection, *, batch_size: int = 500) -> int:
     """Populoi datasets.lemmas (ja title_lemmas) koko korpukselle.
 
@@ -264,29 +319,13 @@ def index_lemmas(conn: sqlite3.Connection, *, batch_size: int = 500) -> int:
         logger.warning("[lemmatize] simplemma puuttuu — lemmoja ei voi indeksoida")
         return 0
 
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(datasets)").fetchall()}
-    with_titles = "title_lemmas" in columns
-    rows = conn.execute(
-        "SELECT rowid, title_fi, title, notes_fi, notes, organization_title, "
-        "keywords_fi, geographical_coverage FROM datasets"
-    ).fetchall()
+    with_titles = "title_lemmas" in _lemma_columns(conn)
+    rows = conn.execute(_LEMMA_SOURCE_SQL).fetchall()
 
     updated = 0
     for start in range(0, len(rows), batch_size):
         batch = rows[start : start + batch_size]
-        if with_titles:
-            conn.executemany(
-                "UPDATE datasets SET lemmas = ?, title_lemmas = ? WHERE rowid = ?",
-                [
-                    (dataset_lemma_text(row), title_lemma_text(row), row["rowid"])
-                    for row in batch
-                ],
-            )
-        else:
-            conn.executemany(
-                "UPDATE datasets SET lemmas = ? WHERE rowid = ?",
-                [(dataset_lemma_text(row), row["rowid"]) for row in batch],
-            )
+        _write_lemmas(conn, batch, with_titles)
         conn.commit()
         updated += len(batch)
         logger.info("[lemmatize] %d/%d datasettiä indeksoitu", updated, len(rows))
