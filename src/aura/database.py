@@ -96,7 +96,7 @@ def get_connection(
 #: siksi ainoa lähde joka on olemassa myös kontissa. Sen ja hakemiston
 #: synkassa pitää ``tests/test_schema_drift.py``: uusi migraatio ilman
 #: vakion nostoa kaataa testit.
-EXPECTED_SCHEMA_VERSION = 26
+EXPECTED_SCHEMA_VERSION = 27
 
 
 class SchemaTooOldError(RuntimeError):
@@ -598,6 +598,16 @@ _FTS_WEIGHTS_WITH_LEMMAS: tuple[float, ...] = (
 )
 _FTS_WEIGHTS_LEGACY: tuple[float, ...] = _FTS_WEIGHTS_WITH_LEMMAS[:-1]
 
+#: Otsikon perusmuotojen paino (migraatio 027). Perusmuotosarake painaa 5
+#: riippumatta siitä, tuleeko sana otsikosta vai kuvauksesta, joten
+#: taivutettu otsikko ("Kuntien tilinpäätökset") hävisi aineistolle jonka
+#: otsikossa sana on sellaisenaan. Arvo mitattu kultaisilla seteillä.
+TITLE_LEMMA_WEIGHT = 8.0
+_FTS_WEIGHTS_WITH_TITLE_LEMMAS: tuple[float, ...] = (
+    *_FTS_WEIGHTS_WITH_LEMMAS,
+    TITLE_LEMMA_WEIGHT,
+)
+
 # Jos tiukka AND-haku tuottaa vähemmän kuin tämän, löysennetään asteittain.
 RELAX_THRESHOLD = 3
 
@@ -651,9 +661,27 @@ def _has_lemma_column(conn: sqlite3.Connection) -> bool:
     return any(row[1] == "lemmas" for row in cols)
 
 
+def _has_title_lemma_column(conn: sqlite3.Connection) -> bool:
+    """Onko migraatio 027 (otsikon perusmuodot FTS:ssä) ajettu?"""
+    cols = conn.execute("PRAGMA table_info(datasets_fts)").fetchall()
+    return any(row[1] == "title_lemmas" for row in cols)
+
+
+def lemma_columns(conn: sqlite3.Connection) -> str | None:
+    """FTS5-sarakerajaus perusmuodoille: ``{lemmas title_lemmas}``, ``lemmas`` tai None."""
+    if _has_title_lemma_column(conn):
+        return "{lemmas title_lemmas}"
+    return "lemmas" if _has_lemma_column(conn) else None
+
+
 def _bm25_expr(conn: sqlite3.Connection) -> str:
     """Rakenna painotettu bm25()-lauseke kannan sarakemäärän mukaan."""
-    weights = _FTS_WEIGHTS_WITH_LEMMAS if _has_lemma_column(conn) else _FTS_WEIGHTS_LEGACY
+    if _has_title_lemma_column(conn):
+        weights = _FTS_WEIGHTS_WITH_TITLE_LEMMAS
+    elif _has_lemma_column(conn):
+        weights = _FTS_WEIGHTS_WITH_LEMMAS
+    else:
+        weights = _FTS_WEIGHTS_LEGACY
     return "bm25(datasets_fts, " + ", ".join(str(w) for w in weights) + ")"
 
 
@@ -782,7 +810,7 @@ def search_datasets(
 
     filter_where = (" AND " + " AND ".join(filter_conditions)) if filter_conditions else ""
 
-    lemma_col = "lemmas" if _has_lemma_column(conn) else None
+    lemma_col = lemma_columns(conn)
     sql = f"""
         SELECT d.*, COALESCE(fts.rank, 0) as rank,
                COALESCE(q.score, {NEUTRAL_QUALITY}) AS quality_score,

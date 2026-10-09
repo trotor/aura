@@ -242,16 +242,30 @@ def dataset_lemma_text(row: sqlite3.Row) -> str:
     return lemmatize_text(" ".join(parts))
 
 
-def index_lemmas(conn: sqlite3.Connection, *, batch_size: int = 500) -> int:
-    """Populoi datasets.lemmas koko korpukselle.
+def title_lemma_text(row: sqlite3.Row) -> str:
+    """Otsikon perusmuodot: suomenkielinen otsikko, muuten yleisotsikko."""
+    available = set(row.keys())
+    title = (row["title_fi"] if "title_fi" in available else None) or (
+        row["title"] if "title" in available else None
+    )
+    return lemmatize_text(str(title)) if title else ""
 
-    FTS5-indeksi pysyy synkassa datasets_au-triggerin kautta, joten erillistä
-    rebuildia ei tarvita. Palauttaa päivitettyjen rivien määrän.
+
+def index_lemmas(conn: sqlite3.Connection, *, batch_size: int = 500) -> int:
+    """Populoi datasets.lemmas (ja title_lemmas) koko korpukselle.
+
+    ``title_lemmas`` (migraatio 027) saa otsikon perusmuodot omaan
+    FTS-sarakkeeseensa, jolloin taivutettu otsikko painaa haussa otsikon
+    verran eikä kuvauksen. FTS5-indeksi pysyy synkassa datasets_au-
+    triggerin kautta, joten erillistä rebuildia ei tarvita. Palauttaa
+    päivitettyjen rivien määrän.
     """
     if not LEMMATIZER_AVAILABLE:
         logger.warning("[lemmatize] simplemma puuttuu — lemmoja ei voi indeksoida")
         return 0
 
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(datasets)").fetchall()}
+    with_titles = "title_lemmas" in columns
     rows = conn.execute(
         "SELECT rowid, title_fi, title, notes_fi, notes, organization_title, "
         "keywords_fi, geographical_coverage FROM datasets"
@@ -260,10 +274,19 @@ def index_lemmas(conn: sqlite3.Connection, *, batch_size: int = 500) -> int:
     updated = 0
     for start in range(0, len(rows), batch_size):
         batch = rows[start : start + batch_size]
-        conn.executemany(
-            "UPDATE datasets SET lemmas = ? WHERE rowid = ?",
-            [(dataset_lemma_text(row), row["rowid"]) for row in batch],
-        )
+        if with_titles:
+            conn.executemany(
+                "UPDATE datasets SET lemmas = ?, title_lemmas = ? WHERE rowid = ?",
+                [
+                    (dataset_lemma_text(row), title_lemma_text(row), row["rowid"])
+                    for row in batch
+                ],
+            )
+        else:
+            conn.executemany(
+                "UPDATE datasets SET lemmas = ? WHERE rowid = ?",
+                [(dataset_lemma_text(row), row["rowid"]) for row in batch],
+            )
         conn.commit()
         updated += len(batch)
         logger.info("[lemmatize] %d/%d datasettiä indeksoitu", updated, len(rows))
