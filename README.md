@@ -67,6 +67,8 @@ Ohjeteksti on alle 1 500 merkkiä, joten Aura ei syö agentin kontekstia. Konelu
 
 Selaimella näkee saman hakemiston: haku suodattimineen, aineistosivut resursseineen, taulukoiden ja karttatasojen esikatselu sekä kartta aineistojen alueellisesta jakaumasta.
 
+Avainsanoista pääsee selaamaan aiheittain: jokainen avainsana vie [avainsanasivulle](https://aura.futuai.fi/avainsanat), jolla ovat sen aineistot sekä liittyvät aiheet (samoissa aineistoissa esiintyvät sanat) ja samankaltaiset sanat (sama perusmuoto tai yhdyssanan osa).
+
 ![Haku: pääkaupunkiseudun ilmanlaatu](docs/assets/img/haku.png)
 
 Aura palvelee myös julkaisijaa. Laatuprofiili (`/mcp/laatu`) kertoo julkaisijan omista aineistoista, mistä puuttuu kuvaus, avainsanat, päivitystiheys tai lisenssi ja mitkä linkit eivät toimi.
