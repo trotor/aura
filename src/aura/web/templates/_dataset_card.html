@@ -1,3 +1,4 @@
+{% from "_kw.html" import kw_link %}
 <article class="dataset-card">
     <header>
         <a href="/dataset/{{ dataset.id }}">
@@ -37,7 +38,7 @@
             {% if dataset.metadata_modified %} | {{ dataset.metadata_modified | format_date }}{% endif %}
             {% set keywords = dataset.keywords_fi | parse_json_list %}
             {% if keywords %}
-            | {% for kw in keywords[:5] %}<kbd>{{ kw }}</kbd> {% endfor %}
+            | {% for kw in keywords[:5] %}{{ kw_link(kw) }} {% endfor %}
             {% endif %}
         </small>
     </footer>

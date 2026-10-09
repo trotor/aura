@@ -516,3 +516,50 @@ class TestUlkoisenSisallonEscapaus:
         from aura.web.app import safe_href
 
         assert safe_href(url) == expected
+
+
+class TestAvainsanaselain:
+    """Avainsanat ovat linkkejä koko sivustolla ja vievät avainsanasivulle."""
+
+    @pytest.fixture(autouse=True)
+    def _tyhja_valimuisti(self) -> None:
+        from aura import keywords
+
+        keywords._cache.clear()
+
+    def test_avainsanasivu_listaa_aineistot(self, client: TestClient) -> None:
+        resp = client.get("/avainsana/testi")
+        assert resp.status_code == 200
+        assert "Testidatasetti 1" in resp.text
+        assert 'href="/avainsana/data"' in resp.text  # liittyvä avainsana
+
+    def test_kirjainkoko_ja_valilyonnit_eivat_haittaa(self, client: TestClient) -> None:
+        assert client.get("/avainsana/TESTI").status_code == 200
+
+    def test_tuntematon_avainsana(self, client: TestClient) -> None:
+        resp = client.get("/avainsana/ei-olemassa")
+        assert resp.status_code == 404
+        assert 'href="/avainsanat"' in resp.text
+
+    def test_hakemisto(self, client: TestClient) -> None:
+        resp = client.get("/avainsanat")
+        assert resp.status_code == 200
+        assert 'href="/avainsana/testi"' in resp.text
+
+    def test_aineistosivun_avainsanat_ovat_linkkeja(self, client: TestClient) -> None:
+        body = client.get("/dataset/test-ds-1").text
+        assert 'href="/avainsana/testi"' in body
+
+    def test_hakutuloksen_avainsanat_ovat_linkkeja(self, client: TestClient) -> None:
+        body = client.get("/search/results?q=testidatasetti").text
+        assert 'href="/avainsana/testi"' in body
+
+    def test_navigaatiossa_linkki(self, client: TestClient) -> None:
+        assert 'href="/avainsanat"' in client.get("/search").text
+
+    def test_lisaa_tuloksia_kysely_on_koodattu(self, client: TestClient) -> None:
+        """Seuraavan sivun linkissä hakusana on URL-koodattu."""
+        from aura.web.routes.search import results_query
+
+        expected = "q=a%26b+c&source=&fmt=&organization=&page=2"
+        assert results_query("a&b c", "", "", "", 2) == expected

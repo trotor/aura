@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_kw.html" import kw_link %}
+
+{% block title %}{{ entry.label if entry else keyword }} – avainsana{% endblock %}
+
+{% block content %}
+<p><a href="/avainsanat">&larr; Kaikki avainsanat</a></p>
+
+{% if entry is none %}
+<hgroup>
+    <h1>{{ keyword }}</h1>
+    <p>Tällä avainsanalla ei ole aineistoja.</p>
+</hgroup>
+{% if suggestions %}
+<p>Lähellä olevia avainsanoja:</p>
+<p class="kw-list">{% for e in suggestions %}{{ kw_link(e.label, e.count) }} {% endfor %}</p>
+{% endif %}
+<p><a href="/search?q={{ keyword | urlencode }}" role="button" class="outline">Hae tekstihaulla</a></p>
+{% else %}
+<hgroup>
+    <h1>{{ entry.label }}</h1>
+    <p>{{ entry.count }} aineistoa tällä avainsanalla.</p>
+</hgroup>
+
+{% if related or similar %}
+<div class="grid kw-neighbours">
+    {% if related %}
+    <article>
+        <header><h3>Liittyvät aiheet</h3></header>
+        <p><small>Esiintyvät samoissa aineistoissa.</small></p>
+        <p class="kw-list">{% for e in related %}{{ kw_link(e.label, e.count) }} {% endfor %}</p>
+    </article>
+    {% endif %}
+    {% if similar %}
+    <article>
+        <header><h3>Samankaltaiset sanat</h3></header>
+        <p><small>Sama perusmuoto tai yhdyssanan osa.</small></p>
+        <p class="kw-list">{% for e in similar %}{{ kw_link(e.label, e.count) }} {% endfor %}</p>
+    </article>
+    {% endif %}
+</div>
+{% endif %}
+
+<section aria-label="Aineistot">
+    {% for dataset in results %}
+    {% include "_dataset_card.html" %}
+    {% endfor %}
+</section>
+
+<nav class="kw-pages">
+    {% if page > 1 %}<a href="?page={{ page - 1 }}" role="button" class="outline">&larr; Edelliset</a>{% endif %}
+    {% if has_next %}<a href="?page={{ page + 1 }}" role="button" class="outline">Seuraavat &rarr;</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

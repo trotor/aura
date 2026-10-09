@@ -102,12 +102,15 @@ def create_app(lifespan: object = lifespan) -> FastAPI:
     from aura.web.routes.api import router as api_router
     from aura.web.routes.dataset import router as dataset_router
     from aura.web.routes.index import router as index_router
+    from aura.web.routes.keywords import router as keywords_router
     from aura.web.routes.map import router as map_router
     from aura.web.routes.search import router as search_router
     from aura.web.routes.view import router as view_router
 
     # Aseta templates kaikkiin routereihin
-    for router in [index_router, search_router, dataset_router, map_router, view_router]:
+    for router in [
+        index_router, search_router, dataset_router, map_router, view_router, keywords_router
+    ]:
         router.templates = templates  # type: ignore[attr-defined]
 
     app.include_router(index_router)
@@ -115,6 +118,7 @@ def create_app(lifespan: object = lifespan) -> FastAPI:
     app.include_router(dataset_router)
     app.include_router(map_router)
     app.include_router(view_router)
+    app.include_router(keywords_router)
     app.include_router(api_router, prefix="/api")
 
     return app

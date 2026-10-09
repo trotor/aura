@@ -123,6 +123,14 @@
     </dl>
 </section>
 
+<section class="browse" aria-labelledby="browse-title">
+    {% from "_kw.html" import kw_link %}
+    <h2 id="browse-title">{{ t.browse_title }}</h2>
+    <p class="intro">{{ t.browse_intro }}</p>
+    <p class="kw-list">{% for e in top_keywords %}{{ kw_link(e.label, e.count) }} {% endfor %}</p>
+    <p><a href="/avainsanat">{{ t.keywords_all }}</a></p>
+</section>
+
 <section class="pro" aria-labelledby="pro-title">
     <h2 id="pro-title">{{ t.pro_title }}</h2>
     {% if instance.is_extended %}

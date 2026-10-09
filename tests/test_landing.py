@@ -171,3 +171,9 @@ def test_llms_txt_kertoo_tekijan(client: TestClient) -> None:
     text = client.get("/llms.txt").text
     assert "Tero Rönkkö" in text
     assert "tero@futuai.fi" in text
+
+
+@pytest.mark.parametrize("path", ["/", "/en", "/sv"])
+def test_etusivulla_avainsanaselain(client: TestClient, path: str) -> None:
+    body = client.get(path).text
+    assert 'href="/avainsanat"' in body

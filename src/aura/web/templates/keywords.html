@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_kw.html" import kw_link %}
+
+{% block title %}Avainsanat{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h1>Avainsanat</h1>
+    <p>{{ total }} avainsanaa, joilla julkaisijat ovat kuvanneet aineistonsa. Valitse avainsana, niin näet sen aineistot ja siihen liittyvät aiheet.</p>
+</hgroup>
+
+<article>
+    <header><h3>Yleisimmät</h3></header>
+    <p class="kw-list">
+        {% for e in top %}{{ kw_link(e.label, e.count) }} {% endfor %}
+    </p>
+</article>
+
+<label for="kw-filter">Suodata avainsanoja</label>
+<input id="kw-filter" type="search" placeholder="esim. metsä, liikenne, väestö" autocomplete="off">
+
+<nav class="kw-letters" aria-label="Alkukirjaimet">
+    {% for letter in groups %}<a href="#kirjain-{{ letter }}">{{ letter }}</a> {% endfor %}
+</nav>
+
+{% for letter, entries in groups.items() %}
+<section class="kw-group" id="kirjain-{{ letter }}">
+    <h2>{{ letter }}</h2>
+    <p class="kw-list">
+        {% for e in entries %}<span data-kw="{{ e.key }}">{{ kw_link(e.label, e.count) }}</span> {% endfor %}
+    </p>
+</section>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("kw-filter").addEventListener("input", function(evt) {
+    const needle = evt.target.value.trim().toLowerCase();
+    document.querySelectorAll(".kw-group").forEach(function(group) {
+        let visible = 0;
+        group.querySelectorAll("[data-kw]").forEach(function(item) {
+            const show = !needle || item.dataset.kw.includes(needle);
+            item.hidden = !show;
+            if (show) visible++;
+        });
+        group.hidden = visible === 0;
+    });
+});
+</script>
+{% endblock %}

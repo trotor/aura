@@ -12,6 +12,7 @@ from markupsafe import Markup, escape
 
 from aura.database import get_stats
 from aura.instance import describe_instance
+from aura.keywords import get_index
 from aura.web.app import get_db
 from aura.web.i18n import (
     AUTHOR_EMAIL,
@@ -119,6 +120,7 @@ def _render_landing(request: Request, lang: str) -> object:
                 (code, TEXTS[code]["lang_name"], landing_path(code)) for code in LANGUAGES
             ],
             "self_path": landing_path(lang),
+            "top_keywords": get_index(conn).top(24),
             "pro_url": PRO_URL,
         },
     )

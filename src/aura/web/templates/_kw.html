@@ -1,0 +1,5 @@
+{# Avainsanalinkki. Käytetään kaikkialla, jotta avainsanasta pääsee aina
+   avainsanasivulle ja sieltä liittyviin sanoihin. #}
+{% macro kw_link(label, count=None) -%}
+<a class="kw" href="/avainsana/{{ label | urlencode }}">{{ label }}{% if count %} <small>{{ count }}</small>{% endif %}</a>
+{%- endmacro %}

@@ -50,6 +50,13 @@ TEXTS: dict[str, dict[str, Any]] = {
         "nav_home": "Etusivu",
         "nav_search": "Haku",
         "nav_map": "Kartta",
+        "nav_keywords": "Avainsanat",
+        "browse_title": "Selaa aiheittain",
+        "browse_intro": (
+            "Julkaisijat ovat kuvanneet aineistonsa avainsanoilla. Jokaisesta "
+            "avainsanasta pääsee sen aineistoihin ja siihen liittyviin aiheisiin."
+        ),
+        "keywords_all": "Kaikki avainsanat",
         "hero_title": "Kysy Suomen avoimelta datalta.",
         "hero_lede": (
             "Aura tuntee {datasets} aineistoa {sources} lähteestä ja "
@@ -268,6 +275,13 @@ TEXTS: dict[str, dict[str, Any]] = {
         "nav_home": "Home",
         "nav_search": "Search",
         "nav_map": "Map",
+        "nav_keywords": "Keywords",
+        "browse_title": "Browse by topic",
+        "browse_intro": (
+            "Publishers describe their datasets with keywords (in Finnish). Each "
+            "keyword leads to its datasets and to related topics."
+        ),
+        "keywords_all": "All keywords",
         "hero_title": "Ask Finland’s open data.",
         "hero_lede": (
             "Aura knows {datasets} datasets from {sources} sources and "
@@ -486,6 +500,13 @@ TEXTS: dict[str, dict[str, Any]] = {
         "nav_home": "Startsida",
         "nav_search": "Sök",
         "nav_map": "Karta",
+        "nav_keywords": "Nyckelord",
+        "browse_title": "Bläddra efter ämne",
+        "browse_intro": (
+            "Utgivarna beskriver sina datamängder med nyckelord (på finska). Varje "
+            "nyckelord leder till dess datamängder och till närliggande ämnen."
+        ),
+        "keywords_all": "Alla nyckelord",
         "hero_title": "Fråga Finlands öppna data.",
         "hero_lede": (
             "Aura känner till {datasets} datamängder från {sources} källor "
