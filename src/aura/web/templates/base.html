@@ -18,6 +18,7 @@
         <ul>
             <li><a href="{{ '/' if lang is not defined or lang == 'fi' else '/' ~ lang }}">{{ t.nav_home if t is defined else 'Etusivu' }}</a></li>
             <li><a href="/search">{{ t.nav_search if t is defined else 'Haku' }}</a></li>
+            <li><a href="/avainsanat">{{ t.nav_keywords if t is defined else 'Avainsanat' }}</a></li>
             <li><a href="/map">{{ t.nav_map if t is defined else 'Kartta' }}</a></li>
             {% if alternates is defined %}
             <li class="lang-switch">

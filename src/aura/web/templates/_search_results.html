@@ -1,3 +1,10 @@
+{% from "_kw.html" import kw_link %}
+{% if result_keywords %}
+<p class="kw-list result-keywords">
+    <small>Tuloksissa toistuvat avainsanat:</small>
+    {% for kw in result_keywords %}{{ kw_link(kw) }} {% endfor %}
+</p>
+{% endif %}
 {% for dataset in results %}
 {% include "_dataset_card.html" %}
 {% else %}
@@ -5,7 +12,7 @@
 {% endfor %}
 
 {% if has_next %}
-<button hx-get="/search/results?q={{ q }}&source={{ source }}&fmt={{ fmt }}&organization={{ organization }}&page={{ page + 1 }}"
+<button hx-get="/search/results?{{ next_query }}"
         hx-target="#results"
         hx-swap="innerHTML"
         hx-indicator="#search-spinner"

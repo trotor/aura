@@ -2,14 +2,72 @@
 
 from __future__ import annotations
 
+import sqlite3
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from aura.database import search_datasets
+from aura.keywords import get_index, is_noise, normalize
 from aura.web.app import get_db
 
 router = APIRouter()
+
+#: Hakutulosten yläpuolella näytettävien avainsanojen määrä.
+RESULT_KEYWORDS = 10
+
+
+def results_query(q: str, source: str, fmt: str, organization: str, page: int) -> str:
+    """Seuraavan tulossivun kysely URL-koodattuna (hakusana voi sisältää &-merkin)."""
+    return urlencode(
+        {"q": q, "source": source, "fmt": fmt, "organization": organization, "page": page}
+    )
+
+
+def resources_for(
+    conn: sqlite3.Connection, dataset_ids: list[str]
+) -> dict[str, list[dict[str, object]]]:
+    """Aineistojen resurssit yhdellä kyselyllä korttien formaattimerkintöjä varten."""
+    by_dataset: dict[str, list[dict[str, object]]] = {}
+    if not dataset_ids:
+        return by_dataset
+    placeholders = ",".join("?" * len(dataset_ids))
+    rows = conn.execute(
+        f"SELECT id, dataset_id, name, name_fi, format, url "
+        f"FROM resources WHERE dataset_id IN ({placeholders})",
+        dataset_ids,
+    ).fetchall()
+    for row in rows:
+        rd = dict(row)
+        by_dataset.setdefault(str(rd["dataset_id"]), []).append(rd)
+    return by_dataset
+
+
+def result_keywords(conn: sqlite3.Connection, results: list[dict[str, object]]) -> list[str]:
+    """Tuloksissa toistuvat avainsanat, joilla haun voi jatkaa avainsanaan."""
+    import json
+    from collections import Counter
+
+    index = get_index(conn)
+    counts: Counter[str] = Counter()
+    for row in results:
+        try:
+            keywords = json.loads(str(row.get("keywords_fi") or "[]"))
+        except json.JSONDecodeError:
+            continue
+        counts.update(
+            {normalize(k) for k in keywords if isinstance(k, str) and not is_noise(k)}
+        )
+    labels = []
+    for key, _ in counts.most_common():
+        entry = index.get(key)
+        if entry is not None:
+            labels.append(entry.label)
+        if len(labels) >= RESULT_KEYWORDS:
+            break
+    return labels
 
 
 @router.get("/search")
@@ -121,20 +179,7 @@ async def search_results(
 
     has_next = len(results) == limit
 
-    # Hae resurssit hakutulosten dataseteille (yksi kysely)
-    dataset_ids = [r["id"] for r in results]
-    resources_by_dataset: dict[str, list[dict[str, object]]] = {}
-    if dataset_ids:
-        placeholders = ",".join("?" * len(dataset_ids))
-        res_rows = conn.execute(
-            f"SELECT id, dataset_id, name, name_fi, format, url "
-            f"FROM resources WHERE dataset_id IN ({placeholders})",
-            dataset_ids,
-        ).fetchall()
-        for r in res_rows:
-            rd = dict(r)
-            ds_id = str(rd["dataset_id"])
-            resources_by_dataset.setdefault(ds_id, []).append(rd)
+    resources_by_dataset = resources_for(conn, [r["id"] for r in results])
 
     templates: Jinja2Templates = router.templates  # type: ignore[attr-defined]
     return templates.TemplateResponse(
@@ -149,5 +194,7 @@ async def search_results(
             "organization": organization,
             "page": page,
             "has_next": has_next,
+            "next_query": results_query(q, source, fmt, organization, page + 1),
+            "result_keywords": result_keywords(conn, results) if page == 1 else [],
         },
     )
