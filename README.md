@@ -109,6 +109,17 @@ Aura ei ole sidottu avoimeen dataan. Sama rakenne toimii myös organisaation omi
 
 Valmiita keräimiä on CKAN-, PxWeb-, WFS-, WMS-, ArcGIS-, OData-, OpenAPI- ja GTFS-lähteille, ja uusi lähde on yleensä yksi tiedosto ([ohje](CONTRIBUTING.md)). Laatuprofiili kertoo samalla, mistä aineistoista puuttuu kuvaus, lisenssi tai toimiva linkki. Koodi on MIT-lisensoitua, ja kysymykset ja ideat ovat tervetulleita [GitHubissa](https://github.com/trotor/aura/issues).
 
+## Laajenna: yhdistä avoimia aineistoja
+
+Auran työkalut palauttavat rivejä, lähteitä ja lisenssejä. Niiden päälle voi rakentaa vastauksia, joita mikään yksittäinen aineisto ei anna. Esimerkki: *"Paljonko kiinteistön puusto on arvoltaan tämän hetken kantohinnoilla?"*
+
+1. **Kiinteistön rajat:** `query_source` hyväksyy alueeksi kiinteistötunnuksen (`174-401-3-6`). Rajat tulevat MML:n kiinteistörekisterikartasta.
+2. **Metsäkuviot:** Metsäkeskuksen metsävarakuvioista tulevat kiinteistön kohdalta tukki- ja kuitupuun määrät, puulajit ja kehitysluokat.
+3. **Kantohinnat:** Luken pystykaupan hinnat hinta-alueittain ja hakkuutavoittain.
+4. **Lasku:** määrät kerrotaan hinnoilla, ja tuloksena on puuston hakkuuarvo euroina hehtaarilta. Jokaisen luvun lähde ja lisenssi kulkevat mukana.
+
+Kaikki neljä ovat avointa dataa (CC BY 4.0). Aura kertoo myös, mikä ei ole: toteutuneet kauppahinnat ja metsätilan arviointitaulukot. Haku "metsän hinta" ohjaa niiden lähteisiin. Tällä hetkellä laskun tekee tekoälyavustaja. Saman voi rakentaa omaksi työkaluksi tai Auran laajennuspisteisiin (`aura.extensions`, ks. [referenssi](docs/REFERENCE.md#laajennuspisteet)). Samalla kaavalla voi yhdistää muitakin aineistoja: kiinteistöön kaavat, suojelualueet ja pohjavesialueet, tai kuntaan tilastot ja palvelupisteet.
+
 ## Aja itse
 
 Tietokanta tulee repositorion mukana ([Git LFS](https://git-lfs.github.com/)), joten aineistot ovat käytössä heti kloonauksen jälkeen.

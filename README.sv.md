@@ -97,6 +97,17 @@ Aura är inte bunden till öppna data. Samma struktur fungerar för en organisat
 
 Det finns insamlare för CKAN, PxWeb, WFS, WMS, ArcGIS, OData, OpenAPI och GTFS, och en ny källa är oftast en fil ([instruktioner](CONTRIBUTING.md), på finska). Koden är MIT-licensierad, och frågor och idéer är välkomna [på GitHub](https://github.com/trotor/aura/issues).
 
+## Bygg vidare: kombinera öppna data
+
+Auras verktyg returnerar rader, källor och licenser. Ovanpå dem kan man bygga svar som ingen enskild datamängd ger. Exempel: *"Vad är virket på fastigheten värt till dagens rotpriser?"*
+
+1. **Fastighetens gränser:** `query_source` godtar en fastighetsbeteckning som område (`174-401-3-6`). Gränserna kommer från Lantmäteriverkets fastighetsregisterkarta.
+2. **Skogsfigurer:** Skogscentralens skogsfigurer ger stock- och massavedsvolymer, trädslag och utvecklingsklasser på fastigheten.
+3. **Rotpriser:** Naturresursinstitutets priser för leveransvirke på rot per prisområde och avverkningssätt.
+4. **Beräkningen:** volymerna gånger priserna ger virkets avverkningsvärde i euro per hektar, med källa och licens för varje siffra.
+
+Alla fyra är öppna data (CC BY 4.0). Aura berättar också vad som inte är det: faktiska köpesummor och värderingstabeller för skogsfastigheter, och en sökning efter "metsän hinta" (skogens pris) visar var de finns. I dag gör AI-assistenten beräkningen. Samma sak kan byggas som ett eget verktyg eller på Auras utvidgningspunkter (`aura.extensions`, se [referensen](docs/REFERENCE.md#laajennuspisteet), på finska). Samma mönster fungerar för andra kombinationer: planer, skyddsområden och grundvattenområden för en fastighet, eller statistik och servicepunkter för en kommun.
+
 ## Kör den själv
 
 Databasen följer med repositoryt ([Git LFS](https://git-lfs.github.com/)), så datamängderna finns direkt efter kloning.

@@ -47,6 +47,12 @@ Aura ei ole sidottu avoimeen dataan. Sama rakenne – keräin lähdettä kohden,
 
 ---
 
+## Laajenna: yhdistä avoimia aineistoja
+
+Auran päälle voi rakentaa vastauksia, joita mikään yksittäinen aineisto ei anna. Esimerkki: *"Paljonko kiinteistön puusto on arvoltaan tämän hetken kantohinnoilla?"* Kiinteistötunnuksella saadaan MML:n kiinteistörajat, niillä Metsäkeskuksen metsävarakuviot ja Luken kantohinnoilla puuston hakkuuarvo euroina hehtaarilta. Kaikki on avointa dataa (CC BY 4.0), ja jokaisen luvun lähde kulkee mukana. Samalla kaavalla kiinteistöön voi yhdistää kaavat, suojelualueet ja pohjavesialueet. Lisää [README:ssä](https://github.com/trotor/aura#laajenna-yhdistä-avoimia-aineistoja).
+
+---
+
 ## Dokumentaatio
 
 - [README](https://github.com/trotor/aura#readme): esittely, esimerkit ja Aura Pro
