@@ -114,3 +114,24 @@ def test_kiinteistotunnus_ei_paady_telemetriaan(telemetry: Path, raw: str, store
     """Henkilön kiinteistön tunnus on henkilötieto (aura.kiinteisto)."""
     assert record_pattern("area", raw)
     assert top_patterns("area")[0]["pattern"] == stored
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "174-401 3-6",
+        "174\t401\t3\t6",
+        "174\n401-3-6",
+        "174 401 3 6-m601",
+        "\u0661\u0667\u0664-401-3-6",
+    ],
+)
+def test_jasentimen_ja_peiton_ero_ei_vuoda(telemetry: Path, raw: str) -> None:
+    """Kaikki mitä jäsennin hyväksyy tai tunnistaa määräalaksi, peitetään."""
+    from aura.telemetry import record_call
+
+    assert record_call("query_source", {"area": raw, "query": f"puusto {raw}"})
+    stored = {r["pattern"] for r in top_patterns("area")} | {
+        r["pattern"] for r in top_patterns("query")
+    }
+    assert all("401" not in p for p in stored), stored

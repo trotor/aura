@@ -45,6 +45,7 @@ def test_tunnus_normalisoidaan(text: str, expected: str) -> None:
         "1234-401-3-6",
         "174-401-3",
         "123456789012345",
+        "\uff11\uff17\uff14-401-3-6",  # täysleveät numerot
     ],
 )
 def test_muut_aluemuodot_eivat_ole_tunnuksia(text: str) -> None:

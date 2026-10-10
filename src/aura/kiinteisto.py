@@ -34,11 +34,11 @@ from aura.constants import user_agent
 from aura.net import read_capped
 
 #: 14-numeroinen muoto tai neljä numeroryhmää viivoin tai välilyönnein.
-_DIGITS = re.compile(r"^\d{14}$")
-_GROUPS = re.compile(r"^(\d{1,3})[-\s](\d{1,3})[-\s](\d{1,4})[-\s](\d{1,4})$")
+_DIGITS = re.compile(r"^\d{14}$", re.ASCII)
+_GROUPS = re.compile(r"^(\d{1,3})[-\s](\d{1,3})[-\s](\d{1,4})[-\s](\d{1,4})$", re.ASCII)
 #: Määräala: tunnuksen perässä "-M601". Määräala on kiinteistön osa, jolla ei
 #: ole omia rajoja kiinteistörekisterikartalla samalla tavalla.
-_MAARAALA = re.compile(r"^[\d\s-]+-M\d+$", re.IGNORECASE)
+_MAARAALA = re.compile(r"^[\d\s-]+-M\d+$", re.IGNORECASE | re.ASCII)
 
 _TIMEOUT = 30.0
 _LIMIT = 20 * 1024 * 1024
