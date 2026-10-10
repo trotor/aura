@@ -22,8 +22,10 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import re
 import urllib.parse
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -316,8 +318,11 @@ class Features:
     #: Palvelun kerrokset kyvyistä, jos kerros valittiin neuvottelussa
     #: (URL ei kertonut kerrosta). Tyhjä kun kerros tuli URL:sta.
     feature_types: list[str] = field(default_factory=list)
-    #: Neuvottelussa valittu kerros (kykyjen ensimmäinen), tai None.
+    #: Neuvottelussa valittu kerros, tai None.
     type_name: str | None = None
+    #: Valittiinko kerros vihjeiden perusteella (``choose_layer``) eikä
+    #: kykyjen ensimmäisenä.
+    layer_matched: bool = False
 
 
 def _from_geojson(data: dict[str, Any], max_rows: int) -> Features:
@@ -368,6 +373,68 @@ def _read_body(body: str, max_rows: int) -> Features | None:
     return None
 
 
+_FOLD = str.maketrans("äöå", "aoa")
+#: Lyhyempi sana kelpaa toisen alkuosaksi vasta tästä pituudesta:
+#: "kiinteisto" ~ "kiinteistot", mutta ei "alue" ~ "aluesarjat".
+_MIN_PREFIX = 5
+
+
+def _layer_words(text: str) -> list[str]:
+    """Kerroksen nimen tai vihjeen sanat: nimiavaruus pois, CamelCase auki."""
+    text = text.rsplit(":", 1)[-1]
+    text = re.sub(r"(?<=[a-zåäö])(?=[A-ZÅÄÖ])", " ", text)
+    return [w.translate(_FOLD) for w in re.split(r"[^0-9a-zåäö]+", text.lower()) if w]
+
+
+def _word_forms(word: str) -> set[str]:
+    """Sana ja sen perusmuoto ilman ääkkösiä: "kiinteistöt" → kiinteistot, kiinteisto."""
+    from aura.lemmatize import lemma
+
+    return {word, lemma(word).translate(_FOLD)}
+
+
+def _words_match(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    short, long = sorted((a, b), key=len)
+    return len(short) >= _MIN_PREFIX and long.startswith(short)
+
+
+def choose_layer(feature_types: Sequence[str], hints: Sequence[str]) -> str | None:
+    """Valitse kerros, jonka nimi vastaa parhaiten aineiston kuvausta.
+
+    Katalogin WFS-resurssi on usein koko palvelun kyvykkyysosoite, jolloin
+    kerros jää valittavaksi. Kykyjen ensimmäinen on sattumaa: "Helsingin
+    kiinteistöt alueina" sai liikennemäärät, vaikka samassa palvelussa on
+    ``avoindata:Kiinteisto_alue``. Vihjeitä ovat aineiston otsikko ja sen
+    muiden resurssien kerrosnimet; täsmälleen sama kerrosnimi ratkaisee
+    suoraan. Palauttaa None, jos mikään kerros ei osu yhteenkään vihjeen
+    sanaan tai valittavaa ei ole.
+    """
+    if len(feature_types) < 2:
+        return None
+    for hint in hints:
+        if hint in feature_types:
+            return hint
+    hint_words = [_word_forms(w) for h in hints for w in _layer_words(h)]
+    best: tuple[int, int, int] | None = None
+    chosen: str | None = None
+    for position, name in enumerate(feature_types):
+        words = _layer_words(name)
+        matched = sum(
+            1 for forms in hint_words if any(_words_match(f, w) for f in forms for w in words)
+        )
+        if matched == 0:
+            continue
+        unmatched = sum(
+            1 for w in words if not any(_words_match(f, w) for forms in hint_words for f in forms)
+        )
+        key = (matched, -unmatched, -position)
+        if best is None or key > best:
+            best, chosen = key, name
+    return chosen
+
+
 async def fetch_features(
     url: str,
     max_rows: int,
@@ -375,6 +442,7 @@ async def fetch_features(
     bbox: str | None = None,
     cql_filter: str | None = None,
     timeout: float = _TIMEOUT,
+    layer_hints: Sequence[str] = (),
 ) -> Features:
     """Hae kohteita WFS-palvelusta, neuvotellen tarvittaessa.
 
@@ -433,7 +501,8 @@ async def fetch_features(
         caps = parse_capabilities(caps_resp.text)
 
         output_format = pick_output_format(caps.output_formats)
-        type_name = caps.feature_types[0] if caps.feature_types else None
+        matched_layer = choose_layer(caps.feature_types, layer_hints)
+        type_name = matched_layer or (caps.feature_types[0] if caps.feature_types else None)
         if output_format is None and type_name is None:
             return Features(error=first_error or "Palvelu ei kertonut kyvyistään.")
 
@@ -468,6 +537,9 @@ async def fetch_features(
         # Kerros valittiin palvelun puolesta: kerrotaan mikä ja mistä
         # joukosta, jotta vastaus ei näytä koko palvelun sisällöltä.
         result = dataclasses.replace(
-            result, feature_types=list(caps.feature_types), type_name=type_name
+            result,
+            feature_types=list(caps.feature_types),
+            type_name=type_name,
+            layer_matched=matched_layer is not None,
         )
     return result

@@ -11,6 +11,7 @@ tulkitsee aluerajauksen ja muotoilee vastauksen.
 from __future__ import annotations
 
 import re
+import urllib.parse
 from typing import Any
 
 import httpx
@@ -113,6 +114,31 @@ def _example_call(dataset_id: str, table: fetch.Table) -> NextAction | None:
     )
 
 
+_LAYER_PARAMS = ("layers", "layer", "typename", "typenames")
+
+
+def _layer_hints(dataset: dict[str, Any]) -> list[str]:
+    """Vihjeet WFS-kerroksen valintaan: otsikko ja muiden resurssien kerrosnimet.
+
+    Esikatselukuvan tai WMS-resurssin ``LAYERS``-parametri kertoo usein
+    julkaisijan oman nimen kerrokselle (Helsingin kiinteistöt:
+    ``avoindata:Kiinteistot``), vaikka WFS-resurssi on pelkkä
+    kyvykkyysosoite.
+    """
+    hints: list[str] = []
+    for title in (dataset.get("title_fi"), dataset.get("title")):
+        if title and title not in hints:
+            hints.append(str(title))
+    for res in dataset.get("resources", []):
+        query = urllib.parse.urlsplit(res.get("url") or "").query
+        for key, values in urllib.parse.parse_qs(query).items():
+            if key.lower() not in _LAYER_PARAMS:
+                continue
+            for value in values:
+                hints.extend(v.strip() for v in value.split(",") if v.strip())
+    return hints
+
+
 def _layer_call(
     dataset_id: str, res_ref: ResourceRef, table: fetch.Table, layer: str
 ) -> NextAction | None:
@@ -126,10 +152,11 @@ def _layer_call(
         return None
     if type_name_from_url(res_ref.url):
         return None
+    how = "aineiston nimen perusteella" if table.layer_matched else "automaattisesti (ensimmäinen)"
     return NextAction(
         tool="query_source",
         args={"dataset_id": dataset_id, "resource_index": res_ref.index, "layer": table.layer},
-        why="Kerros valittiin automaattisesti (ensimmäinen); vaihda layer, vaihtoehdot: layers",
+        why=f"Kerros valittiin {how}; vaihda layer, vaihtoehdot: layers",
     )
 
 
@@ -271,7 +298,13 @@ async def query_source(
             table = await fetch.fetch_fmi(url, filters, max_rows, bbox)
         elif protocol == "wfs":
             table = await fetch.fetch_wfs(
-                url, filters, max_rows, bbox, layer=layer, postal_code=postal_code
+                url,
+                filters,
+                max_rows,
+                bbox,
+                layer=layer,
+                postal_code=postal_code,
+                layer_hints=_layer_hints(dataset),
             )
         elif protocol == "odata":
             table = await fetch.fetch_odata(url, filters, columns, max_rows)

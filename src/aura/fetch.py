@@ -33,6 +33,7 @@ import re
 import sqlite3
 import urllib.parse
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -91,6 +92,8 @@ class Table:
     layers: list[str] | None = None
     #: WFS: kerros jota kysely käytti, jos se tiedetään.
     layer: str | None = None
+    #: WFS: kerros valittiin aineiston nimen perusteella (``wfs.choose_layer``).
+    layer_matched: bool = False
 
 
 def _client() -> httpx.AsyncClient:
@@ -459,8 +462,12 @@ async def fetch_wfs(
     *,
     layer: str = "",
     postal_code: str = "",
+    layer_hints: Sequence[str] = (),
 ) -> Table:
     """WFS-kysely. ``layer`` valitsee kerroksen, ``postal_code`` rajaa postinumeroon.
+
+    ``layer_hints`` (aineiston otsikko, muiden resurssien kerrosnimet)
+    ohjaavat kerroksen valintaa, kun URL ei nimeä kerrosta (``choose_layer``).
 
     Postinumerorajaus on attribuuttisuodatin eikä bbox: postinumeroalueen
     rajaus laatikkona osuisi naapurialueisiin. Se toimii vain kerroksessa
@@ -482,7 +489,7 @@ async def fetch_wfs(
     probe = None
     layers: list[str] = []
     if postal_code:
-        probe = await fetch_features(url, 1, timeout=TIMEOUT)
+        probe = await fetch_features(url, 1, timeout=TIMEOUT, layer_hints=layer_hints)
         if probe.error:
             return Table(
                 protocol="wfs", request_url=url, error_code="service_error", error=probe.error
@@ -512,7 +519,7 @@ async def fetch_wfs(
     cql = None
     bbox_param = None
     if parts and bbox is not None:
-        probe = probe or await fetch_features(url, 1, timeout=TIMEOUT)
+        probe = probe or await fetch_features(url, 1, timeout=TIMEOUT, layer_hints=layer_hints)
         if probe.geometry_name is None:
             return Table(
                 protocol="wfs",
@@ -528,11 +535,14 @@ async def fetch_wfs(
         cql = " AND ".join(parts)
     elif bbox is not None:
         bbox_param = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},EPSG:3067"
-    result = await fetch_features(url, max_rows, bbox=bbox_param, cql_filter=cql, timeout=TIMEOUT)
+    result = await fetch_features(
+        url, max_rows, bbox=bbox_param, cql_filter=cql, timeout=TIMEOUT, layer_hints=layer_hints
+    )
     table = Table(protocol="wfs", request_url=url)
     layers = list(result.feature_types) or layers
     probed = probe.type_name if probe else None
     table.layer = result.type_name or probed or type_name_from_url(url)
+    table.layer_matched = result.layer_matched or bool(probe and probe.layer_matched)
     if layers:
         table.layers = layers
     if result.error:
@@ -543,8 +553,9 @@ async def fetch_wfs(
         listed = ", ".join(layers[:_MAX_LAYERS_LISTED])
         extra = len(layers) - _MAX_LAYERS_LISTED
         more = f" (+{extra} muuta)" if extra > 0 else ""
+        how = "aineiston nimeen sopivinta" if table.layer_matched else "ensimmäistä"
         table.notes.append(
-            f"Palvelussa on {len(layers)} kerrosta; käytettiin ensimmäistä ({table.layer}). "
+            f"Palvelussa on {len(layers)} kerrosta; käytettiin {how} ({table.layer}). "
             f"Valitse kerros layer-parametrilla: {listed}{more}."
         )
     rows = [{h: _num(v) for h, v in zip(result.headers, r, strict=False)} for r in result.rows]

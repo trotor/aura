@@ -232,7 +232,12 @@ async def test_query_source_valittaa_layerin_ja_postinumeron(
                 "layer": "postialue:pno_tilasto_2026",
             }
         )
-    assert seen == {"layer": "postialue:pno_tilasto_2026", "postal_code": "00100", "bbox": None}
+    assert seen == {
+        "layer": "postialue:pno_tilasto_2026",
+        "postal_code": "00100",
+        "bbox": None,
+        "layer_hints": ["Paavo"],
+    }
     assert data["resource"]["layer"] == "postialue:pno_tilasto_2026"
     assert data["notes"][0].startswith("Aluerajaus: postinumeroalue 00100 Helsinki")
     assert "layers" not in data
@@ -331,3 +336,142 @@ async def test_sotkanet_aluerajaus_tunnuksilla() -> None:
         reset_tool_profile(mcp)
     assert seen["filters"] == {"region_code": ["564"], "region_level": ["kunta"]}
     assert "Aluerajaus" in " ".join(r.structured_content["notes"])
+
+
+# --- Kerroksen valinta aineiston nimestä (10.10.2026) -------------------
+#
+# "Helsingin kiinteistöt alueina" kysyi palvelun ensimmäisen kerroksen
+# (liikennemäärät), vaikka kiinteistökerros on samassa palvelussa nimellä
+# avoindata:Kiinteisto_alue. Valinta tehdään vain kun URL ei nimeä kerrosta.
+
+HEL = [
+    "avoindata:Ajoneuvoliikenne_liikennemaarat_viiva",
+    "avoindata:Aluesarjat_avainluvut_2024",
+    "avoindata:Helsinki_osoiteluettelo",
+    "avoindata:Kiinteisto_alue",
+    "avoindata:Maaraala_alue_varma_sijainti",
+]
+
+
+def test_kerros_valitaan_aineiston_nimen_perusteella() -> None:
+    from aura.wfs import choose_layer
+
+    assert choose_layer(HEL, ["Helsingin kiinteistöt alueina"]) == "avoindata:Kiinteisto_alue"
+
+
+def test_muun_resurssin_kerrosnimi_ratkaisee() -> None:
+    from aura.wfs import choose_layer
+
+    hints = ["Helsingin osoitteet", "avoindata:Helsinki_osoiteluettelo"]
+    assert choose_layer(HEL, hints) == "avoindata:Helsinki_osoiteluettelo"
+
+
+def test_ilman_osumaa_ei_valita() -> None:
+    from aura.wfs import choose_layer
+
+    assert choose_layer(HEL, ["Paavo"]) is None
+    assert choose_layer(["a:yksi"], ["yksi"]) is None  # yksi kerros: ei valittavaa
+
+
+def test_camelcase_ja_aakkoset() -> None:
+    from aura.wfs import choose_layer
+
+    layers = ["ms:Rakennukset", "ms:KiinteistoRajat", "ms:Tiet"]
+    assert choose_layer(layers, ["Kiinteistörajat"]) == "ms:KiinteistoRajat"
+
+
+@pytest.mark.asyncio
+async def test_neuvottelu_kayttaa_vihjeiden_kerrosta() -> None:
+    seen: list[dict[str, str]] = []
+
+    async def _get(url: str, params: dict[str, str] | None = None, **_: Any) -> Any:
+        params = params or {}
+        seen.append(params)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        if params.get("request") == "GetCapabilities":
+            resp.text = _caps(HEL)
+        elif "typeNames" not in params:
+            resp.text = '<ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">' \
+                '<ows:Exception><ows:ExceptionText>typeName puuttuu</ows:ExceptionText>' \
+                "</ows:Exception></ows:ExceptionReport>"
+        else:
+            resp.text = (
+                '{"type":"FeatureCollection","totalFeatures":1,"features":'
+                '[{"geometry_name":"geom","properties":{"kiinteistotunnus":"09104399030004"}}]}'
+            )
+        return resp
+
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=_get)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    with patch("aura.wfs.httpx.AsyncClient", return_value=client):
+        result = await fetch_features(
+            "https://kartta.hel.fi/ws/geoserver/avoindata/wfs", 1,
+            layer_hints=["Helsingin kiinteistöt alueina"],
+        )
+    assert result.type_name == "avoindata:Kiinteisto_alue"
+    assert result.layer_matched
+    assert seen[-1]["typeNames"] == "avoindata:Kiinteisto_alue"
+
+
+@pytest.mark.asyncio
+async def test_valittu_kerros_kerrotaan_huomautuksessa() -> None:
+    async def fake(url: str, max_rows: int, **kw: Any) -> Features:
+        assert kw["layer_hints"] == ["Helsingin kiinteistöt alueina"]
+        return _feature(
+            ["kiinteistotunnus"], ["09104399030004"],
+            feature_types=HEL, type_name="avoindata:Kiinteisto_alue", layer_matched=True,
+        )
+
+    with patch("aura.wfs.fetch_features", fake):
+        table = await fetch.fetch_wfs(
+            PAAVO, None, 5, None, layer_hints=["Helsingin kiinteistöt alueina"]
+        )
+    assert table.layer_matched
+    note = next(n for n in table.notes if "kerrosta" in n)
+    assert "aineiston nimeen sopivinta (avoindata:Kiinteisto_alue)" in note
+
+
+async def test_query_source_antaa_vihjeiksi_nimen_ja_muiden_resurssien_kerrokset(
+    public: sqlite3.Connection,
+) -> None:
+    upsert_dataset(
+        public,
+        Dataset(
+            id="hel-kiinteistot",
+            name="hel-kiinteistot",
+            title="Helsingin kiinteistöt alueina",
+            source="hri.fi",
+            resources=[
+                Resource(
+                    id="h-png", name="Esikatselukuva", format="PNG",
+                    url="https://kartta.hel.fi/ws/geoserver/avoindata/wms?LAYERS=avoindata:Kiinteistot",
+                ),
+                Resource(
+                    id="h-wfs", name="WFS-rajapinta", format="WFS",
+                    url="https://kartta.hel.fi/ws/geoserver/avoindata/wfs?request=getCapabilities",
+                ),
+            ],
+        ),
+    )
+    public.commit()
+    seen: dict[str, Any] = {}
+
+    async def fake_wfs(url: str, filters: Any, max_rows: int, bbox: Any, **kw: Any) -> fetch.Table:
+        seen.update(kw)
+        table = fetch.Table(
+            protocol="wfs", request_url=url, layers=HEL,
+            layer="avoindata:Kiinteisto_alue", layer_matched=True,
+        )
+        return fetch._finish(table, ["kiinteistotunnus"], [{"kiinteistotunnus": "1"}], None, 1)
+
+    with patch.object(fetch, "fetch_wfs", fake_wfs):
+        data = await _call({"dataset_id": "hel-kiinteistot"})
+    assert seen["layer_hints"][0] == "Helsingin kiinteistöt alueina"
+    assert "avoindata:Kiinteistot" in seen["layer_hints"]
+    assert data["resource"]["layer"] == "avoindata:Kiinteisto_alue"
+    assert data["next_actions"][0]["why"].startswith(
+        "Kerros valittiin aineiston nimen perusteella"
+    )
