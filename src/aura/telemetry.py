@@ -170,7 +170,7 @@ def record_zero_result(query: str, env: Mapping[str, str] | None = None) -> bool
 # rivinvaihto erottimena ei ohita sitä. Aluearvo tarkistetaan lisäksi
 # suoraan jäsentimellä (``_pattern_value``).
 _PROPERTY_ID = re.compile(
-    r"(?<![\d-])(?:\d{14}|\d{1,3}[-\s]\d{1,3}[-\s]\d{1,4}[-\s]\d{1,4})(?:-M\d+)?(?![\d-])",
+    r"(?<!\d)(?:\d{14}|\d{1,3}[-\s]\d{1,3}[-\s]\d{1,4}[-\s]\d{1,4})(?:-M\d+)?(?!\d)",
     re.IGNORECASE,
 )
 PROPERTY_ID_PLACEHOLDER = "<kiinteistötunnus>"

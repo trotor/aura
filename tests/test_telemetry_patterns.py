@@ -123,6 +123,8 @@ def test_kiinteistotunnus_ei_paady_telemetriaan(telemetry: Path, raw: str, store
         "174\t401\t3\t6",
         "174\n401-3-6",
         "174 401 3 6-m601",
+        "nro-174-401-3-6",
+        "tila-17440100030006-",
         "\u0661\u0667\u0664-401-3-6",
     ],
 )
