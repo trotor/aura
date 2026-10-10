@@ -23,8 +23,11 @@ henkilötieto, joten tunnusta ei kirjata vastauksen ulkopuolelle.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -102,6 +105,8 @@ class Lookup:
     #: Miten edetä, kun rajoja ei saatu (avaimen hankinta tms.).
     hint: str = ""
     error: str = ""
+    #: Huomautus vastaukseen, esim. kunnan rajojen ensimmäinen lataus.
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -177,26 +182,99 @@ async def _municipal(
     return Lookup(tunnus=tunnus, provider=service.name, parcels=parcels)
 
 
-async def find_parcels(tunnus: str, *, transport: httpx.AsyncBaseTransport | None = None) -> Lookup:
-    """Kiinteistön palstat. Tyhjä ``parcels`` + ``hint`` kun lähdettä ei ole."""
+#: Yksi kunta kerrallaan: samanaikaiset kyselyt samasta kunnasta eivät lataa
+#: sitä kahdesti, eikä julkinen palvelin kuormita peiliä rinnakkain.
+_LOAD_LOCK = asyncio.Lock()
+
+
+def _auto_load_enabled() -> bool:
+    """Ladataanko puuttuva kunta ensimmäisellä kyselyllä (oletus kyllä)."""
+    return os.environ.get("AURA_KIINTEISTOT_AUTO", "1") != "0"
+
+
+def _successor(conn: sqlite3.Connection, code: str) -> str:
+    """Kuntakoodi, jonka rajoilla ladataan: lakkautettu kunta → seuraaja."""
+    from aura.areas import resolve_area
+
+    match = resolve_area(conn, code)
+    if match is not None and match.area.level == "kunta":
+        return match.area.code
+    return code
+
+
+async def _auto_load(conn: sqlite3.Connection, kunta: str) -> tuple[int | None, str]:
+    """Lataa kunnan palstat indeksiin. Palauttaa (palstoja, virhe)."""
+    from aura import kiinteisto_index
+
+    async with _LOAD_LOCK:
+        if kiinteisto_index.loaded(kiinteisto_index.index_path(), kunta):
+            return 0, ""  # toinen kysely ehti ladata
+        target = _successor(conn, kunta)
+        aliases = (kunta,) if target != kunta else ()
+        try:
+            summary = await kiinteisto_index.load_municipality(conn, target, aliases=aliases)
+        except (OSError, sqlite3.Error, httpx.HTTPError, ValueError) as exc:
+            return None, f"Kiinteistörajojen lataus epäonnistui: {type(exc).__name__}"
+    return summary.parcels, ""
+
+
+async def find_parcels(
+    tunnus: str,
+    *,
+    conn: sqlite3.Connection | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> Lookup:
+    """Kiinteistön palstat. Tyhjä ``parcels`` + ``hint`` kun lähdettä ei ole.
+
+    Järjestys: paikallinen indeksi, kunnan oma WFS ja lopuksi kunnan lataus
+    indeksiin (vain kun ``conn`` on annettu ja ``AURA_KIINTEISTOT_AUTO`` ei
+    ole ``0``). Lataus kestää kunnan koosta riippuen sekunneista minuuttiin,
+    ja se tehdään kerran kuntaa kohden.
+    """
     from aura import kiinteisto_index
 
     path = kiinteisto_index.index_path()
+    provider = kiinteisto_index.PROVIDER
     parcels = kiinteisto_index.lookup(path, tunnus)
     if parcels:
-        return Lookup(tunnus=tunnus, provider=kiinteisto_index.PROVIDER, parcels=parcels)
-    service = MUNICIPAL.get(tunnus[:3])
-    if service is None:
-        if kiinteisto_index.loaded(path, tunnus[:3]):
-            # Kunta on ladattu, mutta tunnusta ei ole: tunnus on väärä tai lakannut.
-            return Lookup(tunnus=tunnus, provider=kiinteisto_index.PROVIDER)
-        return Lookup(tunnus=tunnus, provider=None, hint=index_hint(tunnus))
-    try:
-        return await _municipal(tunnus, service, transport)
-    except (httpx.HTTPError, ValueError) as exc:
+        return Lookup(tunnus=tunnus, provider=provider, parcels=parcels)
+
+    kunta = tunnus[:3]
+    service = MUNICIPAL.get(kunta)
+    municipal_error = ""
+    if service is not None:
+        try:
+            result = await _municipal(tunnus, service, transport)
+        except (httpx.HTTPError, ValueError) as exc:
+            municipal_error = f"{service.name} ei vastannut: {type(exc).__name__}"
+        else:
+            if result.parcels or conn is None or not _auto_load_enabled():
+                result.hint = result.hint or index_hint(tunnus)
+                return result
+
+    if kiinteisto_index.loaded(path, kunta):
+        # Kunta on ladattu, mutta tunnusta ei ole: tunnus on väärä tai lakannut.
+        return Lookup(tunnus=tunnus, provider=provider)
+    if conn is None or not _auto_load_enabled():
         return Lookup(
             tunnus=tunnus,
-            provider=service.name,
-            error=f"{service.name} ei vastannut: {type(exc).__name__}",
+            provider=service.name if service and municipal_error else None,
+            error=municipal_error,
             hint=index_hint(tunnus),
         )
+
+    count, error = await _auto_load(conn, kunta)
+    if count is None:
+        return Lookup(tunnus=tunnus, provider=None, error=error, hint=index_hint(tunnus))
+    note = (
+        f"Kunnan {kunta} kiinteistörajat ladattiin indeksiin ensimmäistä kertaa "
+        f"({count} palstaa)."
+        if count
+        else ""
+    )
+    return Lookup(
+        tunnus=tunnus,
+        provider=provider,
+        parcels=kiinteisto_index.lookup(path, tunnus),
+        note=note,
+    )

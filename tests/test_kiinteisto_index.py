@@ -169,3 +169,78 @@ async def test_ilman_indeksia_ohje_nimeaa_kunnan_ja_komennon(
     result = await kiinteisto.find_parcels(T1)
     assert result.parcels == []
     assert "aura parcels 435" in result.hint
+
+
+# --- Lataus tarvittaessa (julkinen palvelin, 10.10.2026) ------------------
+
+
+@pytest.mark.asyncio
+async def test_puuttuva_kunta_ladataan_ensimmaisella_kyselylla(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index = tmp_path / "kiinteistot.sqlite"
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(index))
+    monkeypatch.setattr(kiinteisto, "_successor", lambda conn, code: code)
+    import aura.kiinteisto_index as ki
+
+    real = ki.load_municipality
+    calls: list[str] = []
+
+    async def load(conn: sqlite3.Connection, kunta: str, **kw: object) -> ki.LoadSummary:
+        calls.append(kunta)
+        return await real(conn, kunta, transport=_Kapsi(), **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ki, "load_municipality", load)
+    result = await kiinteisto.find_parcels(T2, conn=aura_db)
+    assert result.parcels == [Parcel(bbox=(7000.0, 7000.0, 7100.0, 7100.0))]
+    assert "ladattiin" in result.note
+    # Toinen kysely käyttää valmista indeksiä.
+    await kiinteisto.find_parcels(T1, conn=aura_db)
+    assert calls == ["435"]
+
+
+@pytest.mark.asyncio
+async def test_lakkautetun_kunnan_tunnus_ladataan_seuraajan_rajoilla(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    monkeypatch.setattr(kiinteisto, "_successor", lambda conn, code: "435")
+    import aura.kiinteisto_index as ki
+
+    seen: dict[str, object] = {}
+
+    async def load(conn: sqlite3.Connection, kunta: str, **kw: object) -> ki.LoadSummary:
+        seen.update(kunta=kunta, aliases=kw.get("aliases"))
+        return ki.LoadSummary(kunta=kunta, sheets=0, parcels=0, missing=0)
+
+    monkeypatch.setattr(ki, "load_municipality", load)
+    await kiinteisto.find_parcels("53240100030006", conn=aura_db)
+    assert seen == {"kunta": "435", "aliases": ("532",)}
+
+
+@pytest.mark.asyncio
+async def test_automaattilatauksen_voi_kytkea_pois(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    monkeypatch.setenv("AURA_KIINTEISTOT_AUTO", "0")
+    result = await kiinteisto.find_parcels(T1, conn=aura_db)
+    assert result.parcels == [] and "aura parcels 435" in result.hint
+
+
+@pytest.mark.asyncio
+async def test_kirjoitusvirhe_ei_kaada_kyselya(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    monkeypatch.setattr(kiinteisto, "_successor", lambda conn, code: code)
+    import aura.kiinteisto_index as ki
+
+    async def load(conn: sqlite3.Connection, kunta: str, **kw: object) -> ki.LoadSummary:
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(ki, "load_municipality", load)
+    result = await kiinteisto.find_parcels(T1, conn=aura_db)
+    assert result.parcels == []
+    assert result.error and "OSError" in result.error
+    assert "aura parcels 435" in result.hint
