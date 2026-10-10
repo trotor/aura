@@ -308,8 +308,10 @@ async def query_source(
                 resource=res_ref,
             )
         if tunnus is not None:
-            lookup = await kiinteisto.find_parcels(tunnus)
+            lookup = await kiinteisto.find_parcels(tunnus, conn=conn)
             short = kiinteisto.format_tunnus(tunnus)
+            if lookup.note:
+                notes_pre.append(lookup.note)
             if not lookup.parcels:
                 if lookup.provider and not lookup.error:
                     return fail(

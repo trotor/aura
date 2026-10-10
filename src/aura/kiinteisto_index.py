@@ -23,6 +23,7 @@ import os
 import sqlite3
 import struct
 import zipfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,7 +39,7 @@ KAPSI = "https://kartat.kapsi.fi/files/kiinteistorekisterikartta/avoin/karttaleh
 PROVIDER = "MML kiinteistörekisterikartta (CC BY 4.0), Kapsi.fi-peili"
 
 _LIMIT = 50 * 1024 * 1024
-_CONCURRENCY = 4
+_CONCURRENCY = 6
 _TIMEOUT = 60.0
 
 _SCHEMA = """
@@ -139,6 +140,8 @@ def read_parcels(zip_bytes: bytes) -> list[tuple[int, str, str, Bbox]]:
 def _connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
+    # WAL: palvelimella kysely lukee indeksiä samalla kun toinen kunta latautuu.
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
     return conn
 
@@ -153,54 +156,25 @@ class LoadSummary:
 
 async def _fetch_sheet(
     client: httpx.AsyncClient, sheet: str, gate: asyncio.Semaphore
-) -> bytes | None:
+) -> list[tuple[int, str, str, Bbox]] | None:
+    """Lehden palstat, tai None jos lehteä ei ole (merialue, ei kiinteistöjä).
+
+    Jäsennys heti latauksen perään ja säikeessä: koko kunnan zipit eivät ole
+    yhtä aikaa muistissa, eikä jäsennys pysäytä palvelimen tapahtumasilmukkaa.
+    """
     async with gate:
         response, body = await read_capped(client, sheet_url(sheet), limit=_LIMIT)
-    if response.status_code == 404:
-        return None  # merialue tai lehti ilman kiinteistöjä
-    response.raise_for_status()
-    return body
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return await asyncio.to_thread(read_parcels, body)
 
 
-async def load_municipality(
-    conn: sqlite3.Connection,
-    kunta: str,
-    *,
-    path: Path | None = None,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> LoadSummary:
-    """Lataa kunnan kiinteistöjen palstat indeksiin. ``kunta`` = kuntakoodi."""
-    row = conn.execute(
-        "SELECT min_x, min_y, max_x, max_y FROM ref_municipalities WHERE code = ?", (kunta,)
-    ).fetchone()
-    if row is None or row[0] is None:
-        raise ValueError(
-            f"Kunnan {kunta} rajoja ei ole kannassa. Aja: aura populate municipality_bbox"
-        )
-    sheets = sheets_for_bbox(conn, (row[0], row[1], row[2], row[3]))
-    gate = asyncio.Semaphore(_CONCURRENCY)
-    # Osoite on kiinteä (Kapsi), ei käyttäjän antama.
-    async with httpx.AsyncClient(
-        timeout=_TIMEOUT, headers={"User-Agent": user_agent()}, transport=transport
-    ) as client:
-        bodies = await asyncio.gather(*(_fetch_sheet(client, s, gate) for s in sheets))
-
-    merged: dict[int, tuple[str, str, Bbox]] = {}
-    for body in bodies:
-        if body is None:
-            continue
-        for pid, tunnus, kunta_code, box in read_parcels(body):
-            if pid in merged:
-                old = merged[pid][2]
-                box = (
-                    min(old[0], box[0]),
-                    min(old[1], box[1]),
-                    max(old[2], box[2]),
-                    max(old[3], box[3]),
-                )
-            merged[pid] = (tunnus, kunta_code, box)
-
-    db = _connect(path or index_path())
+def _write_index(
+    path: Path, merged: dict[int, tuple[str, str, Bbox]], kunnat: Sequence[str], sheets: int
+) -> None:
+    """Kirjoita palstat ja ladatut kunnat indeksiin (erillinen tiedosto, ei aura.db)."""
+    db = _connect(path)
     try:
         with db:
             db.executemany(
@@ -216,14 +190,59 @@ async def load_municipality(
                 """,
                 [(pid, t, k, *b) for pid, (t, k, b) in merged.items()],
             )
-            db.execute(
+            today = datetime.now(UTC).date().isoformat()
+            db.executemany(
                 "INSERT OR REPLACE INTO kunnat (kunta, haettu, lehtia, palstoja)"
                 " VALUES (?, ?, ?, ?)",
-                (kunta, datetime.now(UTC).date().isoformat(), len(sheets), len(merged)),
+                [(code, today, sheets, len(merged)) for code in kunnat],
             )
     finally:
         db.close()
-    missing = sum(1 for b in bodies if b is None)
+
+
+async def load_municipality(
+    conn: sqlite3.Connection,
+    kunta: str,
+    *,
+    path: Path | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+    aliases: Sequence[str] = (),
+) -> LoadSummary:
+    """Lataa kunnan kiinteistöjen palstat indeksiin. ``kunta`` = kuntakoodi.
+
+    ``aliases`` kirjataan ladatuiksi samalla: lakkautetun kunnan koodi, jonka
+    alue ladattiin seuraajakunnan rajoilla.
+    """
+    row = conn.execute(
+        "SELECT min_x, min_y, max_x, max_y FROM ref_municipalities WHERE code = ?", (kunta,)
+    ).fetchone()
+    if row is None or row[0] is None:
+        raise ValueError(
+            f"Kunnan {kunta} rajoja ei ole kannassa. Aja: aura populate municipality_bbox"
+        )
+    sheets = sheets_for_bbox(conn, (row[0], row[1], row[2], row[3]))
+    gate = asyncio.Semaphore(_CONCURRENCY)
+    # Osoite on kiinteä (Kapsi), ei käyttäjän antama.
+    async with httpx.AsyncClient(
+        timeout=_TIMEOUT, headers={"User-Agent": user_agent()}, transport=transport
+    ) as client:
+        sheet_parcels = await asyncio.gather(*(_fetch_sheet(client, s, gate) for s in sheets))
+
+    merged: dict[int, tuple[str, str, Bbox]] = {}
+    for parcels in sheet_parcels:
+        for pid, tunnus, kunta_code, box in parcels or ():
+            if pid in merged:
+                old = merged[pid][2]
+                box = (
+                    min(old[0], box[0]),
+                    min(old[1], box[1]),
+                    max(old[2], box[2]),
+                    max(old[3], box[3]),
+                )
+            merged[pid] = (tunnus, kunta_code, box)
+
+    _write_index(path or index_path(), merged, (kunta, *aliases), len(sheets))
+    missing = sum(1 for b in sheet_parcels if b is None)
     return LoadSummary(
         kunta=kunta, sheets=len(sheets) - missing, parcels=len(merged), missing=missing
     )

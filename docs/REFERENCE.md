@@ -431,8 +431,11 @@ Kaksi viiteaineistoa Tilastokeskuksen luokituspalvelusta (`aura populate areas`,
 
 Palstojen rajat haetaan järjestyksessä:
 
-1. **Paikallinen indeksi** `data/boundaries/kiinteistot.sqlite` (gitignoressa, `AURA_KIINTEISTOT_DB`). Ladataan kunnittain komennolla `aura parcels Luhanka 435 …`. Lähde on MML:n kiinteistörekisterikartta (CC BY 4.0) [Kapsi.fi:n peilistä](https://kartat.kapsi.fi/files/kiinteistorekisterikartta/) karttalehdittäin. API-avainta ei tarvita, ja pienen kunnan lataus kestää sekunteja.
+1. **Paikallinen indeksi** `data/boundaries/kiinteistot.sqlite` (gitignoressa, `AURA_KIINTEISTOT_DB`). Lähde on MML:n kiinteistörekisterikartta (CC BY 4.0) [Kapsi.fi:n peilistä](https://kartat.kapsi.fi/files/kiinteistorekisterikartta/) karttalehdittäin. API-avainta ei tarvita.
 2. **Kunnan oma avoin WFS** (nyt Helsinki), jos indeksissä ei ole tunnusta. Kattaa vain kunnan ylläpitämät kiinteistöt.
+3. **Lataus tarvittaessa:** jos kunta puuttuu indeksistä, ensimmäinen kysely lataa sen (Luhanka 1,5 s, Rovaniemi noin 30 s), ja seuraavat kyselyt käyttävät valmista indeksiä. Lakkautetun kunnan tunnus ladataan seuraajakunnan rajoilla. Kuntia ladataan yksi kerrallaan. Kytke pois asettamalla `AURA_KIINTEISTOT_AUTO=0`; silloin kunnat ladataan käsin komennolla `aura parcels Luhanka 435 …`.
+
+Julkisessa palvelussa indeksi on pysyvällä levyllä (`AURA_KIINTEISTOT_DB=/data/kiinteistot/kiinteistot.sqlite`), koska kontti ajetaan vain luku -tilassa.
 
 MML:n omat rajapinnat (kiinteistötietojen kyselypalvelu ja paikkatiedon tiedostopalvelu) vaativat maksuttoman API-avaimen, jonka saa MML:n Oma tili -palvelusta. Aura ei tarvitse sitä, koska Kapsin peili jakaa saman avoimen aineiston.
 
