@@ -158,13 +158,45 @@ def record_zero_result(query: str, env: Mapping[str, str] | None = None) -> bool
         return False
 
 
+# Kiinteistötunnukset pois (14 numeroa, "174-401-3-6", "174 401-3 6", määräala
+# "-M601"). Henkilön omistaman kiinteistön tunnus on henkilötieto, ja
+# ``query_source(area=...)`` ottaa sen vastaan (aura.kiinteisto). Kuvioon
+# jää tieto siitä, että kiinteistöllä kysyttiin, ei mistä kiinteistöstä.
+#
+# Lauseke on tarkoituksella väljempi kuin ``kiinteisto.parse_tunnus``
+# (sekaerottimet, Unicode-numerot): jokainen jäsentimen hyväksymä muoto on
+# peitettävä, ja liiallinen peitto maksaa vain kuvion tarkkuutta. Peitto
+# tehdään vasta välilyöntien normalisoinnin jälkeen, jotta sarkain tai
+# rivinvaihto erottimena ei ohita sitä. Aluearvo tarkistetaan lisäksi
+# suoraan jäsentimellä (``_pattern_value``).
+_PROPERTY_ID = re.compile(
+    r"(?<!\d)(?:\d{14}|\d{1,3}[-\s]\d{1,3}[-\s]\d{1,4}[-\s]\d{1,4})(?:-M\d+)?(?!\d)",
+    re.IGNORECASE,
+)
+PROPERTY_ID_PLACEHOLDER = "<kiinteistötunnus>"
+
+
 def _clean(text: str) -> str:
-    return " ".join(_CONTROL_CHARS.sub(" ", text).split())[:MAX_QUERY_LENGTH]
+    text = " ".join(_CONTROL_CHARS.sub(" ", text).split())
+    return _PROPERTY_ID.sub(PROPERTY_ID_PLACEHOLDER, text)[:MAX_QUERY_LENGTH]
+
+
+def _pattern_value(kind: str, raw: str) -> str:
+    """Kuvion arvo: aluearvo, jonka jäsennin tulkitsee tunnukseksi, peitetään kokonaan."""
+    if kind == "area":
+        from aura.kiinteisto import parse_tunnus
+
+        try:
+            if parse_tunnus(raw) is not None:
+                return PROPERTY_ID_PLACEHOLDER
+        except ValueError:  # määräala
+            return PROPERTY_ID_PLACEHOLDER
+    return _clean(raw)
 
 
 def record_pattern(kind: str, pattern: str, env: Mapping[str, str] | None = None) -> bool:
     """Kirjaa kuvio laskuriin. Ei koskaan nosta poikkeusta (kutsuja on työkalupolulla)."""
-    cleaned = _clean(pattern)
+    cleaned = _pattern_value(kind, pattern)
     path = telemetry_path(env)
     if not cleaned or path is None or kind not in PATTERN_KINDS:
         return False
@@ -226,7 +258,8 @@ def record_call(
         if kind is None or value in (None, "", []):
             continue
         values = value if isinstance(value, list) else [value]
-        patterns += [(kind, _clean(str(v))) for v in values[:5] if _clean(str(v))]
+        cleaned = [_pattern_value(kind, str(v)) for v in values[:5]]
+        patterns += [(kind, c) for c in cleaned if c]
     if error_code:
         patterns.append(("error", _clean(f"{tool}:{error_code}")))
     try:

@@ -59,6 +59,8 @@ Jokainen vastaus on strukturoitu ja noudattaa julkaistua `outputSchema`a, joten 
 
 Alueen voi antaa monella tavalla: `Tampere`, `Tampereella`, `Tammerfors`, `837`, `KU837`, `Pirkanmaa`, `33100`. Lakkautettu kunta tulkitaan seuraajakseen (`Nastola` → Lahti).
 
+Paikkatietoaineistoissa alueeksi kelpaa myös kiinteistötunnus (`174-401-3-6`): `query_source` rajaa haun kiinteistön palstoihin, esimerkiksi Metsäkeskuksen metsävarakuviot tilalta. Kiinteistörajat ladataan omaan Auraan kunnittain komennolla `aura parcels <kunta>` ilman API-avainta ([referenssi](docs/REFERENCE.md#kiinteistötunnus-aluerajauksena)).
+
 `query_source` osaa PxWebin, WFS:n, Ilmatieteen laitoksen tallennetut kyselyt, ODatan, CSV:n ja JSONin. PxWebissä aika ymmärtää arvot `uusin` ja `2020-2024`.
 
 Ohjeteksti on alle 1 500 merkkiä, joten Aura ei syö agentin kontekstia. Koneluettava kuvaus palvelusta on osoitteessa [`/llms.txt`](https://aura.futuai.fi/llms.txt).

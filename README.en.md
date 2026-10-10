@@ -59,6 +59,8 @@ Every response is structured and follows a published `outputSchema`, so the agen
 
 Areas can be given in many forms: `Tampere`, `Tammerfors`, `837`, `KU837`, `Pirkanmaa`, `33100`, even inflected Finnish (`Tampereella`). An abolished municipality resolves to its successor (`Nastola` → Lahti).
 
+For spatial datasets, a Finnish property identifier also works as an area (`174-401-3-6`): `query_source` limits the query to the property's parcels, for example the Finnish Forest Centre's forest stands on a holding. In your own Aura, load property boundaries per municipality with `aura parcels <municipality>`, no API key needed ([reference](docs/REFERENCE.md#kiinteistötunnus-aluerajauksena)).
+
 `query_source` handles PxWeb, WFS, the Meteorological Institute’s stored queries, OData, CSV and JSON. In PxWeb, time accepts `uusin` (latest) and ranges like `2020-2024`.
 
 The instructions are under 1,500 characters, so Aura does not eat the agent’s context. A machine-readable description lives at [`/llms.txt`](https://aura.futuai.fi/llms.txt).

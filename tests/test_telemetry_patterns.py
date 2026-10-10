@@ -96,3 +96,44 @@ def test_asiakasohjelman_nimi() -> None:
     assert client_kind("claude-user/1.0 (+https://claude.ai)") == "claude-user"
     assert client_kind("Mozilla/5.0 (Macintosh)") == "mozilla"
     assert client_kind("\x1b[2Kpaha/1") == "2kpaha"
+
+
+@pytest.mark.parametrize(
+    ("raw", "stored"),
+    [
+        ("174-401-3-6", "<kiinteistötunnus>"),
+        ("09104399030004", "<kiinteistötunnus>"),
+        ("091-043-9903-0004-M601", "<kiinteistötunnus>"),
+        ("puusto tilalla 174 401 3 6", "puusto tilalla <kiinteistötunnus>"),
+        ("00100", "00100"),
+        ("2020-2024", "2020-2024"),
+        ("väestö 2024-01-31", "väestö 2024-01-31"),
+    ],
+)
+def test_kiinteistotunnus_ei_paady_telemetriaan(telemetry: Path, raw: str, stored: str) -> None:
+    """Henkilön kiinteistön tunnus on henkilötieto (aura.kiinteisto)."""
+    assert record_pattern("area", raw)
+    assert top_patterns("area")[0]["pattern"] == stored
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "174-401 3-6",
+        "174\t401\t3\t6",
+        "174\n401-3-6",
+        "174 401 3 6-m601",
+        "nro-174-401-3-6",
+        "tila-17440100030006-",
+        "\u0661\u0667\u0664-401-3-6",
+    ],
+)
+def test_jasentimen_ja_peiton_ero_ei_vuoda(telemetry: Path, raw: str) -> None:
+    """Kaikki mitä jäsennin hyväksyy tai tunnistaa määräalaksi, peitetään."""
+    from aura.telemetry import record_call
+
+    assert record_call("query_source", {"area": raw, "query": f"puusto {raw}"})
+    stored = {r["pattern"] for r in top_patterns("area")} | {
+        r["pattern"] for r in top_patterns("query")
+    }
+    assert all("401" not in p for p in stored), stored

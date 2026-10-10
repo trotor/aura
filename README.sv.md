@@ -58,6 +58,8 @@ Varje svar är strukturerat och följer ett publicerat `outputSchema`, så agent
 
 Områden kan anges på många sätt: `Vasa`, `Vaasa`, `905`, `KU905`, `Österbotten`, `65100`. En nedlagd kommun tolkas som sin efterträdare.
 
+För geodata fungerar även en fastighetsbeteckning som område (`174-401-3-6`): `query_source` avgränsar frågan till fastighetens skiften, till exempel Skogscentralens skogsfigurer på en lägenhet. I din egen Aura laddas fastighetsgränserna per kommun med `aura parcels <kommun>` utan API-nyckel ([referens](docs/REFERENCE.md#kiinteistötunnus-aluerajauksena)).
+
 `query_source` hanterar PxWeb, WFS, Meteorologiska institutets lagrade frågor, OData, CSV och JSON.
 
 Instruktionerna är under 1 500 tecken, så Aura tar inte upp agentens kontext. En maskinläsbar beskrivning finns på [`/llms.txt`](https://aura.futuai.fi/llms.txt).
