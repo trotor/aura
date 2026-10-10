@@ -494,6 +494,20 @@ find_data("palvelut", region="33100")            # postinumero → kunta
 
 Hierarkkinen haku: haettaessa maakunnalla palautetaan myös maakunnan kuntien aineistot. Viitetaulut (308 kuntaa, 3 784 postinumeroa) mahdollistavat alueen tunnistuksen.
 
+## Laajennuspisteet
+
+Avoin Aura on metatietokatalogi. Laajennus voi tuoda työkaluvastauksiin valmiita tunnuslukuja tai laskelmia koskematta Auran omaan koodiin (`aura.extensions`). Koukku rekisteröidään nimellä `register(nimi, funktio)`:
+
+| Koukku | Allekirjoitus | Mihin vastaukseen |
+|---|---|---|
+| `find_data.indicators` | `(conn, query, region) -> list[dict]` | `find_data`-vastauksen `indicators`-kenttä |
+| `inspect_dataset.recipe` | `(conn, dataset) -> dict \| None` | aineiston todennettu kyselypohja |
+| `area_snapshot.key_figures` | `(conn, area) -> list[dict]` | alueen tunnusluvut arvoineen ja lähteineen |
+
+`add_instructions(teksti)` lisää rivin julkisen profiilin ohjeeseen. Koukun poikkeus kirjataan lokiin eikä kaada työkalua.
+
+Esimerkki laajennuksesta: kiinteistön puuston hakkuuarvo. Kiinteistötunnus rajaa Metsäkeskuksen metsävarakuviot (`metsakeskus-stand`), joiden tukki- ja kuitupuun määrät kerrotaan Luken kantohinnoilla (`luke-0100_teokau.px`). Avoin Aura antaa molemmat aineistot lähteineen; laskun voi tehdä tekoälyavustaja, oma työkalu tai laajennus. Pro-versio käyttää samoja koukkuja tunnuslukuihinsa.
+
 ## Kehitys
 
 ```bash

@@ -109,6 +109,17 @@ Aura is not tied to open data. The same structure works for an organisation’s 
 
 Harvesters exist for CKAN, PxWeb, WFS, WMS, ArcGIS, OData, OpenAPI and GTFS sources, and a new source is usually one file ([guide](CONTRIBUTING.md)). The quality profile shows which datasets lack a description, a licence or a working link. The code is MIT licensed, and questions and ideas are welcome [on GitHub](https://github.com/trotor/aura/issues).
 
+## Extend it: combine open datasets
+
+Aura’s tools return rows, sources and licences. On top of them you can build answers that no single dataset gives. Example: *"What is the timber on this property worth at current stumpage prices?"*
+
+1. **Property boundaries:** `query_source` accepts a Finnish property identifier as the area (`174-401-3-6`). The boundaries come from the National Land Survey’s cadastral index map.
+2. **Forest stands:** the Finnish Forest Centre’s stand data gives sawlog and pulpwood volumes, tree species and development classes on the property.
+3. **Stumpage prices:** Natural Resources Institute Finland’s standing-sale prices by price area and cutting method.
+4. **The calculation:** volumes times prices gives the timber’s stumpage value in euros per hectare, with the source and licence of every number.
+
+All four are open data (CC BY 4.0). Aura also says what is not: actual sale prices and forest valuation tables, and a search for "metsän hinta" (forest price) points to where they are. Today the AI assistant does the calculation. The same can be built as a tool of its own or on Aura’s extension points (`aura.extensions`, see the [reference](docs/REFERENCE.md#laajennuspisteet), in Finnish). The same pattern works for other combinations: zoning plans, protected areas and groundwater areas for a property, or statistics and service points for a municipality.
+
 ## Run it yourself
 
 The database ships with the repository ([Git LFS](https://git-lfs.github.com/)), so the datasets are there right after cloning.
