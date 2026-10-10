@@ -28,6 +28,8 @@ import json
 import os
 import re
 import sqlite3
+import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -182,9 +184,34 @@ async def _municipal(
     return Lookup(tunnus=tunnus, provider=service.name, parcels=parcels)
 
 
-#: Yksi kunta kerrallaan: samanaikaiset kyselyt samasta kunnasta eivät lataa
-#: sitä kahdesti, eikä julkinen palvelin kuormita peiliä rinnakkain.
+#: Yksi kunta kerrallaan: julkinen palvelin ei kuormita peiliä rinnakkain.
 _LOAD_LOCK = asyncio.Lock()
+
+# Julkisen palvelimen suoja (tietoturvakatselmointi 10.10.2026): anonyymi
+# kysely voi käynnistää kunnan latauksen, eli satoja karttalehtiä peilistä.
+# Rajat ovat koko prosessin yhteisiä, eivät käyttäjäkohtaisia:
+# - kuntalatauksia enintään ``AURA_KIINTEISTOT_MAX_PER_HOUR`` (oletus 20) tunnissa
+# - epäonnistunutta kuntaa ei yritetä uudelleen ``_RETRY_AFTER_FAILURE`` sekuntiin
+# - käynnissä olevaa latausta ei jäädä odottamaan (ei pyyntöjen kasautumista)
+# - tuntematonta kuntakoodia ei ladata lainkaan
+# Koko Suomi on kertaluonteinen ~26 000 lehden työ; ladattua kuntaa ei
+# ladata uudelleen, joten kustannus on rajattu myös pahimmassa tapauksessa.
+_RETRY_AFTER_FAILURE = 15 * 60
+_recent_loads: deque[float] = deque()
+_failed_at: dict[str, float] = {}
+
+
+def _reset_load_state() -> None:
+    """Tyhjennä latausrajojen tila (testit)."""
+    _recent_loads.clear()
+    _failed_at.clear()
+
+
+def _max_loads_per_hour() -> int:
+    try:
+        return max(0, int(os.environ.get("AURA_KIINTEISTOT_MAX_PER_HOUR", "20")))
+    except ValueError:
+        return 20
 
 
 def _auto_load_enabled() -> bool:
@@ -192,28 +219,42 @@ def _auto_load_enabled() -> bool:
     return os.environ.get("AURA_KIINTEISTOT_AUTO", "1") != "0"
 
 
-def _successor(conn: sqlite3.Connection, code: str) -> str:
-    """Kuntakoodi, jonka rajoilla ladataan: lakkautettu kunta → seuraaja."""
+def _successor(conn: sqlite3.Connection, code: str) -> str | None:
+    """Kuntakoodi, jonka rajoilla ladataan (lakkautettu → seuraaja), tai None."""
     from aura.areas import resolve_area
 
     match = resolve_area(conn, code)
     if match is not None and match.area.level == "kunta":
         return match.area.code
-    return code
+    return None
 
 
 async def _auto_load(conn: sqlite3.Connection, kunta: str) -> tuple[int | None, str]:
     """Lataa kunnan palstat indeksiin. Palauttaa (palstoja, virhe)."""
     from aura import kiinteisto_index
 
+    if _LOAD_LOCK.locked():
+        return None, "Kiinteistörajojen lataus on käynnissä; yritä hetken kuluttua uudelleen."
     async with _LOAD_LOCK:
         if kiinteisto_index.loaded(kiinteisto_index.index_path(), kunta):
             return 0, ""  # toinen kysely ehti ladata
+        now = time.monotonic()
+        failed = _failed_at.get(kunta)
+        if failed is not None and now - failed < _RETRY_AFTER_FAILURE:
+            return None, "Kunnan kiinteistörajojen lataus epäonnistui äskettäin; yritä myöhemmin."
         target = _successor(conn, kunta)
+        if target is None:
+            return None, f"Kuntakoodia {kunta} ei tunneta."
+        while _recent_loads and now - _recent_loads[0] > 3600:
+            _recent_loads.popleft()
+        if len(_recent_loads) >= _max_loads_per_hour():
+            return None, "Kiinteistörajojen latausraja tälle tunnille on täynnä; yritä myöhemmin."
+        _recent_loads.append(now)
         aliases = (kunta,) if target != kunta else ()
         try:
             summary = await kiinteisto_index.load_municipality(conn, target, aliases=aliases)
         except (OSError, sqlite3.Error, httpx.HTTPError, ValueError) as exc:
+            _failed_at[kunta] = time.monotonic()
             return None, f"Kiinteistörajojen lataus epäonnistui: {type(exc).__name__}"
     return summary.parcels, ""
 
@@ -267,8 +308,7 @@ async def find_parcels(
     if count is None:
         return Lookup(tunnus=tunnus, provider=None, error=error, hint=index_hint(tunnus))
     note = (
-        f"Kunnan {kunta} kiinteistörajat ladattiin indeksiin ensimmäistä kertaa "
-        f"({count} palstaa)."
+        f"Kunnan {kunta} kiinteistörajat ladattiin indeksiin ensimmäistä kertaa ({count} palstaa)."
         if count
         else ""
     )

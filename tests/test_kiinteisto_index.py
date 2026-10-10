@@ -174,6 +174,11 @@ async def test_ilman_indeksia_ohje_nimeaa_kunnan_ja_komennon(
 # --- Lataus tarvittaessa (julkinen palvelin, 10.10.2026) ------------------
 
 
+@pytest.fixture(autouse=True)
+def _latausrajat_nollaan() -> None:
+    kiinteisto._reset_load_state()
+
+
 @pytest.mark.asyncio
 async def test_puuttuva_kunta_ladataan_ensimmaisella_kyselylla(
     aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -244,3 +249,73 @@ async def test_kirjoitusvirhe_ei_kaada_kyselya(
     assert result.parcels == []
     assert result.error and "OSError" in result.error
     assert "aura parcels 435" in result.hint
+
+
+def _load_counter(monkeypatch: pytest.MonkeyPatch, fail: bool = False) -> list[str]:
+    import aura.kiinteisto_index as ki
+
+    calls: list[str] = []
+
+    async def load(conn: sqlite3.Connection, kunta: str, **kw: object) -> ki.LoadSummary:
+        calls.append(kunta)
+        if fail:
+            raise httpx.ConnectError("peili ei vastaa")
+        return ki.LoadSummary(kunta=kunta, sheets=1, parcels=1, missing=0)
+
+    monkeypatch.setattr(ki, "load_municipality", load)
+    monkeypatch.setattr(kiinteisto, "_successor", lambda conn, code: code)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_latauksia_enintaan_kiintion_verran_tunnissa(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    monkeypatch.setenv("AURA_KIINTEISTOT_MAX_PER_HOUR", "2")
+    calls = _load_counter(monkeypatch)
+    for code in ("101", "102", "103"):
+        result = await kiinteisto.find_parcels(f"{code}40100030006", conn=aura_db)
+    assert calls == ["101", "102"]
+    assert "latausraja" in result.error
+
+
+@pytest.mark.asyncio
+async def test_epaonnistunutta_kuntaa_ei_yriteta_heti_uudelleen(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    calls = _load_counter(monkeypatch, fail=True)
+    first = await kiinteisto.find_parcels(T1, conn=aura_db)
+    second = await kiinteisto.find_parcels(T1, conn=aura_db)
+    assert calls == ["435"]
+    assert "ConnectError" in first.error
+    assert "äskettäin" in second.error
+
+
+@pytest.mark.asyncio
+async def test_kaynnissa_olevaa_latausta_ei_jaada_odottamaan(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    calls = _load_counter(monkeypatch)
+    async with kiinteisto._LOAD_LOCK:
+        result = await kiinteisto.find_parcels(T1, conn=aura_db)
+    assert calls == []
+    assert "käynnissä" in result.error
+
+
+@pytest.mark.asyncio
+async def test_tuntematonta_kuntaa_ei_ladata_eika_se_kuluta_kiintiota(
+    aura_db: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AURA_KIINTEISTOT_DB", str(tmp_path / "k.sqlite"))
+    monkeypatch.setenv("AURA_KIINTEISTOT_MAX_PER_HOUR", "1")
+    calls = _load_counter(monkeypatch)
+    monkeypatch.setattr(
+        kiinteisto, "_successor", lambda conn, code: None if code == "999" else code
+    )
+    unknown = await kiinteisto.find_parcels("99940100030006", conn=aura_db)
+    await kiinteisto.find_parcels(T1, conn=aura_db)
+    assert "ei tunneta" in unknown.error
+    assert calls == ["435"]
