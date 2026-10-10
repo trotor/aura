@@ -10,6 +10,7 @@ tulkitsee aluerajauksen ja muotoilee vastauksen.
 
 from __future__ import annotations
 
+import json
 import re
 import urllib.parse
 from typing import Any
@@ -20,7 +21,7 @@ from fastmcp.tools import ToolResult
 from pydantic import Field
 
 import aura.server as _server
-from aura import fetch
+from aura import fetch, kiinteisto
 from aura.areas import resolve_area
 from aura.database import get_dataset, get_source
 from aura.formats import resource_format
@@ -139,6 +140,49 @@ def _layer_hints(dataset: dict[str, Any]) -> list[str]:
     return hints
 
 
+async def _wfs_by_parcels(
+    url: str,
+    filters: dict[str, list[str]] | None,
+    max_rows: int,
+    parcels: list[kiinteisto.Parcel],
+    **kwargs: Any,
+) -> fetch.Table:
+    """WFS-kysely palsta kerrallaan, rivit yhdistettynä ilman toistoja.
+
+    Kiinteistön palstat voivat olla kilometrien päässä toisistaan, jolloin
+    yhteinen suorakaide kattaisi ison alueen ja ``max_rows`` täyttyisi
+    naapurien kohteilla.
+    """
+    merged: fetch.Table | None = None
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    truncated = False
+    for parcel in parcels:
+        table = await fetch.fetch_wfs(url, filters, max_rows, parcel.bbox, **kwargs)
+        if table.error:
+            return table
+        merged = merged or table
+        truncated = truncated or table.truncated
+        for row in table.rows:
+            key = json.dumps(row, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key)
+                rows.append(row)
+        if len(rows) >= max_rows:
+            truncated = True
+            break
+    assert merged is not None  # parcels ei ole tyhjä
+    merged.rows = rows[:max_rows]
+    merged.truncated = truncated or len(rows) > max_rows
+    if len(parcels) > 1:
+        merged.total = None
+    merged.notes.append(
+        "Rajaus palstojen suorakaiteilla: mukana voi olla naapurikiinteistöjen kohteita, "
+        "jotka osuvat suorakaiteeseen."
+    )
+    return merged
+
+
 def _layer_call(
     dataset_id: str, res_ref: ResourceRef, table: fetch.Table, layer: str
 ) -> NextAction | None:
@@ -186,8 +230,9 @@ async def query_source(
             tallennetuissa kyselyissä avaimet ovat kyselyn parametreja
             (place, fmisid, parameters, starttime).
         area: Aluerajaus. PxWebissä rajaa aluedimension, WFS:ssä bbox:iin
-            (kunta, karttalehti tai "minx,miny,maxx,maxy") tai postinumeroon
-            ("00100"), jos kerroksessa on postinumerokenttä.
+            (kunta, karttalehti tai "minx,miny,maxx,maxy"), postinumeroon
+            ("00100"), jos kerroksessa on postinumerokenttä, tai
+            kiinteistön palstoihin (kiinteistötunnus, esim. "174-401-3-6").
         columns: Palautettavat sarakkeet (CSV, OData).
         resource_index: Resurssin indeksi; oletus valitaan automaattisesti.
         format_hint: Suosi tätä formaattia, esim. "WFS" tai "CSV".
@@ -245,7 +290,54 @@ async def query_source(
     notes_pre: list[str] = []
     if layer and protocol != "wfs":
         notes_pre.append(f"layer koskee vain WFS-resursseja; ohitettiin ({protocol}).")
-    if area and protocol == "wfs" and _POSTAL_CODE.match(area.strip()):
+    lookup: kiinteisto.Lookup | None = None
+    if area:
+        try:
+            tunnus = kiinteisto.parse_tunnus(area)
+        except ValueError as exc:
+            return fail(
+                QuerySourceResult, "unknown_area", str(exc), dataset_id=ds_id, resource=res_ref
+            )
+        if tunnus is not None and protocol != "wfs":
+            return fail(
+                QuerySourceResult,
+                "area_not_supported",
+                f"Kiinteistötunnus rajaa vain paikkatietoa (WFS); resurssi on {protocol.upper()}.",
+                hint=f"Kunnan tasolla rajaa kuntakoodilla: area='{tunnus[:3]}'.",
+                dataset_id=ds_id,
+                resource=res_ref,
+            )
+        if tunnus is not None:
+            lookup = await kiinteisto.find_parcels(tunnus)
+            short = kiinteisto.format_tunnus(tunnus)
+            if not lookup.parcels:
+                if lookup.provider and not lookup.error:
+                    return fail(
+                        QuerySourceResult,
+                        "property_not_found",
+                        f"Kiinteistöä {short} ei löytynyt lähteestä {lookup.provider}.",
+                        hint="Tarkista tunnus. Kunnan rajapinnassa ovat vain kunnan "
+                        "ylläpitämät kiinteistöt (asemakaava-alueet). " + lookup.hint,
+                        dataset_id=ds_id,
+                        resource=res_ref,
+                    )
+                return fail(
+                    QuerySourceResult,
+                    "property_geometry_unavailable",
+                    lookup.error or f"Kiinteistön {short} rajoja ei ole saatavilla.",
+                    hint=lookup.hint,
+                    dataset_id=ds_id,
+                    resource=res_ref,
+                )
+            count = len(lookup.parcels)
+            area_note = (
+                f"kiinteistö {short}, {count} {'palsta' if count == 1 else 'palstaa'} "
+                f"({lookup.provider})"
+            )
+
+    if lookup is not None:
+        pass
+    elif area and protocol == "wfs" and _POSTAL_CODE.match(area.strip()):
         # Postinumero rajataan attribuutilla, ei bbox:lla (ks. fetch_wfs).
         postal_code = area.strip()
         match = resolve_area(conn, postal_code, levels=("postinumero",))
@@ -296,6 +388,15 @@ async def query_source(
             table = await fetch.fetch_pxweb(url, filters, max_rows, conn, area=area)
         elif protocol == "fmi_stored_query":
             table = await fetch.fetch_fmi(url, filters, max_rows, bbox)
+        elif protocol == "wfs" and lookup is not None:
+            table = await _wfs_by_parcels(
+                url,
+                filters,
+                max_rows,
+                lookup.parcels,
+                layer=layer,
+                layer_hints=_layer_hints(dataset),
+            )
         elif protocol == "wfs":
             table = await fetch.fetch_wfs(
                 url,

@@ -158,7 +158,19 @@ def record_zero_result(query: str, env: Mapping[str, str] | None = None) -> bool
         return False
 
 
+# Kiinteistötunnukset pois (14 numeroa, "174-401-3-6", "174 401 3 6", määräala
+# "-M601"). Henkilön omistaman kiinteistön tunnus on henkilötieto, ja
+# ``query_source(area=...)`` ottaa sen vastaan (aura.kiinteisto). Kuvioon
+# jää tieto siitä, että kiinteistöllä kysyttiin, ei mistä kiinteistöstä.
+_PROPERTY_ID = re.compile(
+    r"(?<![\d-])(?:\d{14}|\d{1,3}([- ])\d{1,3}\1\d{1,4}\1\d{1,4})(?:-M\d+)?(?![\d-])",
+    re.IGNORECASE,
+)
+PROPERTY_ID_PLACEHOLDER = "<kiinteistötunnus>"
+
+
 def _clean(text: str) -> str:
+    text = _PROPERTY_ID.sub(PROPERTY_ID_PLACEHOLDER, text)
     return " ".join(_CONTROL_CHARS.sub(" ", text).split())[:MAX_QUERY_LENGTH]
 
 

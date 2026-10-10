@@ -425,6 +425,19 @@ Kaksi viiteaineistoa Tilastokeskuksen luokituspalvelusta (`aura populate areas`,
 
 `aura.areas.resolve_area()` tulkitsee alueen kaikille työkaluille samalla tavalla: nimi (fi/sv, myös taivutettuna), kuntakoodi, StatFin-koodi (`KU837`, `MK06`, `SK064`, `HVA08`), postinumero tai lakkautetun kunnan nimi.
 
+### Kiinteistötunnus aluerajauksena
+
+`query_source(area=...)` hyväksyy WFS-aineistoille kiinteistötunnuksen muodoissa `17440100030006`, `174-401-3-6` ja `092-072-0032-0006`. Kysely tehdään palsta kerrallaan kiinteistön palstojen suorakaiteilla, ja samat rivit yhdistetään. Suorakaiteeseen voi osua naapurikiinteistöjen kohteita, ja vastaus kertoo sen. Määräala (`…-M601`) hylätään, koska sillä ei ole omia rajoja.
+
+Palstojen rajat haetaan järjestyksessä:
+
+1. **Paikallinen indeksi** `data/boundaries/kiinteistot.sqlite` (gitignoressa, `AURA_KIINTEISTOT_DB`). Ladataan kunnittain komennolla `aura parcels Luhanka 435 …`. Lähde on MML:n kiinteistörekisterikartta (CC BY 4.0) [Kapsi.fi:n peilistä](https://kartat.kapsi.fi/files/kiinteistorekisterikartta/) karttalehdittäin. API-avainta ei tarvita, ja pienen kunnan lataus kestää sekunteja.
+2. **Kunnan oma avoin WFS** (nyt Helsinki), jos indeksissä ei ole tunnusta. Kattaa vain kunnan ylläpitämät kiinteistöt.
+
+MML:n omat rajapinnat (kiinteistötietojen kyselypalvelu ja paikkatiedon tiedostopalvelu) vaativat maksuttoman API-avaimen, jonka saa MML:n Oma tili -palvelusta. Aura ei tarvitse sitä, koska Kapsin peili jakaa saman avoimen aineiston.
+
+Omistajatietoja ei haeta eikä aineistossa ole. Henkilön omistaman kiinteistön tunnus on silti henkilötieto: telemetria korvaa tunnukset paikkamerkillä `<kiinteistötunnus>`, ja Metsäkeskuksen aineistojen ehdot muistuttavat henkilötietosäännöistä, jos tietoja yhdistetään henkilöihin.
+
 ### Rajausaineistot
 
 Paikallisina rajausaineistoina käytetään GeoPackage-tiedostoja `data/boundaries/`-kansiossa. Kansio on gitignoressa — aineistot ladataan erikseen. Lähde: [Kapsi.fi](https://kartat.kapsi.fi/files/) (MML:n avoin data, CC BY 4.0).

@@ -318,6 +318,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Indeksoi suomen perusmuodot hakua varten (datasets.lemmas)",
     )
 
+    # parcels
+    parcels_p = subparsers.add_parser(
+        "parcels",
+        help="Lataa kuntien kiinteistörajat paikalliseen indeksiin (kiinteistötunnushaku)",
+    )
+    parcels_p.add_argument("kunnat", nargs="+", help="Kunnan nimi tai koodi, esim. Luhanka 435")
+
     # region-levels
     subparsers.add_parser(
         "region-levels",
@@ -974,6 +981,32 @@ def main() -> None:
         run_migrations(conn)
         count = index_lemmas(conn)
         print(f"Lemmat indeksoitu {count} datasetille.")
+
+    elif args.command == "parcels":
+        import httpx
+
+        from aura.areas import resolve_area
+        from aura.database import get_connection
+        from aura.kiinteisto_index import PROVIDER, index_path, load_municipality
+
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        conn = get_connection()
+        print(f"Lähde: {PROVIDER}. Indeksi: {index_path()}")
+        for text in args.kunnat:
+            match = resolve_area(conn, text)
+            if match is None or match.area.level != "kunta":
+                print(f"  {text}: kuntaa ei tunnistettu, ohitetaan")
+                continue
+            code, name = match.area.code, match.area.name_fi
+            try:
+                loaded = asyncio.run(load_municipality(conn, code))
+            except (ValueError, httpx.HTTPError) as exc:
+                print(f"  {name} ({code}): {exc}")
+                continue
+            print(
+                f"  {name} ({code}): {loaded.parcels} palstaa {loaded.sheets} karttalehdeltä"
+                + (f" ({loaded.missing} lehteä ilman kiinteistöjä)" if loaded.missing else "")
+            )
 
     elif args.command == "region-levels":
         import httpx

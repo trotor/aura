@@ -96,3 +96,21 @@ def test_asiakasohjelman_nimi() -> None:
     assert client_kind("claude-user/1.0 (+https://claude.ai)") == "claude-user"
     assert client_kind("Mozilla/5.0 (Macintosh)") == "mozilla"
     assert client_kind("\x1b[2Kpaha/1") == "2kpaha"
+
+
+@pytest.mark.parametrize(
+    ("raw", "stored"),
+    [
+        ("174-401-3-6", "<kiinteistötunnus>"),
+        ("09104399030004", "<kiinteistötunnus>"),
+        ("091-043-9903-0004-M601", "<kiinteistötunnus>"),
+        ("puusto tilalla 174 401 3 6", "puusto tilalla <kiinteistötunnus>"),
+        ("00100", "00100"),
+        ("2020-2024", "2020-2024"),
+        ("väestö 2024-01-31", "väestö 2024-01-31"),
+    ],
+)
+def test_kiinteistotunnus_ei_paady_telemetriaan(telemetry: Path, raw: str, stored: str) -> None:
+    """Henkilön kiinteistön tunnus on henkilötieto (aura.kiinteisto)."""
+    assert record_pattern("area", raw)
+    assert top_patterns("area")[0]["pattern"] == stored
