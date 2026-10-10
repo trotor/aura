@@ -27,3 +27,11 @@ def test_monisanainen_avain_on_vahva() -> None:
 def test_vain_arkisanasto_ei_aihesanastoja() -> None:
     # "koulu" on aihesanastossa (→ kouluverkko), ei arkisanastossa.
     assert synonym_variants("koulu") == []
+
+
+def test_puun_ja_metsan_hinta_arkisanoina() -> None:
+    """"kantohinta" ja "metsän hinta" ohjaavat tilastojen omiin nimiin (10.10.2026)."""
+    reset_cache()
+    assert "teollisuuspuun kauppa" in synonym_variants("kantohinta")
+    assert dict(synonym_variants_ranked("puun hinta")) == {"teollisuuspuun kauppa": True}
+    assert "metsätilojen hinnat" in dict(synonym_variants_ranked("metsän hinta"))

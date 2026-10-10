@@ -17,6 +17,11 @@
     "crimes": ["tietoon tulleet rikokset"],
     "työttömyys": ["työttömät työnhakijat", "työllisyyskatsaus"],
     "tulot": ["tulonjako", "käytettävissä olevat tulot"],
-    "suojelualue": ["luonnonsuojelualueet", "suojelualueet"]
+    "suojelualue": ["luonnonsuojelualueet", "suojelualueet"],
+    "kantohinta": ["teollisuuspuun kauppa"],
+    "puun hinta": ["teollisuuspuun kauppa"],
+    "puukauppa": ["teollisuuspuun kauppa"],
+    "metsän hinta": ["metsätilojen hinnat", "metsätilakauppa"],
+    "metsän arvo": ["metsätilan arviointi", "summa-arvomenetelmä"]
   }
 }
