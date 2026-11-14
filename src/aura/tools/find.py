@@ -22,6 +22,7 @@ from aura import extensions
 from aura.areas import resolve_area
 from aura.constants import parse_json_list
 from aura.database import search_datasets
+from aura.formats import normalize_format
 from aura.limits import MAX_SEARCH_LIMIT, clamp
 from aura.responses import AreaRef, Envelope, Model, NextAction, respond, schema_of
 from aura.server import mcp
@@ -100,7 +101,7 @@ def _hit(
     if region_names:
         cov = " ".join(parse_json_list(d.get("geographical_coverage", "[]"))).lower()
         coverage = "own" if any(n.lower() in cov for n in region_names) else "nationwide"
-    upper = {f.upper() for f in formats}
+    upper = {normalize_format(f) for f in formats}
     return DatasetHit(
         id=d.get("id", ""),
         title=d.get("title_fi") or d.get("title") or d.get("name", ""),

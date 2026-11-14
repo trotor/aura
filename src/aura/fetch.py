@@ -158,6 +158,24 @@ def _filter_rows(
 # --- CSV ---
 
 
+def csv_dialect(first_line: str) -> tuple[str, str]:
+    """Päättele CSV:n erotin ja lainausmerkki otsikkoriviltä.
+
+    Lainausmerkki on heittomerkki vain, jos *jokainen* otsikkosolu on sen
+    sisällä: VTV:n vaalirahoitusaineistot kirjoittavat ``'Ehdokasnumero';
+    'Etunimet';…``, ja oletuslainausmerkillä sarakkeet ja arvot jäivät
+    heittomerkkeihin eikä yksikään luku jäsentynyt luvuksi. Sanan sisäinen
+    heittomerkki (``l'aani``) ei riitä.
+    """
+    first = first_line.rstrip("\r\n")
+    delimiter = ";" if first.count(";") > first.count(",") else ","
+    if first.count("\t") > max(first.count(";"), first.count(",")):
+        delimiter = "\t"
+    cells = [c.strip() for c in first.split(delimiter) if c.strip()]
+    quoted = bool(cells) and all(len(c) >= 2 and c[0] == c[-1] == "'" for c in cells)
+    return delimiter, "'" if quoted else '"'
+
+
 async def fetch_csv(
     url: str, filters: dict[str, list[str]] | None, columns: list[str] | None, max_rows: int
 ) -> Table:
@@ -165,13 +183,10 @@ async def fetch_csv(
     text = content.decode("utf-8-sig", errors="replace")
     if cut:
         text = text.rsplit("\n", 1)[0]
-    first = text.split("\n", 1)[0]
-    delimiter = ";" if first.count(";") > first.count(",") else ","
-    if first.count("\t") > max(first.count(";"), first.count(",")):
-        delimiter = "\t"
-    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
-    headers = list(reader.fieldnames or [])
-    all_rows = [{k: _num(v) for k, v in r.items() if k is not None} for r in reader]
+    delimiter, quotechar = csv_dialect(text.split("\n", 1)[0])
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter, quotechar=quotechar)
+    headers = [h for h in reader.fieldnames or [] if h]
+    all_rows = [{k: _num(v) for k, v in r.items() if k} for r in reader]
     rows, total, unknown = _filter_rows(all_rows, filters, max_rows)
     table = Table(protocol="csv", request_url=url, total=None if cut else total)
     table.notes.append(f"Erotin '{delimiter}'.")
@@ -206,8 +221,21 @@ def _finish(
 # --- JSON / GeoJSON ---
 
 
-def _records(data: Any) -> tuple[list[dict[str, Any]], str]:
-    """Etsi JSON-vastauksesta rivilista. Palauttaa (rivit, polku)."""
+def json_records(data: Any) -> tuple[list[dict[str, Any]], str]:
+    """Etsi JSON-vastauksesta rivilista. Palauttaa (rivit, polku).
+
+    Eduskunnan rajapinta palauttaa sarakenimet ja rivit erikseen
+    (``columnNames`` + ``rowData``, rivit listoina). Ilman tätä haaraa
+    kaikki seitsemän kyseltäväksi merkittyä eduskunta-aineistoa päättyivät
+    virheeseen "rivilistaa ei löytynyt".
+    """
+    if isinstance(data, dict):
+        names, rows = data.get("columnNames"), data.get("rowData")
+        if isinstance(names, list) and isinstance(rows, list):
+            cols = [str(n) for n in names]
+            return [
+                dict(zip(cols, r, strict=False)) for r in rows if isinstance(r, list)
+            ], "rowData"
     if isinstance(data, dict) and data.get("type") == "FeatureCollection":
         return [
             f.get("properties") or {} for f in data.get("features", [])
@@ -232,25 +260,59 @@ async def fetch_json(
     conn: sqlite3.Connection | None = None,
 ) -> Table:
     server_filtered = False
+    server_note = ""
     if filters and "api.vipunen.fi" in url:
         url, server_filtered = vipunen_filter_url(url, filters), True
-    content, cut = await _download(url)
+        server_note = (
+            "Vipunen: suodatus tehtiin palvelimella (filter-parametri), joten rivit "
+            "kattavat koko tietojoukon eivätkä vain ensimmäistä sivua."
+        )
+    prefetched: tuple[bytes, bool] | None = None
+    fallback_note = ""
+    if filters and "avoindata.eduskunta.fi" in url:
+        prefetched, filtered = await _eduskunta_server_filter(url, filters)
+        if prefetched is not None:
+            url, server_filtered = filtered, True
+            server_note = "eduskunta"
+        elif filtered != url:
+            fallback_note = (
+                "Eduskunta: palvelimen täsmällinen suodatus (columnName/columnValue, "
+                "kirjainkoko huomioiden) ei löytänyt rivejä, joten suodatettiin "
+                "ensimmäinen sivu."
+            )
+    content, cut = prefetched if prefetched is not None else await _download(url)
+    if cut and "avoindata.eduskunta.fi" in url and "perPage=" not in url:
+        # VaskiDatan 100 asiakirjan sivu ylittää latausrajan, eikä katkaistu
+        # JSON jäsenny. Pienempi sivu mahtuu (10 riviä ≈ 170 kt).
+        url = _with_query(url, perPage=str(EDUSKUNTA_SMALL_PAGE))
+        content, cut = await _download(url)
+        fallback_note = (fallback_note + " " if fallback_note else "") + (
+            f"Eduskunta: 100 rivin sivu ylitti latausrajan, joten haettiin "
+            f"{EDUSKUNTA_SMALL_PAGE} rivin sivu."
+        )
     table = Table(protocol="json", request_url=url)
+    if fallback_note:
+        table.notes.append(fallback_note)
     try:
         data = json.loads(content.decode("utf-8", errors="replace"))
     except (json.JSONDecodeError, ValueError):
         table.error_code = "not_json"
         table.error = "Vastaus ei ole kelvollista JSONia" + (" (katkaistu)" if cut else "")
         return table
-    records, path = _records(data)
+    records, path = json_records(data)
     if not records and server_filtered:
-        table.notes.append("Vipunen: palvelin suodatti, eikä yksikään rivi täsmännyt.")
+        table.notes.append("Palvelin suodatti, eikä yksikään rivi täsmännyt.")
         return _finish(table, [], [], None, 0)
-    if server_filtered:
-        table.notes.append(
-            "Vipunen: suodatus tehtiin palvelimella (filter-parametri), joten rivit "
-            "kattavat koko tietojoukon eivätkä vain ensimmäistä sivua."
+    if server_note == "eduskunta":
+        more = isinstance(data, dict) and data.get("hasMore") is True
+        server_note = "Eduskunta: yksi suodatin tehtiin palvelimella (täsmällinen arvo). " + (
+            "Tuloksia on useampi sivu; tässä ensimmäinen."
+            if more
+            else "Rivit kattavat koko taulun, mutta vain täsmälleen samat arvot osuvat "
+            "(ei osittaisia eikä eri kirjainkoolla kirjoitettuja)."
         )
+    if server_filtered:
+        table.notes.append(server_note)
     if not records:
         table.error_code = "no_rows"
         table.error = "JSON-rakenteesta ei löytynyt rivilistaa."
@@ -271,11 +333,21 @@ async def fetch_json(
         table.notes.append(
             f"Lähde kertoo {reported} osumaa; vastauksessa oli yksi sivu ({len(records)} riviä)."
         )
+    # Eduskunta: hasMore ilman lähteen omaa kokonaismäärää tarkoittaa yhtä
+    # sivua, jonka rivimäärä ei ole lähteen koko.
+    paged = isinstance(data, dict) and data.get("hasMore") is True and reported is None
+    if paged:
+        table.total = None
+        table.notes.append(f"Lähde palautti yhden sivun ({len(records)} riviä); rivejä on enemmän.")
     if path and path != "$":
         table.notes.append(f"Rivit polusta '{path}'.")
     if unknown:
         table.error_code = "unknown_filter"
         table.error = f"Tuntemattomat kentät: {', '.join(unknown)}. Kentät: {headers}"
+    if paged:
+        result = _finish(table, headers, rows, None, None)
+        result.truncated = True
+        return result
     return _finish(table, headers, rows, None, table.total if table.total is not None else total)
 
 
@@ -308,6 +380,58 @@ def vipunen_filter_url(url: str, filters: dict[str, list[str]]) -> str:
     query = dict(urllib.parse.parse_qsl(split.query))
     query["filter"] = ";".join(parts)
     return urllib.parse.urlunsplit(split._replace(query=urllib.parse.urlencode(query)))
+
+
+async def _eduskunta_server_filter(
+    url: str, filters: dict[str, list[str]]
+) -> tuple[tuple[bytes, bool] | None, str]:
+    """Kokeile palvelinsuodatusta. Palauttaa (ladattu vastaus tai None, URL).
+
+    Palvelin vertaa täsmällisesti ja kirjainkoko huomioiden, ja tuntematon
+    sarake on HTTP 400. Kumpikaan ei tarkoita "ei osumia": silloin palataan
+    sivun suodatukseen (alimerkkijono, kirjainkoosta riippumaton), joka myös
+    antaa tuntemattomasta sarakkeesta ``unknown_filter``-virheen sarakelistoineen.
+    """
+    filtered = eduskunta_filter_url(url, filters)
+    if filtered == url:
+        return None, url
+    try:
+        content, cut = await _download(filtered)
+        if cut and "perPage=" not in filtered:
+            # Katkaistu sivu (VaskiData) ei ole "ei osumia": pienempi sivu.
+            filtered = _with_query(filtered, perPage=str(EDUSKUNTA_SMALL_PAGE))
+            content, cut = await _download(filtered)
+        records, _path = json_records(json.loads(content.decode("utf-8", errors="replace")))
+    except (httpx.HTTPStatusError, ValueError):
+        return None, filtered
+    return ((content, cut) if records else None), filtered
+
+
+#: Eduskunnan sivukoko, kun oletussivu (100 riviä) ei mahdu latausrajaan.
+EDUSKUNTA_SMALL_PAGE = 10
+
+
+def _with_query(url: str, **params: str) -> str:
+    split = urllib.parse.urlsplit(url)
+    query = dict(urllib.parse.parse_qsl(split.query))
+    query.update(params)
+    return urllib.parse.urlunsplit(split._replace(query=urllib.parse.urlencode(query)))
+
+
+def eduskunta_filter_url(url: str, filters: dict[str, list[str]]) -> str:
+    """Eduskunnan rajapinnan palvelinsuodatin: ``columnName`` + ``columnValue``.
+
+    Rajapinta palauttaa 100 riviä sivulta, joten pelkkä sivun suodatus ei
+    löytänyt esimerkiksi kansanedustajaa, jonka rivi oli myöhemmällä sivulla.
+    Rajapinta tuntee yhden sarakkeen ja yhden täsmällisen arvon: ensimmäinen
+    yksiarvoinen suodatin viedään palvelimelle, muut suodatetaan sivulta.
+    Jos yksiarvoista suodatinta ei ole, URL palautetaan ennallaan.
+    """
+    for key, values in filters.items():
+        vals = values if isinstance(values, list) else [values]
+        if len(vals) == 1:
+            return _with_query(url, columnName=key, columnValue=str(vals[0]))
+    return url
 
 
 #: Sotkanetin aluekategoria → Auran aluetaso (``aura.areas``in nimet

@@ -11,6 +11,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from aura.fetch import csv_dialect, json_records
+from aura.formats import resource_format
 from aura.net import DEFAULT_LIMIT, public_client, read_capped
 from aura.web.app import get_db
 
@@ -348,6 +350,43 @@ async def wfs_features(
     return {"geojson": geojson}
 
 
+def _json_preview(data: Any, max_rows: int) -> dict[str, Any]:
+    """JSON-vastaus esikatselutaulukoksi samalla jäsentimellä kuin query_source.
+
+    Erillinen jäsennin näytti eduskunnan ``columnNames``/``rowData``-vastauksen
+    raakana JSONina, vaikka query_source osaa sen.
+    """
+    records, _path = json_records(data)
+    if records:
+        return {"type": "table", "rows": records[:max_rows], "total": len(records)}
+    return {"type": "json", "data": data}
+
+
+def _csv_preview(text: str, max_rows: int) -> dict[str, Any]:
+    """CSV-teksti esikatseluksi samalla erottimen ja lainausmerkin päättelyllä
+    kuin query_source. Aiempi ``csv.reader`` oletti pilkun ja lainausmerkin
+    ``"``, joten puolipiste-CSV:n otsikkorivi oli yhdessä sarakkeessa."""
+    import csv
+    import io
+
+    delimiter, quotechar = csv_dialect(text.split("\n", 1)[0])
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter, quotechar=quotechar)
+    rows_list: list[list[str]] = []
+    for csv_row in reader:
+        rows_list.append(csv_row)
+        if len(rows_list) > max_rows + 1:
+            break
+    if not rows_list:
+        return {"type": "csv", "headers": [], "rows": []}
+    header = rows_list[0]
+    keep = [i for i, h in enumerate(header) if h]
+    return {
+        "type": "csv",
+        "headers": [header[i] for i in keep],
+        "rows": [[r[i] if i < len(r) else "" for i in keep] for r in rows_list[1 : max_rows + 1]],
+    }
+
+
 @router.get("/preview/{resource_id}")
 async def preview_resource(
     request: Request,
@@ -366,7 +405,7 @@ async def preview_resource(
 
     resource = dict(row)
     url = resource.get("url", "")
-    fmt = (resource.get("format", "") or "").upper()
+    fmt = resource_format(resource)
 
     if not url:
         return {"type": "empty", "message": "Resurssilla ei ole URL:ia"}
@@ -386,15 +425,7 @@ async def preview_resource(
                 snippet = text[:3000]
                 return {"type": "text", "content": snippet, "url": url}
 
-            if isinstance(data, list):
-                return {"type": "table", "rows": data[:max_rows], "total": len(data)}
-            if isinstance(data, dict):
-                # Jos on GeoJSON FeatureCollection
-                if data.get("type") == "FeatureCollection":
-                    features = data.get("features", [])
-                    rows_data = [f.get("properties", {}) for f in features[:max_rows]]
-                    return {"type": "table", "rows": rows_data, "total": len(features)}
-                return {"type": "json", "data": data}
+            return _json_preview(data, max_rows)
         except httpx.HTTPStatusError as e:
             return {
                 "type": "error",
@@ -422,25 +453,10 @@ async def preview_resource(
                         if len(content) > 8192:
                             break
 
-            import csv
-            import io
-
-            text = content.decode("utf-8", errors="replace")
-            reader = csv.reader(io.StringIO(text))
-            rows_list: list[list[str]] = []
-            for csv_row in reader:
-                rows_list.append(csv_row)
-                if len(rows_list) > max_rows + 1:
-                    break
-
-            if rows_list:
-                headers = rows_list[0]
-                data_rows = rows_list[1:max_rows + 1]
-                return {
-                    "type": "csv",
-                    "headers": headers,
-                    "rows": data_rows,
-                }
+            text = content.decode("utf-8-sig", errors="replace")
+            preview = _csv_preview(text, max_rows)
+            if preview["headers"]:
+                return preview
         except Exception as e:
             return {"type": "error", "message": str(e)}
 
