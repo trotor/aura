@@ -302,6 +302,42 @@ class TestWmsWfsApi:
         data = resp.json()
         assert "geojson" in data or "error" in data
 
+    def test_preview_yhdistelmaformaatti_haetaan_jsonina(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        # Katalogin "JSON, JSONP" (Kansalaisaloite.fi) on JSON-rajapinta: esikatselu
+        # yrittää hakea sen eikä palauta pelkkää linkkiä.
+        import httpx
+
+        from aura.database import upsert_dataset
+        from aura.models import Dataset, Resource
+
+        upsert_dataset(
+            test_db,
+            Dataset(
+                id="aloite",
+                name="aloite",
+                title="Aloitteet",
+                source="avoindata.fi",
+                resources=[
+                    Resource(
+                        id="res-aloite",
+                        name="API",
+                        format="JSON, JSONP",
+                        url="https://example.com/api",
+                    )
+                ],
+            ),
+        )
+        test_db.commit()
+
+        def refuse(*a: object, **kw: object) -> None:
+            raise httpx.ConnectError("ei verkkoa testissä")
+
+        with patch("aura.web.routes.api.public_client", refuse):
+            data = client.get("/api/preview/res-aloite").json()
+        assert data["type"] == "error"
+
     def test_preview_max_rows_100(self, client: TestClient) -> None:
         # Verify max_rows=100 is accepted (was 50 before)
         resp = client.get("/api/preview/res-1?max_rows=100")

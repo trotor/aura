@@ -63,7 +63,36 @@ def infer_format(url: str) -> str:
     return ""
 
 
+#: Saman protokollan nimet: yhdistelmä, jonka kaikki osat ovat tästä
+#: joukosta, on yksi JSON-rajapinta eikä usean formaatin resurssi.
+_JSON_FAMILY = frozenset({"JSON", "JSONP"})
+
+
+def normalize_format(fmt: str) -> str:
+    """Katalogin formaatti isoin kirjaimin; saman protokollan yhdistelmä yhdeksi.
+
+    Avoindata.fi:n Kansalaisaloite- ja Kuntalaisaloite-rajapinnat on
+    luetteloitu muodossa ``"JSON, JSONP"``. Ne palauttavat tavallista
+    JSONia, mutta yhdistelmä ei ollut kyseltävä. ``"JSON/REST"`` jätetään
+    pois: kaikki 13 sellaista resurssia (13.11.2026) ovat dokumentaatio- tai
+    Swagger-sivuja, eivät rajapintoja. Tämä ei ole arvaamista: kaikki osat ovat katalogin
+    omia ja tarkoittavat samaa protokollaa. Eri protokollien yhdistelmä
+    (``"XLSX, CSV"``, ``"JSON, XML"``) jätetään ennalleen, koska siitä ei
+    tiedä mitä URL oletuksena palauttaa.
+
+    >>> normalize_format("JSON, JSONP")
+    'JSON'
+    >>> normalize_format("XLSX, CSV")
+    'XLSX, CSV'
+    """
+    upper = fmt.strip().upper()
+    parts = {p.strip() for p in upper.replace("/", ",").split(",") if p.strip()}
+    if len(parts) > 1 and parts <= _JSON_FAMILY and "JSON" in parts:
+        return "JSON"
+    return upper
+
+
 def resource_format(resource: Mapping[str, Any]) -> str:
     """Resurssin formaatti isoin kirjaimin: katalogin oma, muuten URL:sta päätelty."""
-    own = str(resource.get("format") or "").strip().upper()
+    own = normalize_format(str(resource.get("format") or ""))
     return own or infer_format(str(resource.get("url") or ""))
