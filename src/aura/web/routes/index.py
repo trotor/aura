@@ -176,6 +176,24 @@ async def llms_txt(request: Request) -> str:
         f"- Publisher quality profile: {base}mcp/laatu",
         f"- Claude Code: `claude mcp add --transport http aura {base}mcp`",
         "",
+        "## Without an MCP client",
+        "",
+        "Plain JSON-RPC 2.0 over HTTP POST works. The server is stateless: no "
+        "`initialize` handshake and no `Mcp-Session-Id` header are needed.",
+        "",
+        "```",
+        f"curl -X POST {base}mcp \\",
+        "  -H 'Content-Type: application/json' \\",
+        "  -H 'Accept: application/json, text/event-stream' \\",
+        '  -d \'{"jsonrpc":"2.0","id":1,"method":"tools/call",'
+        '"params":{"name":"find_data","arguments":{"query":"väestö","region":"Tampere"}}}\'',
+        "```",
+        "",
+        'List tools with `"method":"tools/list"`. The response is '
+        "Server-Sent Events (`text/event-stream`), not bare JSON: parse the JSON "
+        "on the `data:` line. The result is in `result.structuredContent`; "
+        "`result.content[0].text` holds a short text summary.",
+        "",
         "## Tools (public profile)",
         "",
         "1. find_data(query, region, source, format, organization) – start here; "

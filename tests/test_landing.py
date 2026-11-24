@@ -177,3 +177,13 @@ def test_llms_txt_kertoo_tekijan(client: TestClient) -> None:
 def test_etusivulla_avainsanaselain(client: TestClient, path: str) -> None:
     body = client.get(path).text
     assert 'href="/avainsanat"' in body
+
+
+def test_llms_txt_neuvoo_kayton_ilman_mcp_asiakasta(client: TestClient) -> None:
+    """Agentti jolla on vain HTTP-työkalu tarvitsee raakapyynnön ja SSE-vihjeen."""
+    text = client.get("/llms.txt", headers={"x-forwarded-proto": "https"}).text
+    assert "curl -X POST https://testserver/mcp" in text
+    assert "Accept: application/json, text/event-stream" in text
+    assert '"method":"tools/call"' in text
+    assert "data:" in text
+    assert "Mcp-Session-Id" in text
